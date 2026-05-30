@@ -11,7 +11,7 @@ import KnowledgeGraph from '../components/KnowledgeGraph';
 import type { SearchResult } from '../types';
 import { 
   Sparkles, Search, Library, MessageSquare, Settings2, Globe, EyeOff, 
-  ShieldAlert, Save, BrainCircuit, ExternalLink, Copy, Check, Trash2, Send, Loader2, Info,
+  ShieldAlert, Save, ExternalLink, Copy, Check, Trash2, Send, Loader2, Info,
   Network
 } from 'lucide-react';
 
@@ -225,9 +225,7 @@ export const Dashboard: React.FC = () => {
           <div className="space-y-6">
             {/* Header branding */}
             <div className="flex items-center gap-2 px-1">
-              <div className="p-1.5 bg-purple-950/20 border border-purple-500/30 rounded-lg text-purple-400">
-                <BrainCircuit className="w-5 h-5" />
-              </div>
+              <img src="/logo.png" alt="MindCache Logo" className="w-8 h-8 rounded-lg object-cover border border-purple-500/30" />
               <div>
                 <h1 className="text-xs font-bold uppercase tracking-wider text-gray-100 m-0">MindCache</h1>
                 <span className="text-[9px] text-gray-500 font-semibold uppercase tracking-wider">Dashboard v1.0</span>

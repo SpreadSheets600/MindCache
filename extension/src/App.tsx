@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { useConnectionStore } from './store/useConnectionStore';
 import { useSettingsStore } from './store/useSettingsStore';
 import BackendStatus from './components/BackendStatus';
-import { ExternalLink, Database, Cpu, BrainCircuit, Activity } from 'lucide-react';
+import { ExternalLink, Database, Cpu, Activity } from 'lucide-react';
 
 /**
  * Extension Action Popup. Primarily acts as a project diagnostic monitor,
@@ -34,9 +34,7 @@ export const App: React.FC = () => {
       <div className="flex-1 flex flex-col justify-between p-4 space-y-4">
         <div className="space-y-4">
           <div className="flex items-center gap-2">
-            <div className="p-1.5 bg-purple-950/20 border border-purple-500/30 rounded-lg text-purple-400">
-              <BrainCircuit className="w-5 h-5" />
-            </div>
+            <img src="/logo.png" alt="MindCache Logo" className="w-8 h-8 rounded-lg object-cover border border-purple-500/30" />
             <div>
               <h1 className="text-xs font-bold uppercase tracking-wider text-gray-100 m-0">MindCache Memory</h1>
               <span className="text-[9px] text-gray-500 font-mono">Local Personal Cognitive System</span>

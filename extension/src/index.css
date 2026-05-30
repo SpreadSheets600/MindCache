@@ -39,6 +39,16 @@ body.dashboard-body {
   font-family: 'JetBrains Mono', monospace;
 }
 
+/* Custom Futuristic Font Style */
+.font-futuristic {
+  font-family: 'Orbitron', sans-serif;
+}
+
+/* Custom Modern Font Style */
+.font-modern {
+  font-family: 'Outfit', sans-serif;
+}
+
 /* Custom Thin Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;

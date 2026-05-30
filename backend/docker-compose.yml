@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mindcache_backend
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persists SQLite database and FAISS index files on host machine
+      - ./data:/app/data
+    environment:
+      - DATABASE_URL=sqlite:///data/mindcache.db
+      - FAISS_INDEX_PATH=data/faiss_index.bin
+      - EMBEDDING_MODEL_NAME=all-MiniLM-L6-v2
+      # Connects inside container to host machine's local Ollama engine
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - OLLAMA_MODEL=llama3
+      - LOG_LEVEL=INFO
+    extra_hosts:
+      # Allows docker container to reach localhost services of host OS
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

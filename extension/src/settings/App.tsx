@@ -1,0 +1,1127 @@
+import React, { useState, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSettingsStore } from "../store/settingsStore";
+import { useConnectionStore } from "../store/connectionStore";
+import { backendClient } from "../services/BackendClient";
+import { DocumentDetail } from "../components/DocumentDetail";
+import { InteractiveKnowledgeGraph } from "../components/InteractiveKnowledgeGraph";
+import {
+    Brain,
+    Database,
+    Plus,
+    Trash2,
+    Shield,
+    Server,
+    Activity,
+    LayoutDashboard,
+    Search,
+    ExternalLink,
+    Eye,
+    Settings,
+    RefreshCw,
+    FolderOpen,
+    Network,
+    Sparkles,
+} from "lucide-react";
+
+type Page = "dashboard" | "search" | "graph" | "memories" | "settings";
+
+const App: React.FC = () => {
+    const queryClient = useQueryClient();
+    const [activePage, setActivePage] = useState<Page>(() => {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            const page = params.get("page") as Page;
+            if (
+                page &&
+                [
+                    "dashboard",
+                    "search",
+                    "graph",
+                    "memories",
+                    "settings",
+                ].includes(page)
+            ) {
+                return page;
+            }
+        } catch {
+            // Ignored
+        }
+        return "dashboard";
+    });
+    const [detailDocId, setDetailDocId] = useState<number | null>(null);
+
+    const {
+        backendUrl,
+        autoTracking,
+        privacyMode,
+        excludedDomains,
+        setBackendUrl,
+        setAutoTracking,
+        setPrivacyMode,
+        addExcludedDomain,
+        removeExcludedDomain,
+        resetSettings,
+    } = useSettingsStore();
+
+    const { isOnline, isChecking, components } = useConnectionStore();
+
+    const [urlInput, setUrlInput] = useState(backendUrl);
+    const [newDomain, setNewDomain] = useState("");
+    const [saveSuccess, setSaveSuccess] = useState(false);
+    const [searchFilter, setSearchFilter] = useState("");
+
+    // Dashboard Search States
+    const [dashSearch, setDashSearch] = useState("");
+    const [debouncedDashSearch, setDebouncedDashSearch] = useState("");
+    const [dashLimit, setDashLimit] = useState(10);
+    const [dashAI, setDashAI] = useState(false);
+    const [searchStartTime, setSearchStartTime] = useState("");
+    const [searchEndTime, setSearchEndTime] = useState("");
+
+    useEffect(() => {
+        const timer = setTimeout(() => setDebouncedDashSearch(dashSearch), 250);
+        return () => clearTimeout(timer);
+    }, [dashSearch]);
+
+    useEffect(() => {
+        setUrlInput(backendUrl);
+    }, [backendUrl]);
+
+    const runDiagnostics = async () => {
+        try {
+            await backendClient.checkHealth();
+        } catch {
+            // Ignored
+        }
+    };
+
+    useEffect(() => {
+        runDiagnostics();
+    }, []);
+
+    const {
+        data: documents = [],
+        isLoading: isDocsLoading,
+        refetch: refetchDocs,
+    } = useQuery({
+        queryKey: ["documents"],
+        queryFn: () => backendClient.listDocuments(0, 100),
+        enabled: isOnline,
+    });
+
+    const {
+        data: dashSearchResults,
+        isLoading: isDashSearchLoading,
+        isError: isDashSearchError,
+        error: dashSearchError,
+    } = useQuery({
+        queryKey: [
+            "dashSearch",
+            debouncedDashSearch,
+            dashLimit,
+            dashAI,
+            searchStartTime,
+            searchEndTime,
+        ],
+        queryFn: () =>
+            backendClient.search(
+                debouncedDashSearch,
+                dashLimit,
+                dashAI,
+                searchStartTime || undefined,
+                searchEndTime || undefined,
+            ),
+        enabled: isOnline && debouncedDashSearch.trim().length > 0,
+        retry: false,
+    });
+
+    useEffect(() => {
+        if (isOnline && activePage === "memories") {
+            refetchDocs();
+        }
+    }, [activePage, isOnline]);
+
+    const deleteMutation = useMutation({
+        mutationFn: (id: number) => backendClient.deleteDocument(id),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["documents"] });
+            refetchDocs();
+        },
+    });
+
+    const handleSaveUrl = () => {
+        setBackendUrl(urlInput);
+        setSaveSuccess(true);
+        setTimeout(() => {
+            setSaveSuccess(false);
+            runDiagnostics();
+        }, 1500);
+    };
+
+    const handleAddDomain = (e: React.FormEvent) => {
+        e.preventDefault();
+        const cleanDomain = newDomain.trim().toLowerCase();
+        if (cleanDomain) {
+            addExcludedDomain(cleanDomain);
+            setNewDomain("");
+        }
+    };
+
+    const handleDeleteDoc = (id: number, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (confirm("Delete this document from MindCache?")) {
+            deleteMutation.mutate(id);
+        }
+    };
+
+    const filteredDocuments = documents.filter((doc) => {
+        const term = searchFilter.toLowerCase();
+        return (
+            (doc.title && doc.title.toLowerCase().includes(term)) ||
+            doc.url.toLowerCase().includes(term) ||
+            doc.domain.toLowerCase().includes(term)
+        );
+    });
+
+    const navItem = (page: Page, label: string, icon: React.ReactNode) => (
+        <button
+            onClick={() => {
+                setActivePage(page);
+                setDetailDocId(null);
+            }}
+            className={`flex items-center space-x-2.5 w-full px-3 py-2 rounded-md text-sm transition-colors text-left ${
+                activePage === page && !detailDocId
+                    ? "bg-secondary text-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+            }`}
+        >
+            {icon}
+            <span>{label}</span>
+        </button>
+    );
+
+    const renderContent = () => {
+        // Inline document detail view
+        if (detailDocId !== null) {
+            return (
+                <DocumentDetail
+                    documentId={detailDocId}
+                    onBack={() => setDetailDocId(null)}
+                />
+            );
+        }
+
+        switch (activePage) {
+            case "dashboard":
+                return (
+                    <div className="space-y-6">
+                        {/* Stats */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <div className="p-4 rounded-lg border border-border">
+                                <div className="text-[11px] text-muted-foreground">
+                                    Memories
+                                </div>
+                                <div className="text-xl font-semibold mt-1">
+                                    {documents.length}
+                                </div>
+                            </div>
+                            <div className="p-4 rounded-lg border border-border">
+                                <div className="text-[11px] text-muted-foreground">
+                                    Vectors
+                                </div>
+                                <div className="text-xl font-semibold mt-1">
+                                    {components?.faiss_index.status ===
+                                    "initialized"
+                                        ? components.faiss_index.vectors_count
+                                        : "-"}
+                                </div>
+                            </div>
+                            <div className="p-4 rounded-lg border border-border">
+                                <div className="text-[11px] text-muted-foreground">
+                                    AI Model
+                                </div>
+                                <div className="text-sm font-medium mt-1.5 truncate">
+                                    {components?.ollama.status === "connected"
+                                        ? components.ollama.model || "Ready"
+                                        : "Offline"}
+                                </div>
+                            </div>
+                            <div className="p-4 rounded-lg border border-border">
+                                <div className="text-[11px] text-muted-foreground">
+                                    Status
+                                </div>
+                                <div className="flex items-center space-x-1.5 mt-1.5">
+                                    <span
+                                        className={`w-1.5 h-1.5 rounded-full ${isOnline ? "bg-emerald-500" : "bg-red-400"}`}
+                                    />
+                                    <span className="text-sm font-medium">
+                                        {isOnline ? "Connected" : "Offline"}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Split Grid - RecentActivity & Stats */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            {/* Recent Activity */}
+                            <div className="md:col-span-2 p-5 rounded-lg border border-border bg-secondary/15 space-y-4">
+                                <div className="flex items-center space-x-2 text-sm font-semibold border-b border-border/60 pb-3 text-zinc-200">
+                                    <Activity className="w-4 h-4 text-blue-400" />
+                                    <span>Recent Activity</span>
+                                </div>
+
+                                {documents.length === 0 ? (
+                                    <p className="text-xs text-muted-foreground/60 italic py-6 text-center">
+                                        No indexed pages yet. Start browsing to
+                                        populate your database.
+                                    </p>
+                                ) : (
+                                    <div className="space-y-2.5 max-h-[360px] overflow-y-auto pr-1">
+                                        {documents.slice(0, 5).map((doc) => (
+                                            <div
+                                                key={doc.id}
+                                                onClick={() =>
+                                                    setDetailDocId(doc.id)
+                                                }
+                                                className="flex items-center justify-between p-3 rounded-md border border-border bg-secondary/5 hover:bg-secondary/20 hover:border-border/80 cursor-pointer transition-all"
+                                            >
+                                                <div className="space-y-0.5 truncate max-w-[75%]">
+                                                    <h4 className="text-xs font-medium text-zinc-100 truncate leading-snug hover:text-blue-400 transition-colors">
+                                                        {doc.title || doc.url}
+                                                    </h4>
+                                                    <p className="text-[10px] text-muted-foreground truncate font-mono">
+                                                        {doc.domain}
+                                                    </p>
+                                                </div>
+                                                <span className="text-[10px] text-muted-foreground/75 font-mono">
+                                                    {new Date(
+                                                        doc.updated_at,
+                                                    ).toLocaleDateString()}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="space-y-4">
+                                <div className="p-4 rounded-lg border border-border space-y-3">
+                                    <div className="flex items-center space-x-2 text-sm font-medium">
+                                        <Activity className="w-4 h-4 text-muted-foreground" />
+                                        <span>Diagnostics</span>
+                                    </div>
+
+                                    {isOnline && components ? (
+                                        <div className="space-y-3 text-xs">
+                                            <div className="flex justify-between">
+                                                <span className="text-muted-foreground">
+                                                    Database
+                                                </span>
+                                                <span
+                                                    className={
+                                                        components.database ===
+                                                        "connected"
+                                                            ? "text-emerald-400"
+                                                            : "text-red-400"
+                                                    }
+                                                >
+                                                    {components.database}
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-muted-foreground">
+                                                    FAISS
+                                                </span>
+                                                <span>
+                                                    {
+                                                        components.faiss_index
+                                                            .vectors_count
+                                                    }{" "}
+                                                    vectors
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-muted-foreground">
+                                                    Ollama
+                                                </span>
+                                                <span
+                                                    className={
+                                                        components.ollama
+                                                            .status ===
+                                                        "connected"
+                                                            ? "text-foreground"
+                                                            : "text-muted-foreground/60"
+                                                    }
+                                                >
+                                                    {components.ollama
+                                                        .status === "connected"
+                                                        ? components.ollama
+                                                              .model || "active"
+                                                        : "offline"}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <p className="text-xs text-muted-foreground/60">
+                                            Backend offline. Start the FastAPI
+                                            server.
+                                        </p>
+                                    )}
+
+                                    <button
+                                        onClick={runDiagnostics}
+                                        disabled={isChecking}
+                                        className="w-full py-1.5 border border-border hover:bg-secondary text-xs rounded-md text-muted-foreground hover:text-foreground transition-colors"
+                                    >
+                                        {isChecking ? "Checking..." : "Refresh"}
+                                    </button>
+                                </div>
+
+                                <div className="p-4 rounded-lg border border-border">
+                                    <div className="text-xs text-muted-foreground">
+                                        Exclusions
+                                    </div>
+                                    <div className="text-lg font-semibold mt-1">
+                                        {excludedDomains.length} domains
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+
+            case "memories":
+                return (
+                    <div className="space-y-4">
+                        <div className="flex items-center bg-secondary/50 border border-border px-3 py-2 rounded-md space-x-2">
+                            <Search className="w-4 h-4 text-muted-foreground" />
+                            <input
+                                type="text"
+                                value={searchFilter}
+                                onChange={(e) =>
+                                    setSearchFilter(e.target.value)
+                                }
+                                placeholder="Filter by title, domain, or URL..."
+                                className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/50"
+                            />
+                            {searchFilter && (
+                                <button
+                                    onClick={() => setSearchFilter("")}
+                                    className="text-xs text-muted-foreground hover:text-foreground"
+                                >
+                                    Clear
+                                </button>
+                            )}
+                        </div>
+
+                        {isDocsLoading ? (
+                            <div className="flex flex-col items-center justify-center h-64 space-y-2">
+                                <RefreshCw className="w-6 h-6 text-muted-foreground animate-spin" />
+                                <p className="text-xs text-muted-foreground">
+                                    Loading...
+                                </p>
+                            </div>
+                        ) : filteredDocuments.length === 0 ? (
+                            <div className="p-12 text-center border border-dashed border-border rounded-lg">
+                                <FolderOpen className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+                                <p className="text-xs text-muted-foreground">
+                                    {searchFilter
+                                        ? "No matching pages."
+                                        : "No documents recorded yet."}
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                {filteredDocuments.map((doc) => (
+                                    <div
+                                        key={doc.id}
+                                        className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3.5 rounded-lg border border-border hover:bg-secondary/30 transition-colors space-y-2 sm:space-y-0"
+                                    >
+                                        <div className="space-y-1 max-w-[80%]">
+                                            <h3
+                                                onClick={() =>
+                                                    setDetailDocId(doc.id)
+                                                }
+                                                className="text-sm font-medium truncate cursor-pointer hover:text-primary transition-colors"
+                                                title={doc.title || doc.url}
+                                            >
+                                                {doc.title || "Untitled Page"}
+                                            </h3>
+                                            <div className="flex items-center space-x-2 text-[11px] text-muted-foreground">
+                                                <span className="truncate max-w-[200px]">
+                                                    {doc.domain}
+                                                </span>
+                                                <span className="text-muted-foreground/30">
+                                                    -
+                                                </span>
+                                                <span>
+                                                    {new Date(
+                                                        doc.updated_at,
+                                                    ).toLocaleDateString()}
+                                                </span>
+                                            </div>
+                                            {doc.keywords &&
+                                                doc.keywords.length > 0 && (
+                                                    <div className="flex flex-wrap gap-1 mt-1">
+                                                        {doc.keywords
+                                                            .slice(0, 4)
+                                                            .map((kw, idx) => (
+                                                                <span
+                                                                    key={idx}
+                                                                    className="text-[10px] text-muted-foreground/50 font-mono"
+                                                                >
+                                                                    {kw.keyword}
+                                                                    {idx <
+                                                                    Math.min(
+                                                                        doc
+                                                                            .keywords
+                                                                            .length,
+                                                                        4,
+                                                                    ) -
+                                                                        1
+                                                                        ? ","
+                                                                        : ""}
+                                                                </span>
+                                                            ))}
+                                                    </div>
+                                                )}
+                                        </div>
+
+                                        <div className="flex items-center space-x-1.5">
+                                            <button
+                                                onClick={() =>
+                                                    setDetailDocId(doc.id)
+                                                }
+                                                className="p-1.5 rounded hover:bg-background text-muted-foreground hover:text-foreground transition-colors"
+                                                title="View"
+                                            >
+                                                <Eye className="w-3.5 h-3.5" />
+                                            </button>
+                                            <button
+                                                onClick={() =>
+                                                    window.open(
+                                                        doc.url,
+                                                        "_blank",
+                                                    )
+                                                }
+                                                className="p-1.5 rounded hover:bg-background text-muted-foreground hover:text-foreground transition-colors"
+                                                title="Open"
+                                            >
+                                                <ExternalLink className="w-3.5 h-3.5" />
+                                            </button>
+                                            <button
+                                                onClick={(e) =>
+                                                    handleDeleteDoc(doc.id, e)
+                                                }
+                                                className="p-1.5 rounded hover:bg-background text-muted-foreground hover:text-red-400 transition-colors"
+                                                title="Delete"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                );
+
+            case "settings":
+                return (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="md:col-span-2 space-y-6">
+                            <div className="space-y-3">
+                                <div className="flex items-center space-x-2 text-sm font-medium">
+                                    <Server className="w-4 h-4 text-muted-foreground" />
+                                    <span>Server</span>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-xs text-muted-foreground">
+                                        Base URL
+                                    </label>
+                                    <div className="flex space-x-2">
+                                        <input
+                                            type="text"
+                                            value={urlInput}
+                                            onChange={(e) =>
+                                                setUrlInput(e.target.value)
+                                            }
+                                            placeholder="http://localhost:8000"
+                                            className="flex-1 bg-secondary/50 border border-border rounded-md px-3 py-2 text-sm font-mono outline-none focus:border-primary transition-colors"
+                                        />
+                                        <button
+                                            onClick={handleSaveUrl}
+                                            className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 active:scale-95 transition-all"
+                                        >
+                                            {saveSuccess ? "Saved" : "Save"}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="border-t border-border" />
+
+                            <div className="space-y-4">
+                                <div className="flex items-center space-x-2 text-sm font-medium">
+                                    <Shield className="w-4 h-4 text-muted-foreground" />
+                                    <span>Privacy</span>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <label className="text-sm">
+                                                Auto tab tracking
+                                            </label>
+                                            <p className="text-xs text-muted-foreground mt-0.5">
+                                                Automatically index pages as you
+                                                browse.
+                                            </p>
+                                        </div>
+                                        <button
+                                            onClick={() =>
+                                                setAutoTracking(!autoTracking)
+                                            }
+                                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                                                autoTracking
+                                                    ? "bg-primary"
+                                                    : "bg-secondary"
+                                            }`}
+                                        >
+                                            <span
+                                                className={`inline-block h-3.5 w-3.5 rounded-full bg-foreground transition-transform ${
+                                                    autoTracking
+                                                        ? "translate-x-4"
+                                                        : "translate-x-0.5"
+                                                }`}
+                                            />
+                                        </button>
+                                    </div>
+
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <label className="text-sm">
+                                                Private search logging
+                                            </label>
+                                            <p className="text-xs text-muted-foreground mt-0.5">
+                                                Don't save recent search
+                                                queries.
+                                            </p>
+                                        </div>
+                                        <button
+                                            onClick={() =>
+                                                setPrivacyMode(!privacyMode)
+                                            }
+                                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                                                privacyMode
+                                                    ? "bg-primary"
+                                                    : "bg-secondary"
+                                            }`}
+                                        >
+                                            <span
+                                                className={`inline-block h-3.5 w-3.5 rounded-full bg-foreground transition-transform ${
+                                                    privacyMode
+                                                        ? "translate-x-4"
+                                                        : "translate-x-0.5"
+                                                }`}
+                                            />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="space-y-6">
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center space-x-2 text-sm font-medium">
+                                        <Database className="w-4 h-4 text-muted-foreground" />
+                                        <span>Exclusions</span>
+                                    </div>
+                                    <span className="text-[11px] text-muted-foreground font-mono">
+                                        {excludedDomains.length}
+                                    </span>
+                                </div>
+
+                                <form
+                                    onSubmit={handleAddDomain}
+                                    className="flex space-x-2"
+                                >
+                                    <input
+                                        type="text"
+                                        value={newDomain}
+                                        onChange={(e) =>
+                                            setNewDomain(e.target.value)
+                                        }
+                                        placeholder="example.com"
+                                        className="flex-1 bg-secondary/50 border border-border rounded-md px-3 py-2 text-sm font-mono outline-none focus:border-primary"
+                                    />
+                                    <button
+                                        type="submit"
+                                        className="flex items-center space-x-1 px-3 py-2 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 active:scale-95 transition-all"
+                                    >
+                                        <Plus className="w-3.5 h-3.5" />
+                                        <span>Add</span>
+                                    </button>
+                                </form>
+
+                                <div className="max-h-44 overflow-y-auto rounded-md border border-border">
+                                    {excludedDomains.length === 0 ? (
+                                        <p className="text-xs text-muted-foreground/40 italic p-4 text-center">
+                                            No exclusions.
+                                        </p>
+                                    ) : (
+                                        excludedDomains.map((domain, i) => (
+                                            <div
+                                                key={i}
+                                                className={`flex items-center justify-between py-2 px-3 text-xs font-mono ${
+                                                    i > 0
+                                                        ? "border-t border-border/50"
+                                                        : ""
+                                                }`}
+                                            >
+                                                <span className="text-muted-foreground truncate max-w-[80%]">
+                                                    {domain}
+                                                </span>
+                                                <button
+                                                    onClick={() =>
+                                                        removeExcludedDomain(
+                                                            domain,
+                                                        )
+                                                    }
+                                                    className="text-muted-foreground/60 hover:text-red-400 transition-colors"
+                                                >
+                                                    <Trash2 className="w-3 h-3" />
+                                                </button>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="border-t border-border" />
+                        </div>
+                    </div>
+                );
+            case "graph":
+                return (
+                    <InteractiveKnowledgeGraph
+                        documents={documents}
+                        onDocumentClick={(id) => setDetailDocId(id)}
+                        onDeleteDocument={(id) => deleteMutation.mutate(id)}
+                    />
+                );
+            case "search":
+                return (
+                    <div className="space-y-6">
+                        {/* Search Input Box */}
+                        <div className="flex items-center bg-secondary/35 border border-border px-4 py-3 rounded-lg space-x-3 focus-within:border-primary/50 transition-colors">
+                            <Search className="w-5 h-5 text-muted-foreground" />
+                            <input
+                                type="text"
+                                value={dashSearch}
+                                onChange={(e) => setDashSearch(e.target.value)}
+                                placeholder="Ask anything about your web history..."
+                                className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/50 text-foreground"
+                            />
+                            {dashSearch && (
+                                <button
+                                    onClick={() => setDashSearch("")}
+                                    className="text-xs text-muted-foreground hover:text-foreground"
+                                >
+                                    Clear
+                                </button>
+                            )}
+                            <button
+                                onClick={() => setDashAI(!dashAI)}
+                                className={`flex items-center space-x-1.5 px-3 py-1 rounded text-xs font-semibold transition-colors focus:outline-none ${
+                                    dashAI
+                                        ? "bg-primary/20 text-primary border border-primary/30"
+                                        : "text-muted-foreground hover:text-foreground border border-transparent"
+                                }`}
+                                title="Generate AI summary of results"
+                            >
+                                <Sparkles className="w-3.5 h-3.5" />
+                                <span>AI Summary</span>
+                            </button>
+                        </div>
+
+                        {/* Two-Column Search Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                            {/* Left sidebar filters */}
+                            <div className="space-y-4">
+                                <div className="p-4 rounded-lg border border-border bg-secondary/15 space-y-3.5">
+                                    <h4 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
+                                        Search Scope
+                                    </h4>
+
+                                    <div className="space-y-1.5">
+                                        <label className="text-[11px] text-muted-foreground">
+                                            Result Limit
+                                        </label>
+                                        <select
+                                            value={dashLimit}
+                                            onChange={(e) =>
+                                                setDashLimit(
+                                                    parseInt(e.target.value),
+                                                )
+                                            }
+                                            className="w-full bg-zinc-900 border border-border rounded-md px-2.5 py-1.5 text-xs text-foreground outline-none"
+                                        >
+                                            <option value="5">
+                                                Top 5 matches
+                                            </option>
+                                            <option value="10">
+                                                Top 10 matches
+                                            </option>
+                                            <option value="20">
+                                                Top 20 matches
+                                            </option>
+                                            <option value="30">
+                                                Top 30 matches
+                                            </option>
+                                        </select>
+                                    </div>
+
+                                    {/* Date range selection */}
+                                    <div className="border-t border-zinc-800/60 pt-3.5 space-y-3">
+                                        <h5 className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
+                                            Time Range
+                                        </h5>
+
+                                        <div className="space-y-1 bg-zinc-950/20 p-1.5 rounded-md border border-zinc-900/50">
+                                            <label className="text-[10.5px] text-muted-foreground flex justify-between">
+                                                <span>Start Date & Time</span>
+                                                {searchStartTime && (
+                                                    <button
+                                                        onClick={() =>
+                                                            setSearchStartTime(
+                                                                "",
+                                                            )
+                                                        }
+                                                        className="text-[9.5px] text-zinc-500 hover:text-zinc-300 transition-colors"
+                                                    >
+                                                        Clear
+                                                    </button>
+                                                )}
+                                            </label>
+                                            <input
+                                                type="datetime-local"
+                                                value={searchStartTime}
+                                                onChange={(e) =>
+                                                    setSearchStartTime(
+                                                        e.target.value,
+                                                    )
+                                                }
+                                                className="w-full bg-zinc-900 border border-zinc-800 rounded px-1.5 py-0.5 text-[11px] text-foreground outline-none focus:border-primary/45 transition-colors"
+                                            />
+                                        </div>
+
+                                        <div className="space-y-1 bg-zinc-950/20 p-1.5 rounded-md border border-zinc-900/50">
+                                            <label className="text-[10.5px] text-muted-foreground flex justify-between">
+                                                <span>End Date & Time</span>
+                                                {searchEndTime && (
+                                                    <button
+                                                        onClick={() =>
+                                                            setSearchEndTime("")
+                                                        }
+                                                        className="text-[9.5px] text-zinc-500 hover:text-zinc-300 transition-colors"
+                                                    >
+                                                        Clear
+                                                    </button>
+                                                )}
+                                            </label>
+                                            <input
+                                                type="datetime-local"
+                                                value={searchEndTime}
+                                                onChange={(e) =>
+                                                    setSearchEndTime(
+                                                        e.target.value,
+                                                    )
+                                                }
+                                                className="w-full bg-zinc-900 border border-zinc-800 rounded px-1.5 py-0.5 text-[11px] text-foreground outline-none focus:border-primary/45 transition-colors"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Right column results */}
+                            <div className="md:col-span-3 space-y-4">
+                                {isDashSearchLoading && (
+                                    <div className="flex flex-col items-center justify-center py-16 space-y-2">
+                                        <RefreshCw className="w-6 h-6 text-muted-foreground animate-spin" />
+                                        <p className="text-xs text-muted-foreground">
+                                            Searching your database...
+                                        </p>
+                                    </div>
+                                )}
+
+                                {!isDashSearchLoading &&
+                                    !debouncedDashSearch.trim() && (
+                                        <div className="p-16 text-center border border-dashed border-border rounded-lg space-y-2">
+                                            <Search className="w-8 h-8 text-muted-foreground/30 mx-auto" />
+                                            <h3 className="text-xs font-semibold text-zinc-300">
+                                                Semantic Engine Idle
+                                            </h3>
+                                            <p className="text-xs text-muted-foreground max-w-xs mx-auto leading-relaxed">
+                                                Type your question above to
+                                                query indexed pages, extract
+                                                answers, and compute matching
+                                                vectors.
+                                            </p>
+                                        </div>
+                                    )}
+
+                                {isDashSearchError && (
+                                    <div className="p-4 rounded-md bg-red-950/20 border border-red-900/30 text-red-400 text-xs">
+                                        {dashSearchError instanceof Error
+                                            ? dashSearchError.message
+                                            : "An error occurred during semantic search."}
+                                    </div>
+                                )}
+
+                                {!isDashSearchLoading &&
+                                    debouncedDashSearch.trim() &&
+                                    dashSearchResults && (
+                                        <>
+                                            {/* AI Summary block */}
+                                            {dashAI &&
+                                                dashSearchResults.ai_summary && (
+                                                    <div className="p-4 rounded-lg bg-primary/5 border border-primary/20 shadow-md space-y-1.5 animate-in fade-in duration-200">
+                                                        <div className="flex items-center space-x-1.5 text-xs text-primary font-semibold">
+                                                            <Sparkles className="w-3.5 h-3.5" />
+                                                            <span>
+                                                                AI Synthesized
+                                                                Response
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-xs text-foreground/90 leading-relaxed">
+                                                            {
+                                                                dashSearchResults.ai_summary
+                                                            }
+                                                        </p>
+                                                    </div>
+                                                )}
+
+                                            {/* Results list */}
+                                            {dashSearchResults.results
+                                                .length === 0 ? (
+                                                <div className="p-12 text-center border border-dashed border-border rounded-lg">
+                                                    <p className="text-xs text-muted-foreground">
+                                                        No matches found. Try
+                                                        widening your query.
+                                                    </p>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-3">
+                                                    {dashSearchResults.results.map(
+                                                        (result) => {
+                                                            const matchPercentage =
+                                                                Math.round(
+                                                                    result.score *
+                                                                        100,
+                                                                );
+                                                            return (
+                                                                <div
+                                                                    key={
+                                                                        result.id
+                                                                    }
+                                                                    onClick={() =>
+                                                                        setDetailDocId(
+                                                                            result.id,
+                                                                        )
+                                                                    }
+                                                                    className="p-4 rounded-lg border border-border bg-secondary/10 hover:bg-secondary/20 hover:border-border/80 hover:scale-[1.005] cursor-pointer transition-all flex flex-col space-y-2.5"
+                                                                >
+                                                                    <div className="flex items-start justify-between space-x-3">
+                                                                        <h3 className="font-semibold text-sm text-zinc-100 hover:text-blue-400 transition-colors line-clamp-1">
+                                                                            {result.title ||
+                                                                                result.url}
+                                                                        </h3>
+                                                                        <span className="text-[10.5px] font-mono bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/20">
+                                                                            {
+                                                                                matchPercentage
+                                                                            }
+                                                                            %
+                                                                            match
+                                                                        </span>
+                                                                    </div>
+
+                                                                    <div className="flex items-center space-x-2 text-[10.5px] text-muted-foreground">
+                                                                        <span className="truncate max-w-[200px]">
+                                                                            {
+                                                                                result.domain
+                                                                            }
+                                                                        </span>
+                                                                        <span>
+                                                                            &bull;
+                                                                        </span>
+                                                                        <span>
+                                                                            {new Date(
+                                                                                result.last_visited_at,
+                                                                            ).toLocaleDateString()}
+                                                                        </span>
+                                                                    </div>
+
+                                                                    {result.summary && (
+                                                                        <p className="text-xs text-muted-foreground/80 leading-relaxed line-clamp-2">
+                                                                            {
+                                                                                result.summary
+                                                                            }
+                                                                        </p>
+                                                                    )}
+
+                                                                    {result.keywords &&
+                                                                        result
+                                                                            .keywords
+                                                                            .length >
+                                                                            0 && (
+                                                                            <div className="flex flex-wrap gap-1 pt-1.5 border-t border-border/30">
+                                                                                {result.keywords
+                                                                                    .slice(
+                                                                                        0,
+                                                                                        4,
+                                                                                    )
+                                                                                    .map(
+                                                                                        (
+                                                                                            kw,
+                                                                                            i,
+                                                                                        ) => (
+                                                                                            <span
+                                                                                                key={
+                                                                                                    i
+                                                                                                }
+                                                                                                className="text-[9px] bg-secondary/70 text-muted-foreground border border-border/50 px-1.5 py-0.5 rounded font-mono"
+                                                                                            >
+                                                                                                #
+                                                                                                {
+                                                                                                    kw.keyword
+                                                                                                }
+                                                                                            </span>
+                                                                                        ),
+                                                                                    )}
+                                                                            </div>
+                                                                        )}
+                                                                </div>
+                                                            );
+                                                        },
+                                                    )}
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
+                            </div>
+                        </div>
+                    </div>
+                );
+        }
+    };
+
+    // Page title for main content header
+    const pageTitle = detailDocId
+        ? "Document"
+        : activePage === "dashboard"
+          ? "Overview"
+          : activePage === "search"
+            ? "Semantic Search"
+            : activePage === "graph"
+              ? "Knowledge Graph"
+              : activePage === "memories"
+                ? "Memories"
+                : "Settings";
+
+    return (
+        <div className="flex h-screen bg-background text-foreground">
+            {/* Sidebar */}
+            <aside className="w-56 flex-shrink-0 border-r border-border flex flex-col">
+                {/* Brand */}
+                <div className="flex items-center space-x-2.5 px-4 py-5 border-b border-border">
+                    <Brain className="w-5 h-5 text-muted-foreground" />
+                    <span className="text-sm font-semibold">MindCache</span>
+                </div>
+
+                {/* Nav */}
+                <nav className="flex-1 p-3 space-y-0.5">
+                    {navItem(
+                        "dashboard",
+                        "Overview",
+                        <LayoutDashboard className="w-4 h-4" />,
+                    )}
+                    {navItem(
+                        "search",
+                        "Semantic Search",
+                        <Search className="w-4 h-4" />,
+                    )}
+                    {navItem(
+                        "graph",
+                        "Knowledge Graph",
+                        <Network className="w-4 h-4" />,
+                    )}
+                    {navItem(
+                        "memories",
+                        "Memories",
+                        <FolderOpen className="w-4 h-4" />,
+                    )}
+                    {navItem(
+                        "settings",
+                        "Settings",
+                        <Settings className="w-4 h-4" />,
+                    )}
+                </nav>
+
+                {/* Footer status */}
+                <div className="px-4 py-3 border-t border-border text-[11px] text-muted-foreground space-y-1">
+                    <div className="flex items-center space-x-1.5">
+                        <span
+                            className={`w-1.5 h-1.5 rounded-full ${isOnline ? "bg-emerald-500" : "bg-red-400"}`}
+                        />
+                        <span>{isOnline ? "Connected" : "Offline"}</span>
+                    </div>
+                    {isOnline && components && (
+                        <div className="text-[10px] text-muted-foreground/60">
+                            {components.faiss_index.vectors_count} vectors
+                            indexed
+                        </div>
+                    )}
+                </div>
+            </aside>
+
+            {/* Main content */}
+            <main
+                className={`flex-1 ${activePage === "graph" && !detailDocId ? "overflow-hidden flex flex-col" : "overflow-y-auto"}`}
+            >
+                <div
+                    className={
+                        activePage === "graph" && !detailDocId
+                            ? "w-full h-full px-6 py-5 flex flex-col space-y-4"
+                            : "max-w-4xl mx-auto px-6 py-6 space-y-6"
+                    }
+                >
+                    {/* Page header */}
+                    <div className="flex items-center justify-between flex-shrink-0">
+                        <h1 className="text-lg font-semibold">{pageTitle}</h1>
+                        {activePage === "memories" && !detailDocId && (
+                            <span className="text-xs text-muted-foreground font-mono">
+                                {documents.length} total
+                            </span>
+                        )}
+                        {activePage === "graph" && !detailDocId && (
+                            <span className="text-xs text-muted-foreground font-mono">
+                                {documents.length > 50
+                                    ? "50"
+                                    : documents.length}{" "}
+                                of {documents.length} docs mapped
+                            </span>
+                        )}
+                    </div>
+
+                    {renderContent()}
+                </div>
+            </main>
+        </div>
+    );
+};
+
+export default App;

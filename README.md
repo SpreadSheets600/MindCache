@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="extension/public/logo_github.png" alt="MindCache Logo" />
+  <img src=".github/image/Banner.png" alt="MindCache Logo" />
 </p>
 
 # MindCache

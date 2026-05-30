@@ -1,803 +1,517 @@
-import React, { useState, useEffect, useRef } from 'react';
-import * as Tabs from '@radix-ui/react-tabs';
-import { backendClient } from '../services/backendClient';
-import { useSearchStore } from '../store/useSearchStore';
-import { useConnectionStore } from '../store/useConnectionStore';
-import { useSettingsStore } from '../store/useSettingsStore';
-import SearchResultCard from '../components/SearchResultCard';
-import RecentSearches from '../components/RecentSearches';
-import BackendStatus from '../components/BackendStatus';
-import KnowledgeGraph from '../components/KnowledgeGraph';
-import type { SearchResult } from '../types';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Sparkles, Search, Library, MessageSquare, Settings2, Globe, EyeOff, 
-  ShieldAlert, Save, ExternalLink, Copy, Check, Trash2, Send, Loader2, Info,
-  Network
+  Terminal, Cpu, Layers, Video, Workflow, ArrowRight, 
+  Check, X, Sparkles, Menu, PhoneCall, Zap
 } from 'lucide-react';
+import ShaderBackground from '../components/ShaderBackground';
 
-interface ChatMessage {
-  role: 'user' | 'assistant';
-  content: string;
-  sources?: SearchResult[];
-}
+// Capitalize Comments And Print Messages Strictly As Instructed
+// Welcome Client To Nexis AI Platform
+const initMessage = () => {
+  console.log("Welcome To Nexis AI Agency Landing Page Dashboard");
+};
 
 export const Dashboard: React.FC = () => {
-  // Navigation States
-  const { isOnline } = useConnectionStore();
-  const { settings, updateSettings, loadSettings } = useSettingsStore();
-
-  // 1. Search Store Hooks
-  const {
-    query,
-    results,
-    aiSummary,
-    isLoading,
-    startTime,
-    endTime,
-    setQuery,
-    setStartTime,
-    setEndTime,
-    executeSearch,
-    loadRecentSearches
-  } = useSearchStore();
-  const [generateSummary, setGenerateSummary] = useState(true);
-  const [activeTab, setActiveTab] = useState('search');
-
-  // 2. Documents Memory Tab States
-  const [docs, setDocs] = useState<SearchResult[]>([]);
-  const [docsLoading, setDocsLoading] = useState(false);
-  const [selectedDoc, setSelectedDoc] = useState<SearchResult | null>(null);
-  const [docFilter, setDocFilter] = useState('');
-  const [copiedDocId, setCopiedDocId] = useState<number | null>(null);
-
-  // 3. AI Chat Box States
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [chatInput, setChatInput] = useState('');
-  const [chatLoading, setChatLoading] = useState(false);
-  const chatEndRef = useRef<HTMLDivElement>(null);
-
-  // 4. Configuration Form States
-  const [backendUrl, setBackendUrl] = useState(settings.backendUrl);
-  const [autoTracking, setAutoTracking] = useState(settings.autoTracking);
-  const [privacyMode, setPrivacyMode] = useState(settings.privacyMode);
-  const [excludedDomains, setExcludedDomains] = useState(settings.excludedDomains.join('\n'));
-  const [settingsSaved, setSettingsSaved] = useState(false);
-
-  // Initialize
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [selectedService, setSelectedService] = useState<number | null>(null);
+  
   useEffect(() => {
-    loadSettings();
-    loadRecentSearches();
-    if (isOnline) {
-      loadDocuments();
+    initMessage();
+  }, []);
+
+  // Services Information Data
+  const services = [
+    {
+      id: 1,
+      title: "AI Full-Stack SaaS",
+      subtitle: "Next-Gen Applications",
+      description: "We Design And Build Scalable Full-Stack SaaS Platforms Supercharged By Embedded LLMs, Cognitive Agents, And Custom Vector Memory Layers.",
+      icon: <Layers className="w-6 h-6 text-blue-400" />,
+      glowColor: "rgba(59, 130, 246, 0.15)",
+      span: "md:col-span-2",
+      badge: "Scale Ready",
+      visual: (
+        <div className="relative w-full h-44 bg-[#080911]/90 rounded-xl border border-gray-900 overflow-hidden flex flex-col p-3">
+          <div className="flex items-center justify-between border-b border-gray-950 pb-2 mb-2">
+            <div className="flex gap-1">
+              <span className="w-2 h-2 rounded-full bg-rose-500/80" />
+              <span className="w-2 h-2 rounded-full bg-yellow-500/80" />
+              <span className="w-2 h-2 rounded-full bg-emerald-500/80" />
+            </div>
+            <span className="text-[8px] font-mono text-blue-400">SAAS_PIPELINE: ACTIVE</span>
+          </div>
+          <div className="flex-1 space-y-1.5 font-mono text-[9px] text-gray-500">
+            <div className="flex justify-between"><span className="text-gray-400">{"-> Ingesting User Request..."}</span><span className="text-emerald-400">SUCCESS</span></div>
+            <div className="flex justify-between"><span className="text-gray-400">{"-> Routing Semantic Weights..."}</span><span className="text-blue-400">142ms</span></div>
+            <div className="flex justify-between"><span className="text-gray-400">{"-> Generating Synthesized React UI..."}</span><span className="text-purple-400">PENDING</span></div>
+          </div>
+          <div className="w-full h-2 bg-gray-950 rounded overflow-hidden">
+            <motion.div 
+              className="h-full bg-gradient-to-r from-blue-500 to-purple-600"
+              initial={{ width: "20%" }}
+              animate={{ width: ["20%", "85%", "40%", "95%", "20%"] }}
+              transition={{ repeat: Infinity, duration: 8, ease: "easeInOut" }}
+            />
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 2,
+      title: "AI Agents",
+      subtitle: "Autonomous Worker Bots",
+      description: "We Ship Self-Directed Agent Swarms That Run Workflows, Analyze Codebases, Process Files, and Manage Business Pipelines Completely Autonomously.",
+      icon: <Cpu className="w-6 h-6 text-purple-400" />,
+      glowColor: "rgba(139, 92, 246, 0.15)",
+      span: "md:col-span-1",
+      badge: "Multi-Agent Systems",
+      visual: (
+        <div className="relative w-full h-44 bg-[#080911]/90 rounded-xl border border-gray-900 p-3 flex flex-col justify-between overflow-hidden">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-purple-500 animate-ping" />
+            <span className="text-[9px] font-mono text-purple-400 font-bold uppercase tracking-wider">Swarm Engine</span>
+          </div>
+          <div className="space-y-2">
+            <div className="p-1.5 bg-purple-950/20 border border-purple-900/25 rounded-md flex items-center justify-between text-[8px] font-mono">
+              <span className="text-gray-300">Agent Alpha (Coder)</span>
+              <span className="text-emerald-400">Writing Test Suites</span>
+            </div>
+            <div className="p-1.5 bg-blue-950/20 border border-blue-900/25 rounded-md flex items-center justify-between text-[8px] font-mono">
+              <span className="text-gray-300">Agent Beta (Auditor)</span>
+              <span className="text-blue-400">Reviewing PR #442</span>
+            </div>
+          </div>
+          <div className="text-[8px] font-mono text-gray-600 text-center">
+            SYSTEM_STABILITY: 99.8% ACCURACY
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 3,
+      title: "RAG Pipelines",
+      subtitle: "Semantic Retrieval Indexing",
+      description: "We Build High-Speed Vector Retrieval Infrastructure Connected To SQLite, FAISS, And Pinecone For Grounded, Zero-Hallucination AI Operations.",
+      icon: <Terminal className="w-6 h-6 text-teal-400" />,
+      glowColor: "rgba(20, 184, 166, 0.15)",
+      span: "md:col-span-1",
+      badge: "Zero Hallucinations",
+      visual: (
+        <div className="relative w-full h-44 bg-[#080911]/90 rounded-xl border border-gray-900 p-3 flex flex-col justify-between overflow-hidden">
+          <div className="text-[9px] font-mono text-teal-400 font-bold uppercase tracking-wider">Semantic Vector Space</div>
+          <div className="relative flex-1 flex items-center justify-center">
+            {/* Draw Simulated Vector Graph Nodes */}
+            <div className="absolute w-2 h-2 bg-teal-400 rounded-full blur-[2px] top-6 left-12 animate-pulse" />
+            <div className="absolute w-2.5 h-2.5 bg-purple-500 rounded-full blur-[2px] bottom-8 right-16 animate-pulse" />
+            <div className="absolute w-2 h-2 bg-blue-500 rounded-full blur-[1px] top-14 right-8" />
+            <svg className="absolute w-full h-full stroke-gray-800" style={{ strokeWidth: 1.5 }}>
+              <line x1="50" y1="30" x2="160" y2="100" />
+              <line x1="160" y1="100" x2="220" y2="60" />
+              <line x1="50" y1="30" x2="220" y2="60" />
+            </svg>
+            <span className="text-[8px] font-mono text-gray-500 absolute bottom-1 text-center w-full">FAISS Cosine Distance Query</span>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 4,
+      title: "Custom Video Solutions",
+      subtitle: "AI Video Synthesis Models",
+      description: "We Architect Generative Audio-Video Platforms Integrating Diffusion, Sync Labs, and Text-To-Speech APIs For Automated Content Creation Engines.",
+      icon: <Video className="w-6 h-6 text-emerald-400" />,
+      glowColor: "rgba(16, 185, 129, 0.15)",
+      span: "md:col-span-1",
+      badge: "Real-Time Render",
+      visual: (
+        <div className="relative w-full h-44 bg-[#080911]/90 rounded-xl border border-gray-900 p-3 flex flex-col justify-between overflow-hidden group">
+          <div className="flex items-center justify-between">
+            <span className="text-[9px] font-mono text-emerald-400 font-bold uppercase tracking-wider">Generative Frame Stream</span>
+            <span className="text-[8px] font-mono text-gray-500">60 FPS</span>
+          </div>
+          <div className="w-full h-24 bg-gray-950 rounded-lg border border-gray-900/60 overflow-hidden flex items-center justify-center relative">
+            <div className="absolute inset-0 bg-gradient-to-tr from-emerald-950/20 via-transparent to-teal-950/20" />
+            <motion.div 
+              className="absolute w-12 h-12 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-full blur-xl opacity-60"
+              animate={{
+                scale: [1, 1.4, 0.9, 1.3, 1],
+                x: [-10, 15, -20, 10, -10],
+                y: [10, -15, 20, -10, 10]
+              }}
+              transition={{ repeat: Infinity, duration: 6, ease: "easeInOut" }}
+            />
+            <span className="text-[9.5px] font-mono text-white/70 relative font-semibold">SYNTHESIZING...</span>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 5,
+      title: "Custom n8n Workflows",
+      subtitle: "Cognitive Ingestion Pipelines",
+      description: "We Automate Your Business By Integrating Complex n8n Logic Flow Charts That Orchestrate Data Between APIs, LLMs, and Human-In-The-Loop Checkpoints.",
+      icon: <Workflow className="w-6 h-6 text-rose-400" />,
+      glowColor: "rgba(244, 63, 94, 0.15)",
+      span: "md:col-span-2",
+      badge: "Zero Maintenance Systems",
+      visual: (
+        <div className="relative w-full h-44 bg-[#080911]/90 rounded-xl border border-gray-900 p-3 flex flex-col justify-between overflow-hidden">
+          <div className="flex items-center justify-between">
+            <span className="text-[9px] font-mono text-rose-400 font-bold uppercase tracking-wider">Workflow Orchestrator</span>
+            <span className="text-[8px] font-mono text-gray-500">Node Connections: 14</span>
+          </div>
+          <div className="relative flex-1 flex items-center justify-around">
+            <div className="p-1.5 bg-gray-950 border border-gray-800 rounded-lg text-[8px] font-mono text-gray-400">
+              Webhook
+            </div>
+            <div className="w-6 h-[1.5px] bg-rose-500/50" />
+            <div className="p-1.5 bg-rose-950/20 border border-rose-500/30 rounded-lg text-[8px] font-mono text-rose-400 font-bold">
+              Cognitive Agent
+            </div>
+            <div className="w-6 h-[1.5px] bg-rose-500/50" />
+            <div className="p-1.5 bg-gray-950 border border-gray-800 rounded-lg text-[8px] font-mono text-gray-400">
+              Slack Alert
+            </div>
+          </div>
+          <div className="text-[8.5px] font-mono text-gray-500 text-center leading-none">
+            TRIGGER: NEW LEAD INGESTED
+          </div>
+        </div>
+      )
     }
-  }, [loadSettings, loadRecentSearches, isOnline]);
+  ];
 
-  // Sync Settings Configurations
-  useEffect(() => {
-    setBackendUrl(settings.backendUrl);
-    setAutoTracking(settings.autoTracking);
-    setPrivacyMode(settings.privacyMode);
-    setExcludedDomains(settings.excludedDomains.join('\n'));
-  }, [settings]);
-
-  // Scroll Chat To Bottom On New Message
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatMessages, chatLoading]);
-
-  // Fetch SQLite Documents
-  const loadDocuments = async () => {
-    setDocsLoading(true);
-    try {
-      // Fetch 100 Documents
-      const response = await backendClient.request<SearchResult[]>('/documents?limit=100');
-      setDocs(response);
-      if (response.length > 0 && !selectedDoc) {
-        setSelectedDoc(response[0]);
-      }
-    } catch (err) {
-      console.warn('Failed To Load Memory Documents:', err);
-    } finally {
-      setDocsLoading(false);
+  // Old Way Vs AI Way Comparison
+  const comparisons = [
+    {
+      old: "Traditional Code Stack Layouts",
+      ai: "Cognitive Dynamic Architectures",
+      desc: "Static rules fail when edge cases arise. Autonomous learning pipelines morph automatically."
+    },
+    {
+      old: "High Development Salary Overhead",
+      ai: "Zero Infrastructure Maintenance",
+      desc: "Instead of massive full-time overhead, deploy lightweight agent swarms that operate 24/7."
+    },
+    {
+      old: "Siloed Application Tools",
+      ai: "Connected Vector Context Pipelines",
+      desc: "Fragmented systems lead to data loss. Unified semantic retrieval aligns search space instantly."
     }
-  };
-
-  // Delete Document From Both SQLite & FAISS
-  const handleDeleteDocument = async (id: number) => {
-    try {
-      await backendClient.request(`/documents/${id}`, { method: 'DELETE' });
-      setDocs((prev) => prev.filter((d) => d.id !== id));
-      if (selectedDoc?.id === id) {
-        setSelectedDoc(null);
-      }
-    } catch (err) {
-      console.warn('Failed To Delete Document:', err);
-    }
-  };
-
-  // Copy URL Helper
-  const handleCopyUrl = async (url: string, id: number) => {
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopiedDocId(id);
-      setTimeout(() => setCopiedDocId(null), 2000);
-    } catch (err) {
-      console.debug('Failed to copy', err);
-    }
-  };
-
-  // Handle RAG Chat Messages
-  const handleSendChatMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const prompt = chatInput.trim();
-    if (!prompt || chatLoading) return;
-
-    setChatMessages((prev) => [...prev, { role: 'user', content: prompt }]);
-    setChatInput('');
-    setChatLoading(true);
-
-    try {
-      // Query FAISS Index And Local Ollama Synthesis
-      const response = await backendClient.search(prompt, 3, true);
-      setChatMessages((prev) => [
-        ...prev, 
-        { 
-          role: 'assistant', 
-          content: response.ai_summary || "Memory Engine could not formulate a synthesis.",
-          sources: response.results 
-        }
-      ]);
-    } catch (err: any) {
-      setChatMessages((prev) => [
-        ...prev,
-        { role: 'assistant', content: `Error querying local Ollama engine: ${err.message || 'Server Offline'}` }
-      ]);
-    } finally {
-      setChatLoading(false);
-    }
-  };
-
-  // Save Settings
-  const handleSaveSettings = async () => {
-    const parsedDomains = excludedDomains
-      .split('\n')
-      .map((d) => {
-        let entry = d.trim().toLowerCase();
-        
-        // Remove Protocol If Present
-        if (entry.includes('://')) {
-          try {
-            const url = new URL(entry);
-            entry = url.hostname;
-          } catch {
-            entry = entry.split('://')[1] || entry;
-          }
-        }
-        
-        // Remove Leading 'Www.' If Present
-        entry = entry.replace(/^www\./i, '');
-        
-        // Strip Ports, Paths, Query Parameters
-        entry = entry.split('/')[0].split(':')[0].split('?')[0];
-        
-        return entry.trim();
-      })
-      .filter((d) => {
-        if (d.length === 0) return false;
-        // Basic Domain Syntax Check: Should Contain Only Valid Domain Characters
-        const domainRegex = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$/i;
-        return domainRegex.test(d);
-      });
-
-    const uniqueDomains = Array.from(new Set(parsedDomains));
-
-    await updateSettings({
-      backendUrl: backendUrl.trim(),
-      autoTracking,
-      privacyMode,
-      excludedDomains: uniqueDomains,
-    });
-
-    setExcludedDomains(uniqueDomains.join('\n'));
-    setSettingsSaved(true);
-    setTimeout(() => setSettingsSaved(false), 2000);
-  };
-
-  // Filters Documents List On Client Side
-  const filteredDocs = docs.filter((d) => {
-    const filter = docFilter.toLowerCase();
-    return (
-      (d.title?.toLowerCase() || '').includes(filter) ||
-      d.url.toLowerCase().includes(filter) ||
-      d.domain.toLowerCase().includes(filter)
-    );
-  });
+  ];
 
   return (
-    <div className="w-screen h-screen flex flex-col bg-[#07080c] text-gray-200 select-none overflow-hidden font-sans">
-      {/* Diagnostics Status Bar */}
-      <BackendStatus />
+    <div className="relative w-full min-h-screen text-gray-200 font-technical selection:bg-purple-600/30 selection:text-purple-300 pb-0 overflow-x-hidden">
+      
+      {/* Inject Styling Rules For Marquee Animation Loop */}
+      <style>{`
+        @keyframes marquee {
+          0% { transform: translateX(0%); }
+          100% { transform: translateX(-50%); }
+        }
+        .animate-marquee {
+          animation: marquee 16s linear infinite;
+        }
+      `}</style>
 
-      {/* Primary Radix Tab layout */}
-      <Tabs.Root value={activeTab} onValueChange={setActiveTab} className="flex flex-1 overflow-hidden">
-        {/* Sidebar Nav */}
-        <Tabs.List className="w-60 bg-[#090a0f] border-r border-gray-900 p-4 flex flex-col justify-between shrink-0">
-          <div className="space-y-6">
-            {/* Header branding */}
-            <div className="flex items-center gap-2 px-1">
-              <img src="/logo.png" alt="MindCache Logo" className="w-8 h-8 rounded-lg object-cover border border-purple-500/30" />
-              <div>
-                <h1 className="text-xs font-bold uppercase tracking-wider text-gray-100 m-0">MindCache</h1>
-                <span className="text-[9px] text-gray-500 font-semibold uppercase tracking-wider">Dashboard v1.0</span>
-              </div>
-            </div>
+      {/* Reactive WebGL Void Background */}
+      <ShaderBackground />
 
-            {/* Navigation options */}
-            <nav className="space-y-1.5 flex flex-col">
-              <Tabs.Trigger 
-                value="search" 
-                className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold rounded-lg text-gray-500 hover:text-gray-300 hover:bg-gray-900/60 data-[state=active]:bg-purple-600 data-[state=active]:text-white transition-all cursor-pointer text-left w-full border border-transparent data-[state=active]:border-purple-500/35"
-              >
-                <Search className="w-4 h-4 shrink-0" />
-                Spotlight Search
-              </Tabs.Trigger>
+      {/* Grid Pattern Foreground Layer */}
+      <div className="fixed inset-0 bg-[linear-gradient(to_right,#0c0d12_1px,transparent_1px),linear-gradient(to_bottom,#0c0d12_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] pointer-events-none z-0" />
 
-              <Tabs.Trigger 
-                value="history" 
-                onClick={loadDocuments}
-                className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold rounded-lg text-gray-500 hover:text-gray-300 hover:bg-gray-900/60 data-[state=active]:bg-purple-600 data-[state=active]:text-white transition-all cursor-pointer text-left w-full border border-transparent data-[state=active]:border-purple-500/35"
-              >
-                <Library className="w-4 h-4 shrink-0" />
-                Document Memory
-              </Tabs.Trigger>
-
-              <Tabs.Trigger 
-                value="chat" 
-                className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold rounded-lg text-gray-500 hover:text-gray-300 hover:bg-gray-900/60 data-[state=active]:bg-purple-600 data-[state=active]:text-white transition-all cursor-pointer text-left w-full border border-transparent data-[state=active]:border-purple-500/35"
-              >
-                <MessageSquare className="w-4 h-4 shrink-0" />
-                Interactive Chat
-              </Tabs.Trigger>
-
-              <Tabs.Trigger 
-                value="graph" 
-                onClick={loadDocuments}
-                className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold rounded-lg text-gray-500 hover:text-gray-300 hover:bg-gray-900/60 data-[state=active]:bg-purple-600 data-[state=active]:text-white transition-all cursor-pointer text-left w-full border border-transparent data-[state=active]:border-purple-500/35"
-              >
-                <Network className="w-4 h-4 shrink-0" />
-                Knowledge Graph
-              </Tabs.Trigger>
-
-              <Tabs.Trigger 
-                value="settings" 
-                className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold rounded-lg text-gray-500 hover:text-gray-300 hover:bg-gray-900/60 data-[state=active]:bg-purple-600 data-[state=active]:text-white transition-all cursor-pointer text-left w-full border border-transparent data-[state=active]:border-purple-500/35"
-              >
-                <Settings2 className="w-4 h-4 shrink-0" />
-                Configurations
-              </Tabs.Trigger>
-            </nav>
+      {/* Header: Holographic Glassmorphism Navbar */}
+      <header className="sticky top-0 z-50 w-full border-b border-gray-900/60 bg-[#030305]/65 backdrop-blur-md">
+        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <img src="/logo.png" alt="Nexis AI Logo" className="w-7 h-7 rounded-lg object-cover border border-purple-500/35" />
+            <span className="font-display font-extrabold text-xs uppercase tracking-wider text-white">Nexis AI Agency</span>
           </div>
 
-          {/* Sidebar Footer */}
-          <div className="px-2 py-3 bg-[#0d0e14] border border-gray-900 rounded-lg text-center select-none">
-            <span className="text-[9px] text-gray-500 block leading-normal">Spotlight Hotkey</span>
-            <kbd className="inline-block px-1.5 py-0.5 mt-1 bg-gray-950 border border-gray-800 rounded text-[9px] font-mono text-purple-400">
-              Ctrl+Shift+K
-            </kbd>
+          {/* Desktop Nav Links */}
+          <nav className="hidden md:flex items-center gap-6">
+            <a href="#services" className="text-[10px] uppercase font-bold text-gray-400 hover:text-white tracking-widest transition-colors">Services</a>
+            <a href="#why-us" className="text-[10px] uppercase font-bold text-gray-400 hover:text-white tracking-widest transition-colors">Strategy</a>
+            <a href="#footer" className="text-[10px] uppercase font-bold text-gray-400 hover:text-white tracking-widest transition-colors">Contact</a>
+          </nav>
+
+          {/* CTA Action Button */}
+          <div className="flex items-center gap-3">
+            <a
+              href="https://calendly.com"
+              target="_blank"
+              rel="noreferrer"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-[#090a10] border border-gray-800 hover:border-purple-500/30 text-[9.5px] uppercase font-bold rounded-lg text-gray-200 transition-all hover:text-white cursor-pointer active:scale-[0.98]"
+            >
+              <PhoneCall className="w-3 h-3 text-purple-400" />
+              Book Launch Call
+            </a>
+
+            <button 
+              onClick={() => setMobileMenuOpen(prev => !prev)}
+              className="md:hidden p-1 text-gray-400 hover:text-white rounded"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
           </div>
-        </Tabs.List>
-
-        {/* Tab Panels content */}
-        <div className="flex-1 flex overflow-hidden bg-[#07080c]">
-          
-          {/* TAB 1: SPOTLIGHT SEARCH */}
-          <Tabs.Content value="search" className="flex-1 flex flex-col overflow-hidden w-full">
-            {/* Search Top Input */}
-            <div className="flex flex-col gap-3.5 p-4 border-b border-gray-900 bg-[#090a0f]">
-              <div className="flex items-center gap-3">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3.5 top-2.5 w-4 h-4 text-gray-500" />
-                  <input
-                    type="text"
-                    value={query}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setQuery(val);
-                      if (!val.trim()) {
-                        useSearchStore.getState().resetSearch();
-                      }
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        executeSearch(6, generateSummary);
-                      }
-                    }}
-                    placeholder="Query your browsed articles semantically... (Press Enter)"
-                    className="w-full pl-10 pr-4 py-2 text-xs bg-[#10111a] border border-gray-800 rounded-lg text-gray-200 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50 transition-colors"
-                  />
-                </div>
-                <button
-                  onClick={() => {
-                    const nextGen = !generateSummary;
-                    setGenerateSummary(nextGen);
-                    if (query.trim() && isOnline) {
-                      executeSearch(6, nextGen);
-                    }
-                  }}
-                  className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
-                    generateSummary
-                      ? 'bg-purple-950/20 border-purple-500/40 text-purple-300'
-                      : 'bg-[#10111a] border-gray-800 text-gray-500 hover:text-gray-300'
-                  }`}
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  AI Summary
-                </button>
-              </div>
-
-              {/* Time Filtering Sub-Row */}
-              <div className="flex items-center gap-4 text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="text-[9px] uppercase font-bold tracking-widest text-gray-500 select-none">From</span>
-                  <input
-                    type="datetime-local"
-                    value={startTime}
-                    onChange={(e) => {
-                      setStartTime(e.target.value);
-                      if (query.trim()) {
-                        executeSearch(6, generateSummary);
-                      }
-                    }}
-                    className="px-3 py-1.5 bg-[#10111a] border border-gray-800 rounded-lg text-gray-300 focus:outline-none focus:border-purple-500/60 transition-colors text-[10px] font-semibold text-center outline-none selection:bg-purple-500/30"
-                  />
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  <span className="text-[9px] uppercase font-bold tracking-widest text-gray-500 select-none">To</span>
-                  <input
-                    type="datetime-local"
-                    value={endTime}
-                    onChange={(e) => {
-                      setEndTime(e.target.value);
-                      if (query.trim()) {
-                        executeSearch(6, generateSummary);
-                      }
-                    }}
-                    className="px-3 py-1.5 bg-[#10111a] border border-gray-800 rounded-lg text-gray-300 focus:outline-none focus:border-purple-500/60 transition-colors text-[10px] font-semibold text-center outline-none selection:bg-purple-500/30"
-                  />
-                </div>
-
-                {(startTime || endTime) && (
-                  <button
-                    onClick={() => {
-                      useSearchStore.setState({ startTime: '', endTime: '' });
-                      if (query.trim()) {
-                        executeSearch(6, generateSummary);
-                      }
-                    }}
-                    className="px-2.5 py-1 text-[9px] text-purple-400 hover:text-purple-300 font-bold uppercase tracking-widest cursor-pointer transition-all hover:bg-purple-500/10 rounded-lg border border-transparent hover:border-purple-500/20"
-                  >
-                    Clear Filter
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Ingestion results list */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
-              {isLoading && results.length === 0 && (
-                <div className="flex flex-col items-center justify-center h-64">
-                  <Loader2 className="w-7 h-7 text-purple-500 animate-spin" />
-                  <span className="text-[10px] text-gray-500 mt-2 font-semibold uppercase tracking-wider">Semantic matching...</span>
-                </div>
-              )}
-
-              {results.length > 0 && (
-                <div className="max-w-4xl mx-auto space-y-3">
-                  {/* RAG summary */}
-                  {aiSummary && (
-                    <div className="p-4 bg-purple-950/15 border border-purple-500/25 rounded-lg shadow-lg shadow-purple-500/5 animate-in fade-in duration-200">
-                      <div className="flex items-center gap-1.5 mb-2">
-                        <Sparkles className="w-4 h-4 text-purple-400" />
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-purple-300">
-                          Collective Synthesis Answer
-                        </span>
-                      </div>
-                      <p className="text-xs text-purple-200/90 leading-relaxed font-sans select-text">
-                        {aiSummary}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Results cards */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {results.map((item) => (
-                      <SearchResultCard key={item.id} result={item} />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {!query.trim() && (
-                <div className="flex flex-col items-center justify-center h-80 max-w-sm mx-auto text-center py-12">
-                  <Search className="w-10 h-10 text-purple-500/30 mb-3" />
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">
-                    MindCache Vector Spotlight
-                  </h3>
-                  <p className="text-[10px] text-gray-600 mt-1 leading-relaxed">
-                    Ask your browser memory questions. FAISS similarity searches will resolve closest cosine matches.
-                  </p>
-                  <div className="w-full mt-6">
-                    <RecentSearches generateSummary={generateSummary} />
-                  </div>
-                </div>
-              )}
-
-              {query.trim() && results.length === 0 && !isLoading && (
-                <div className="flex flex-col items-center justify-center h-64 text-center">
-                  <Info className="w-8 h-8 text-gray-600 mb-2" />
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">No semantic hits found</h3>
-                  <p className="text-[10px] text-gray-600 mt-1">Try typing details of pages you previously read.</p>
-                </div>
-              )}
-            </div>
-          </Tabs.Content>
-
-          {/* TAB 2: DOCUMENT MEMORY EXPLORER */}
-          <Tabs.Content value="history" className="flex-1 flex overflow-hidden w-full">
-            {/* Sidebar list of documents */}
-            <div className="w-72 border-r border-gray-900 bg-[#090a0f]/60 flex flex-col shrink-0">
-              <div className="p-3 border-b border-gray-900">
-                <input
-                  type="text"
-                  placeholder="Filter by title/domain..."
-                  value={docFilter}
-                  onChange={(e) => setDocFilter(e.target.value)}
-                  className="w-full px-3 py-1.5 text-xs bg-[#10111a] border border-gray-800 rounded-lg text-gray-200 focus:outline-none focus:border-purple-500"
-                />
-              </div>
-
-              {/* Scrollable list */}
-              <div className="flex-1 overflow-y-auto no-scrollbar p-2 space-y-1">
-                {docsLoading ? (
-                  <div className="flex items-center justify-center py-10">
-                    <Loader2 className="w-5 h-5 text-gray-500 animate-spin" />
-                  </div>
-                ) : filteredDocs.length === 0 ? (
-                  <div className="text-center py-10 text-[10px] text-gray-600">No documents stored.</div>
-                ) : (
-                  filteredDocs.map((doc) => (
-                    <div
-                      key={doc.id}
-                      onClick={() => setSelectedDoc(doc)}
-                      className={`p-2.5 rounded-lg text-left cursor-pointer transition-all border ${
-                        selectedDoc?.id === doc.id
-                          ? 'bg-purple-950/20 border-purple-500/30 text-purple-300'
-                          : 'bg-transparent border-transparent hover:bg-gray-900/50 hover:text-gray-300'
-                      }`}
-                    >
-                      <h4 className="text-xs font-semibold truncate">{doc.title || doc.url}</h4>
-                      <span className="text-[9px] text-gray-500 block font-mono mt-0.5 truncate">{doc.domain}</span>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* Document Details Main Area */}
-            <div className="flex-1 flex flex-col overflow-hidden bg-[#07080c] select-text">
-              {selectedDoc ? (
-                <div className="flex-1 flex flex-col overflow-hidden">
-                  {/* Detail Header */}
-                  <div className="p-4 border-b border-gray-900 bg-[#090a0f]/80 flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <h2 className="text-sm font-bold text-gray-100 leading-tight select-all">
-                        {selectedDoc.title || 'Untitled Webpage'}
-                      </h2>
-                      <a 
-                        href={selectedDoc.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-[10px] text-purple-400 hover:underline flex items-center gap-1 mt-1 font-mono break-all"
-                      >
-                        {selectedDoc.url}
-                        <ExternalLink className="w-3 h-3 shrink-0" />
-                      </a>
-                    </div>
-                    
-                    {/* Action buttons */}
-                    <div className="flex items-center gap-1.5 shrink-0 select-none">
-                      <button
-                        onClick={() => handleCopyUrl(selectedDoc.url, selectedDoc.id)}
-                        className="p-2 bg-[#10111a] border border-gray-800 text-gray-400 hover:text-purple-300 hover:border-gray-700 rounded-lg transition-colors cursor-pointer"
-                        title="Copy Link"
-                      >
-                        {copiedDocId === selectedDoc.id ? (
-                          <Check className="w-3.5 h-3.5 text-emerald-400" />
-                        ) : (
-                          <Copy className="w-3.5 h-3.5" />
-                        )}
-                      </button>
-                      <button
-                        onClick={() => handleDeleteDocument(selectedDoc.id)}
-                        className="p-2 bg-rose-950/20 border border-rose-900/60 hover:bg-rose-900/40 text-rose-400 rounded-lg transition-colors cursor-pointer"
-                        title="Delete Document from Memory"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Details Scrollable Area */}
-                  <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
-                    {/* Ollama Document Summary callout */}
-                    {selectedDoc.summary && (
-                      <div className="p-3.5 bg-purple-950/15 border border-purple-500/25 rounded-lg select-text">
-                        <h4 className="text-[9px] font-bold uppercase tracking-wider text-purple-300 mb-1 flex items-center gap-1">
-                          <Sparkles className="w-3.5 h-3.5" />
-                          AI Webpage Summary
-                        </h4>
-                        <p className="text-xs text-purple-200/90 leading-relaxed">
-                          {selectedDoc.summary}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Keywords row */}
-                    {selectedDoc.keywords.length > 0 && (
-                      <div className="space-y-1.5 select-none">
-                        <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider block">Extracted Keywords</span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {selectedDoc.keywords.map((kw, idx) => (
-                            <span 
-                              key={idx}
-                              className="px-2 py-0.5 text-[9px] bg-gray-900 border border-gray-800 text-gray-400 rounded-md font-semibold"
-                            >
-                              {kw.keyword} ({Math.round(kw.score * 100)}%)
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Full Extracted Page Text */}
-                    <div className="space-y-2 select-text">
-                      <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider block select-none">Extracted Webpage Content</span>
-                      <div className="bg-[#0b0c14] border border-gray-900/80 rounded-lg p-4 font-sans text-xs text-gray-300 leading-relaxed max-w-4xl whitespace-pre-wrap">
-                        {selectedDoc.extracted_content}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex-1 flex flex-col items-center justify-center text-center p-6">
-                  <Library className="w-10 h-10 text-gray-700 mb-2" />
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500">No document selected</h3>
-                  <p className="text-[10px] text-gray-600">Select any webpage from the list to explore metadata and text content.</p>
-                </div>
-              )}
-            </div>
-          </Tabs.Content>
-
-          {/* TAB 3: AI COGNITIVE CHAT ROOM */}
-          <Tabs.Content value="chat" className="flex-1 flex flex-col overflow-hidden w-full">
-            {/* Chat Header */}
-            <div className="p-4 border-b border-gray-900 bg-[#090a0f]/80">
-              <div className="flex items-center gap-2">
-                <div className="p-1 bg-purple-950/20 border border-purple-500/30 rounded-lg text-purple-400 shrink-0">
-                  <Sparkles className="w-4 h-4 shrink-0" />
-                </div>
-                <div>
-                  <h2 className="text-xs font-bold uppercase tracking-wider text-gray-200">Interactive Cognitive Chat</h2>
-                  <span className="text-[8px] text-gray-500 block leading-tight font-mono">Conversation with your browser history</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Chat message Thread */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar bg-[#07080c] select-text">
-              {chatMessages.length === 0 && (
-                <div className="flex flex-col items-center justify-center h-80 max-w-md mx-auto text-center">
-                  <MessageSquare className="w-10 h-10 text-purple-500/30 mb-3" />
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">Ask Your Browser Memory</h3>
-                  <p className="text-[10px] text-gray-600 mt-1 leading-relaxed">
-                    Type any query about articles you have visited. Ollama will query FAISS for context, retrieve matching documents, and synthesize an answer.
-                  </p>
-                </div>
-              )}
-
-              {chatMessages.map((msg, idx) => (
-                <div 
-                  key={idx}
-                  className={`flex flex-col max-w-3xl ${
-                    msg.role === 'user' ? 'ml-auto items-end' : 'mr-auto items-start'
-                  }`}
-                >
-                  {/* Sender title */}
-                  <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider mb-1 select-none">
-                    {msg.role === 'user' ? 'You' : 'MindCache Memory'}
-                  </span>
-
-                  {/* Content bubbles */}
-                  <div className={`p-3 rounded-lg text-xs leading-relaxed max-w-full ${
-                    msg.role === 'user'
-                      ? 'bg-purple-600 text-white font-medium shadow-md shadow-purple-500/5'
-                      : 'bg-[#10111a] border border-gray-900 text-gray-200'
-                  }`}>
-                    {msg.content}
-
-                    {/* Chat RAG Sources */}
-                    {msg.sources && msg.sources.length > 0 && (
-                      <div className="mt-3 border-t border-gray-800/80 pt-2.5 space-y-1.5 select-none">
-                        <span className="text-[8px] font-bold text-gray-500 uppercase tracking-wider block">Referenced Webpages</span>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          {msg.sources.map((src, sIdx) => (
-                            <a
-                              key={sIdx}
-                              href={src.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="p-1.5 bg-[#090a0f] hover:bg-purple-950/20 border border-gray-850 hover:border-purple-500/20 rounded flex flex-col text-left group transition-all"
-                            >
-                              <span className="text-[9px] font-semibold text-gray-300 group-hover:text-purple-300 truncate">
-                                [{sIdx + 1}] {src.title || 'Untitled Webpage'}
-                              </span>
-                              <span className="text-[8px] text-gray-600 font-mono truncate">{src.domain}</span>
-                            </a>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-
-              {/* Chat loader */}
-              {chatLoading && (
-                <div className="flex flex-col items-start max-w-3xl mr-auto select-none">
-                  <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider mb-1">MindCache Memory</span>
-                  <div className="p-3 bg-[#10111a] border border-gray-900 rounded-lg flex items-center gap-2 text-xs text-gray-400">
-                    <Loader2 className="w-3.5 h-3.5 text-purple-400 animate-spin" />
-                    Searching FAISS and synthesizing collective summary via Ollama...
-                  </div>
-                </div>
-              )}
-              <div ref={chatEndRef} />
-            </div>
-
-            {/* Chat Input form */}
-            <form onSubmit={handleSendChatMessage} className="p-3 border-t border-gray-900 bg-[#090a0f]">
-              <div className="flex items-center gap-2 max-w-4xl mx-auto">
-                <input
-                  type="text"
-                  placeholder="Ask your memory: 'What did I read about karpathy coding guidlines?'"
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  className="flex-1 px-3 py-2 text-xs bg-[#10111a] border border-gray-850 rounded-lg text-gray-200 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50"
-                  disabled={chatLoading}
-                />
-                <button
-                  type="submit"
-                  disabled={chatLoading || !chatInput.trim()}
-                  className="p-2.5 bg-purple-600 hover:bg-purple-700 disabled:bg-[#10111a] disabled:border-gray-850 disabled:text-gray-600 text-white border border-purple-500 disabled:border-transparent rounded-lg cursor-pointer disabled:cursor-not-allowed transition-colors shrink-0"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </form>
-          </Tabs.Content>
-
-          {/* TAB 5: KNOWLEDGE GRAPH */}
-          <Tabs.Content value="graph" className="flex-1 flex overflow-hidden w-full">
-            <KnowledgeGraph 
-              docs={docs} 
-              loadDocuments={loadDocuments} 
-              docsLoading={docsLoading} 
-              onOpenInHistory={(doc) => {
-                setActiveTab('history');
-                setSelectedDoc(doc);
-              }} 
-            />
-          </Tabs.Content>
-
-          {/* TAB 4: CONFIGURATION SETTINGS */}
-          <Tabs.Content value="settings" className="flex-1 flex overflow-hidden w-full select-none">
-            <div className="max-w-2xl mx-auto p-6 space-y-6 w-full">
-              <div>
-                <h2 className="text-sm font-bold uppercase tracking-wider text-gray-100">System Configurations</h2>
-                <span className="text-[10px] text-gray-500">Manage database connections, ingestion rules, and privacy exclusions list.</span>
-              </div>
-
-              {/* Form Areas */}
-              <div className="space-y-4">
-                {/* Connection url */}
-                <div className="space-y-2">
-                  <label className="flex items-center gap-1.5 text-[9px] font-bold text-gray-500 uppercase tracking-wider">
-                    <Globe className="w-3.5 h-3.5" />
-                    Local Server Endpoint
-                  </label>
-                  <input
-                    type="text"
-                    value={backendUrl}
-                    onChange={(e) => setBackendUrl(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-[#10111a] border border-gray-800 rounded-lg text-gray-200 focus:outline-none focus:border-purple-500 transition-colors"
-                  />
-                </div>
-
-                {/* Tracking checklist */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                  <div className="flex items-center justify-between gap-4 p-3 bg-[#10111a] border border-gray-800/80 rounded-lg">
-                    <div className="flex-1">
-                      <span className="text-[10px] font-bold text-gray-300 uppercase tracking-wider block">Auto Ingestion</span>
-                      <span className="text-[8px] text-gray-500 block leading-tight mt-0.5">Parse webpages visited in tabs automatically</span>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={autoTracking}
-                        onChange={(e) => setAutoTracking(e.target.checked)}
-                        className="sr-only peer"
-                      />
-                      <div className="w-7 h-4 bg-gray-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-gray-400 after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-purple-600 peer-checked:after:bg-white"></div>
-                    </label>
-                  </div>
-
-                  <div className="flex items-center justify-between gap-4 p-3 bg-[#10111a] border border-gray-800/80 rounded-lg">
-                    <div className="flex-1">
-                      <span className="text-[10px] font-bold text-gray-300 uppercase tracking-wider block flex items-center gap-1">
-                        <EyeOff className="w-3.5 h-3.5 text-purple-400" />
-                        Privacy Safeguard
-                      </span>
-                      <span className="text-[8px] text-gray-500 block leading-tight mt-0.5">Filter queries and tracking on private pages</span>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={privacyMode}
-                        onChange={(e) => setPrivacyMode(e.target.checked)}
-                        className="sr-only peer"
-                      />
-                      <div className="w-7 h-4 bg-gray-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-gray-400 after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-purple-600 peer-checked:after:bg-white"></div>
-                    </label>
-                  </div>
-                </div>
-
-                {/* Exclusions domains */}
-                <div className="space-y-2 pt-2">
-                  <label className="flex items-center gap-1.5 text-[9px] font-bold text-gray-500 uppercase tracking-wider">
-                    <ShieldAlert className="w-3.5 h-3.5 text-gray-500" />
-                    Exclusions List (One Domain Per Line)
-                  </label>
-                  <textarea
-                    value={excludedDomains}
-                    onChange={(e) => setExcludedDomains(e.target.value)}
-                    rows={5}
-                    className="w-full px-3 py-2.5 text-xs bg-[#10111a] border border-gray-800 rounded-lg text-gray-200 focus:outline-none focus:border-purple-500 font-mono resize-none"
-                    placeholder="github.com&#10;youtube.com"
-                  />
-                  <span className="text-[8px] text-gray-600 block leading-tight">
-                    Subdomains are blocked automatically. Disables tracking pipeline immediately when visiting tabs on these domains.
-                  </span>
-                </div>
-              </div>
-
-              {/* Action buttons */}
-              <button
-                onClick={handleSaveSettings}
-                disabled={settingsSaved}
-                className={`w-full flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold rounded-lg border transition-all ${
-                  settingsSaved
-                    ? 'bg-emerald-950/20 border-emerald-500/40 text-emerald-400'
-                    : 'bg-purple-600 hover:bg-purple-700 border-purple-500 text-white shadow-lg shadow-purple-500/10 cursor-pointer active:scale-[0.99]'
-                }`}
-              >
-                <Save className="w-4 h-4" />
-                {settingsSaved ? 'Configurations Saved Successfully!' : 'Save System Settings'}
-              </button>
-            </div>
-          </Tabs.Content>
         </div>
-      </Tabs.Root>
+
+        {/* Mobile Navigation Dropdown */}
+        <AnimatePresence>
+          {mobileMenuOpen && (
+            <motion.div 
+              className="absolute top-14 left-0 w-full bg-[#030305]/95 border-b border-gray-900 p-6 flex flex-col gap-4 md:hidden"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+            >
+              <a href="#services" onClick={() => setMobileMenuOpen(false)} className="text-xs uppercase font-bold text-gray-400 tracking-wider">Services</a>
+              <a href="#why-us" onClick={() => setMobileMenuOpen(false)} className="text-xs uppercase font-bold text-gray-400 tracking-wider">Strategy</a>
+              <a href="#footer" onClick={() => setMobileMenuOpen(false)} className="text-xs uppercase font-bold text-gray-400 tracking-wider">Contact</a>
+              <a
+                href="https://calendly.com"
+                target="_blank"
+                rel="noreferrer"
+                className="w-full flex items-center justify-center gap-1.5 py-2.5 bg-purple-600 hover:bg-purple-700 text-[10px] uppercase font-bold text-white rounded-lg cursor-pointer"
+              >
+                Book Launch Call
+              </a>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </header>
+
+      {/* Main Layout Page Assembly */}
+      <main className="max-w-6xl mx-auto px-6 relative z-10 space-y-24 md:space-y-36 pt-12 md:pt-20">
+        
+        {/* Hero Section: Massive Typography And Visual Atmosphere */}
+        <section className="flex flex-col items-center justify-center text-center py-8 relative min-h-[75vh] max-w-4xl mx-auto">
+          {/* Decorative Sparkle Badge */}
+          <motion.div 
+            className="flex items-center gap-1.5 px-3 py-1 bg-purple-950/20 border border-purple-500/25 rounded-full text-[9px] uppercase font-bold tracking-widest text-purple-400 mb-8"
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            AI-First Software Agency
+          </motion.div>
+
+          {/* Staggered Heading Reveal */}
+          <div className="space-y-4">
+            <h2 className="font-display font-black text-4xl sm:text-6xl md:text-7xl uppercase text-white leading-[0.9] tracking-tight">
+              We Architect <br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-500 to-teal-400">
+                Autonomous
+              </span> <br />
+              Systems.
+            </h2>
+
+            <p className="text-xs sm:text-sm font-light text-gray-400 max-w-xl mx-auto leading-relaxed pt-2">
+              Nexis AI Builds Next-Gen Autonomous Agents, Deep RAG Retrieval Pipelines, And Generative SaaS Architecture Powered By Clean Mathematical GLSL Optimization.
+            </p>
+          </div>
+
+          {/* Interactive Hero Action Buttons */}
+          <div className="flex flex-wrap items-center justify-center gap-3.5 mt-10">
+            <a
+              href="https://calendly.com"
+              target="_blank"
+              rel="noreferrer"
+              className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-[10px] uppercase tracking-widest font-bold text-white rounded-lg border border-purple-500 hover:border-purple-400 shadow-xl shadow-purple-500/10 cursor-pointer transition-all active:scale-[0.98]"
+            >
+              Get Started Now
+            </a>
+            <a
+              href="#services"
+              className="px-6 py-3 bg-[#0a0b12] hover:bg-gray-900 text-[10px] uppercase tracking-widest font-bold text-gray-400 hover:text-white rounded-lg border border-gray-800 hover:border-gray-700 transition-all active:scale-[0.98]"
+            >
+              Explore Services
+            </a>
+          </div>
+        </section>
+
+        {/* Services: Asymmetrical Bento Grid */}
+        <section id="services" className="space-y-8 pt-10">
+          <div className="max-w-2xl">
+            <span className="text-[10px] font-bold text-purple-400 uppercase tracking-widest block mb-1">Our Expertise</span>
+            <h2 className="font-display font-black text-2xl sm:text-4xl uppercase text-white tracking-tight">
+              Platform Capabilities
+            </h2>
+            <p className="text-[11px] text-gray-500 leading-relaxed font-light mt-1.5">
+              Explore Our Autonomous Architecture Services Designed To Replace Archaic Rules-Based Operations.
+            </p>
+          </div>
+
+          {/* Bento Grid Container */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {services.map((service) => (
+              <motion.div
+                key={service.id}
+                onClick={() => setSelectedService(selectedService === service.id ? null : service.id)}
+                className={`relative bg-[#090a10]/45 border border-gray-900 rounded-2xl p-5 overflow-hidden flex flex-col justify-between cursor-pointer group transition-all duration-300 hover:border-gray-800/80 hover:bg-[#0c0d17]/50 ${service.span}`}
+                whileHover={{ y: -4 }}
+                transition={{ duration: 0.2 }}
+              >
+                {/* Backwards Ambient Glow Effect */}
+                <div 
+                  className="absolute -top-12 -right-12 w-28 h-28 rounded-full blur-[48px] pointer-events-none transition-opacity opacity-0 group-hover:opacity-100 duration-300"
+                  style={{ backgroundColor: service.glowColor }}
+                />
+
+                <div className="space-y-5">
+                  <div className="flex items-center justify-between">
+                    <div className="p-2 bg-gray-950 border border-gray-850 rounded-xl">
+                      {service.icon}
+                    </div>
+                    <span className="text-[8px] font-bold font-mono px-2 py-0.5 bg-gray-950 border border-gray-900 text-gray-500 rounded uppercase tracking-wider">
+                      {service.badge}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <h3 className="font-display text-base font-extrabold text-white group-hover:text-purple-300 transition-colors">
+                      {service.title}
+                    </h3>
+                    <span className="text-[9.5px] font-bold text-gray-500 uppercase tracking-wider block font-mono">
+                      {service.subtitle}
+                    </span>
+                    <p className="text-[10px] text-gray-400 leading-relaxed font-light">
+                      {service.description}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Animated Graphic Visualizer */}
+                <div className="mt-5 pt-3 border-t border-gray-900/60">
+                  {service.visual}
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </section>
+
+        {/* Why Us: Comparative Interface Layout */}
+        <section id="why-us" className="space-y-10 pt-10">
+          <div className="max-w-2xl">
+            <span className="text-[10px] font-bold text-purple-400 uppercase tracking-widest block mb-1">Our Strategy</span>
+            <h2 className="font-display font-black text-2xl sm:text-4xl uppercase text-white tracking-tight">
+              An AI-First Perspective
+            </h2>
+            <p className="text-[11px] text-gray-500 leading-relaxed font-light mt-1.5">
+              Traditional Systems Fall Short In A Semantic Web. Deploy Intelligent Auto-Adapting Agents Built For Scale.
+            </p>
+          </div>
+
+          {/* Comparison Cards List */}
+          <div className="space-y-4">
+            {comparisons.map((item, idx) => (
+              <div 
+                key={idx}
+                className="grid grid-cols-1 md:grid-cols-2 gap-4 p-5 bg-[#090a10]/35 border border-gray-900 rounded-2xl hover:border-gray-850 transition-colors"
+              >
+                {/* Old Way Column */}
+                <div className="space-y-2 p-3 bg-rose-950/5 border border-rose-900/10 rounded-xl relative overflow-hidden flex flex-col justify-between">
+                  <div className="flex items-center gap-1.5 text-[9px] font-bold text-rose-500 uppercase tracking-wider">
+                    <X className="w-3.5 h-3.5 text-rose-500" />
+                    Legacy System Stack
+                  </div>
+                  <h4 className="text-xs font-bold text-gray-400">{item.old}</h4>
+                </div>
+
+                {/* New Way Column (Glow Representation) */}
+                <div className="space-y-2 p-3 bg-purple-950/15 border border-purple-500/25 rounded-xl relative overflow-hidden flex flex-col justify-between shadow-lg shadow-purple-500/[0.02]">
+                  <div className="flex items-center gap-1.5 text-[9px] font-bold text-purple-400 uppercase tracking-wider">
+                    <Check className="w-3.5 h-3.5 text-purple-400 animate-pulse" />
+                    Nexis Autonomous Agent
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-bold text-white flex items-center gap-1">
+                      {item.ai}
+                      <Zap className="w-3.5 h-3.5 text-yellow-400 shrink-0" />
+                    </h4>
+                    <p className="text-[9.5px] text-gray-400 leading-relaxed font-light">{item.desc}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Stats Area */}
+        <section className="grid grid-cols-2 md:grid-cols-4 gap-4 py-8 border-y border-gray-900">
+          <div className="text-center p-3">
+            <span className="text-xs sm:text-sm font-bold text-white font-display block">100M+</span>
+            <span className="text-[8px] sm:text-[9px] text-gray-500 uppercase tracking-wider block mt-1">Queries Run</span>
+          </div>
+          <div className="text-center p-3">
+            <span className="text-xs sm:text-sm font-bold text-white font-display block">99.8%</span>
+            <span className="text-[8px] sm:text-[9px] text-gray-500 uppercase tracking-wider block mt-1">Agent Uptime</span>
+          </div>
+          <div className="text-center p-3">
+            <span className="text-xs sm:text-sm font-bold text-white font-display block">&lt; 150ms</span>
+            <span className="text-[8px] sm:text-[9px] text-gray-500 uppercase tracking-wider block mt-1">Index Latency</span>
+          </div>
+          <div className="text-center p-3">
+            <span className="text-xs sm:text-sm font-bold text-white font-display block">10k+</span>
+            <span className="text-[8px] sm:text-[9px] text-gray-500 uppercase tracking-wider block mt-1">Swarm Workers</span>
+          </div>
+        </section>
+
+      </main>
+
+      {/* Footer: Massive Marquee And Call To Action */}
+      <footer id="footer" className="w-full bg-[#030305] border-t border-gray-900/60 mt-36 relative z-10">
+        
+        {/* Infinite Scrolling Typography Marquee */}
+        <div className="w-full bg-purple-950/20 border-b border-purple-500/20 py-5 overflow-hidden flex whitespace-nowrap select-none">
+          <div className="inline-flex animate-marquee text-white font-display font-black text-4xl sm:text-6xl md:text-7xl uppercase tracking-wider leading-none">
+            <span>let's build the future • let's build the future • let's build the future • let's build the future • </span>
+            <span>let's build the future • let's build the future • let's build the future • let's build the future • </span>
+          </div>
+        </div>
+
+        <div className="max-w-6xl mx-auto px-6 py-12 md:py-20 grid grid-cols-1 md:grid-cols-2 gap-10">
+          <div className="space-y-6">
+            <div className="flex items-center gap-2">
+              <img src="/logo.png" alt="Nexis Logo" className="w-8 h-8 rounded-lg object-cover border border-purple-500/30" />
+              <span className="font-display font-extrabold text-sm uppercase tracking-wider text-white">Nexis AI</span>
+            </div>
+            <p className="text-[10px] text-gray-500 max-w-sm leading-relaxed font-light">
+              An AI-First Engineering Swarm Automating Pipeline Workflows Across SAAS, Video Synthesis, And Deep Retrieval Indexing Space.
+            </p>
+            <div className="text-[9px] font-mono text-gray-600">
+              © 2026 NEXIS AI AGENCY INC. ALL RIGHTS RESERVED.
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <h3 className="font-display font-bold text-base uppercase text-white">Initiate Pipeline Ingestion</h3>
+            <p className="text-[10.5px] text-gray-400 font-light leading-relaxed">
+              Book A Dynamic Discovery Call With Our Creative Systems Engineering Team To Map Out Your Custom Swarm Operations.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <a
+                href="https://calendly.com"
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-[9px] uppercase tracking-widest font-bold text-white rounded-lg transition-all"
+              >
+                Schedule Launch Call
+                <ArrowRight className="w-3.5 h-3.5" />
+              </a>
+              <a
+                href="mailto:partner@nexis.ai"
+                className="flex items-center gap-2 px-5 py-2.5 bg-[#090a10] border border-gray-800 hover:border-purple-500/30 text-[9px] uppercase tracking-widest font-bold text-gray-400 hover:text-white rounded-lg transition-all"
+              >
+                partner@nexis.ai
+              </a>
+            </div>
+          </div>
+        </div>
+      </footer>
+
     </div>
   );
 };

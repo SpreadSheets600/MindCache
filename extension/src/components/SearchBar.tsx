@@ -1,89 +1,86 @@
-import React, { useRef, useEffect } from 'react';
-import { Search, Loader2, Sparkles, Settings } from 'lucide-react';
-import { useSearchStore } from '../store/useSearchStore';
+import React, { useRef, useEffect } from "react";
+import { Search, Loader2, Sparkles, X, Settings } from "lucide-react";
+import { useSearchStore } from "../store/searchStore";
 
 interface SearchBarProps {
-  onToggleSettings: () => void;
-  generateSummary: boolean;
-  onToggleSummary: () => void;
+  isLoading: boolean;
+  onSettingsClick: () => void;
 }
 
-/**
- * Premium spotlight search bar with reactive loader status and AI synthesis triggers.
- */
 export const SearchBar: React.FC<SearchBarProps> = ({
-  onToggleSettings,
-  generateSummary,
-  onToggleSummary,
+  isLoading,
+  onSettingsClick,
 }) => {
-  const { query, setQuery, executeSearch, isLoading } = useSearchStore();
+  const { query, setQuery, generateSummary, setGenerateSummary } = useSearchStore();
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Autofocus input on initial popup display
   useEffect(() => {
     if (inputRef.current) {
       inputRef.current.focus();
     }
   }, []);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setQuery(val);
-    if (!val.trim()) {
-      useSearchStore.getState().resetSearch();
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      executeSearch(5, generateSummary);
+  const handleClear = () => {
+    setQuery("");
+    if (inputRef.current) {
+      inputRef.current.focus();
     }
   };
 
   return (
-    <div className="flex items-center gap-2 p-3 bg-[#0a0b10] border-b border-gray-900">
-      <div className="relative flex-1">
-        <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-          {isLoading ? (
-            <Loader2 className="w-4 h-4 text-purple-400 animate-spin" />
-          ) : (
-            <Search className="w-4 h-4 text-gray-500" />
-          )}
-        </div>
+    <div className="relative border-b border-border bg-background">
+      <div className="flex items-center px-4 py-3 space-x-3">
+        {isLoading ? (
+          <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />
+        ) : (
+          <Search className="w-4 h-4 text-muted-foreground" />
+        )}
+
         <input
           ref={inputRef}
           type="text"
           value={query}
-          onChange={handleChange}
-          onKeyDown={handleKeyDown}
-          placeholder="Search your browser memory... (Press Enter)"
-          className="w-full pl-9 pr-4 py-2 text-xs bg-[#10111a] border border-gray-800 rounded-lg text-gray-200 placeholder-gray-500 focus:outline-none focus:border-purple-500/80 focus:ring-1 focus:ring-purple-500/50 transition-colors"
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search your memory..."
+          className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/60 outline-none"
         />
+
+        {query && (
+          <button
+            onClick={handleClear}
+            className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors focus:outline-none"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+
+        <button
+          onClick={() => setGenerateSummary(!generateSummary)}
+          className={`flex items-center space-x-1.5 px-2 py-1 rounded text-[11px] font-medium transition-colors focus:outline-none ${
+            generateSummary
+              ? "bg-primary/10 text-primary"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+          title="Toggle AI summary"
+        >
+          <Sparkles className="w-3 h-3" />
+          <span>AI</span>
+        </button>
+
+        <button
+          onClick={onSettingsClick}
+          className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors focus:outline-none"
+          title="Open Dashboard"
+        >
+          <Settings className="w-4 h-4" />
+        </button>
       </div>
 
-      {/* Local Ollama Collective AI Summary Toggle */}
-      <button
-        onClick={onToggleSummary}
-        title="Toggle Collective Ollama Synthesis"
-        className={`flex items-center gap-1.5 px-2.5 py-2 text-[10px] font-semibold rounded-lg border transition-all cursor-pointer ${
-          generateSummary
-            ? 'bg-purple-950/20 border-purple-500/50 text-purple-300'
-            : 'bg-[#10111a] border-gray-800 text-gray-500 hover:text-gray-300 hover:border-gray-700'
-        }`}
-      >
-        <Sparkles className={`w-3.5 h-3.5 ${generateSummary ? 'text-purple-400' : ''}`} />
-        AI Summary
-      </button>
-
-      {/* Settings Toggle Trigger */}
-      <button
-        onClick={onToggleSettings}
-        title="Configuration Panel"
-        className="p-2 bg-[#10111a] border border-gray-800 text-gray-500 hover:text-gray-300 hover:border-gray-700 rounded-lg transition-colors cursor-pointer"
-      >
-        <Settings className="w-3.5 h-3.5" />
-      </button>
+      {isLoading && (
+        <div className="absolute bottom-0 left-0 right-0 h-px overflow-hidden">
+          <div className="loading-scan-line"></div>
+        </div>
+      )}
     </div>
   );
 };
-export default SearchBar;

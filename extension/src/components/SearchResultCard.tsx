@@ -1,111 +1,128 @@
-import React, { useState } from 'react';
-import type { SearchResult } from '../types';
-import { ExternalLink, Copy, Check } from 'lucide-react';
+import React from "react";
+import { SearchResultItem } from "../types";
+import { ExternalLink, Copy, Eye, Trash2 } from "lucide-react";
 
 interface SearchResultCardProps {
-  result: SearchResult;
+  result: SearchResultItem;
+  isSelected: boolean;
+  onSelect: () => void;
+  onOpen: () => void;
+  onCopy: () => void;
+  onViewDetails: () => void;
+  onDelete: () => void;
 }
 
-/**
- * Premium result card displaying page titles, domain origins, similarity percentages,
- * custom AI summaries, and KeyBERT tags. Includes hover hotkeys for copy and open.
- */
-export const SearchResultCard: React.FC<SearchResultCardProps> = ({ result }) => {
-  const [copied, setCopied] = useState(false);
+export const SearchResultCard: React.FC<SearchResultCardProps> = ({
+  result,
+  isSelected,
+  onSelect,
+  onOpen,
+  onCopy,
+  onViewDetails,
+  onDelete,
+}) => {
+  const matchPercentage = Math.round(result.score * 100);
 
-  const handleCopy = async (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const formatVisitDate = (dateStr: string) => {
     try {
-      await navigator.clipboard.writeText(result.url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.warn('Clipboard write failed:', err);
+      const date = new Date(dateStr);
+      return date.toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+      });
+    } catch {
+      return dateStr;
     }
   };
-
-  const handleOpen = () => {
-    if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.create) {
-      chrome.tabs.create({ url: result.url });
-    } else {
-      window.open(result.url, '_blank');
-    }
-  };
-
-  const formattedDate = new Date(result.last_visited_at).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-
-  // Convert FAISS cosine score (Inner Product) to percentage representation
-  const matchPercent = Math.max(0, Math.min(100, Math.round(result.score * 100)));
 
   return (
     <div
-      onClick={handleOpen}
-      className="p-3 bg-[#0d0e14]/50 hover:bg-[#12131f]/80 border border-gray-800/80 hover:border-purple-500/30 rounded-lg cursor-pointer transition-all duration-200 group"
+      onClick={onSelect}
+      className={`group relative flex flex-col p-3.5 rounded-lg transition-colors cursor-pointer ${
+        isSelected
+          ? "bg-secondary"
+          : "hover:bg-secondary/50"
+      }`}
     >
-      <div className="flex items-start justify-between gap-2 mb-1.5">
-        <div className="flex-1 min-w-0">
-          <h3 className="text-xs font-semibold text-gray-200 group-hover:text-purple-300 transition-colors truncate">
-            {result.title || result.url}
-          </h3>
-          <span className="text-[9px] text-gray-500 font-mono">
-            {result.domain} • {formattedDate}
-          </span>
-        </div>
+      <div className="flex items-start justify-between space-x-3">
+        <h3
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpen();
+          }}
+          className="font-medium text-sm line-clamp-1 flex-1 leading-snug hover:text-primary transition-colors"
+          title={result.title || result.url}
+        >
+          {result.title || result.url}
+        </h3>
 
-        {/* Relevance Score Badge */}
-        <span className="px-1.5 py-0.5 text-[8px] font-mono font-bold bg-purple-950/20 border border-purple-500/20 text-purple-400 rounded-md shrink-0">
-          {matchPercent}% match
+        <span className="text-[11px] font-mono text-muted-foreground whitespace-nowrap">
+          {matchPercentage}%
         </span>
       </div>
 
-      {/* Ollama Page Summary */}
-      {result.summary && (
-        <p className="text-[10px] text-gray-400 leading-relaxed mb-2 bg-[#090a0f] p-1.5 rounded border border-gray-800/40">
+      <div className="flex items-center space-x-2 mt-1 text-[11px] text-muted-foreground">
+        <span className="truncate max-w-[180px]">{result.domain}</span>
+        <span className="text-muted-foreground/40">-</span>
+        <span>{formatVisitDate(result.last_visited_at)}</span>
+      </div>
+
+      {result.summary ? (
+        <p className="mt-2 text-xs text-muted-foreground/80 line-clamp-2 leading-relaxed">
           {result.summary}
         </p>
-      )}
+      ) : null}
 
-      {/* Keywords and Hover Shortcuts */}
-      <div className="flex items-center justify-between gap-2 mt-2">
-        {/* KeyBERT tags */}
-        <div className="flex flex-wrap gap-1 max-w-[70%]">
-          {result.keywords.slice(0, 3).map((kw, i) => (
-            <span
-              key={i}
-              className="px-1.5 py-0.5 text-[8px] bg-gray-950 border border-gray-800/50 text-gray-500 rounded font-semibold"
-            >
-              #{kw.keyword}
-            </span>
-          ))}
+      <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-border/50">
+        <div className="flex items-center gap-1.5 overflow-hidden max-w-[65%]">
+          {result.keywords && result.keywords.length > 0 ? (
+            result.keywords.slice(0, 3).map((kw, i) => (
+              <span
+                key={i}
+                className="text-[9px] bg-secondary/80 text-muted-foreground border border-border/60 px-1.5 py-0.5 rounded font-mono truncate max-w-[90px]"
+              >
+                #{kw.keyword}
+              </span>
+            ))
+          ) : null}
         </div>
 
-        {/* Copy/Open hotkeys (visible on card hover) */}
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div
+          className={`flex items-center space-x-1 transition-opacity duration-150 ${
+            isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+          }`}
+          onClick={(e) => e.stopPropagation()}
+        >
           <button
-            onClick={handleCopy}
-            title="Copy URL to clipboard"
-            className="p-1 text-gray-500 hover:text-purple-300 hover:bg-gray-800 rounded transition-colors cursor-pointer"
+            onClick={onViewDetails}
+            className="p-1 rounded hover:bg-background text-muted-foreground hover:text-foreground transition-colors focus:outline-none"
+            title="View details"
           >
-            {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+            <Eye className="w-3.5 h-3.5" />
           </button>
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleOpen();
-            }}
-            title="Open page in a new browser tab"
-            className="p-1 text-gray-500 hover:text-purple-300 hover:bg-gray-800 rounded transition-colors cursor-pointer"
+            onClick={onCopy}
+            className="p-1 rounded hover:bg-background text-muted-foreground hover:text-foreground transition-colors focus:outline-none"
+            title="Copy URL"
           >
-            <ExternalLink className="w-3 h-3" />
+            <Copy className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={onOpen}
+            className="p-1 rounded hover:bg-background text-muted-foreground hover:text-foreground transition-colors focus:outline-none"
+            title="Open page"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={onDelete}
+            className="p-1 rounded hover:bg-background text-muted-foreground hover:text-red-400 transition-colors focus:outline-none"
+            title="Delete"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
     </div>
   );
 };
-export default SearchResultCard;

@@ -1,31 +1,34 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite'
-import { resolve } from 'path'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { resolve } from 'path';
 
-// https://vite.dev/config/
 export default defineConfig({
-  plugins: [
-    react(),
-    tailwindcss(),
-  ],
+  plugins: [react()],
+  resolve: {
+    alias: {
+      '@': resolve(__dirname, './src'),
+    },
+  },
   build: {
     outDir: 'dist',
-    emptyOutDir: true,
+    sourcemap: true,
     rollupOptions: {
       input: {
-        // Entry point for popup UI
         popup: resolve(__dirname, 'index.html'),
-        // Entry point for full-page dashboard UI
-        dashboard: resolve(__dirname, 'dashboard.html'),
-        // Entry point for background service worker
-        background: resolve(__dirname, 'src/background/background.ts'),
+        settings: resolve(__dirname, 'settings.html'),
+        background: resolve(__dirname, 'src/background/index.ts'),
+        content: resolve(__dirname, 'src/content/index.ts'),
       },
       output: {
-        entryFileNames: '[name].js',
-        chunkFileNames: 'assets/[name].js',
-        assetFileNames: 'assets/[name].[ext]',
+        entryFileNames: (chunkInfo) => {
+          if (chunkInfo.name === 'background' || chunkInfo.name === 'content') {
+            return '[name].js';
+          }
+          return 'assets/[name]-[hash].js';
+        },
+        chunkFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]',
       },
     },
   },
-})
+});

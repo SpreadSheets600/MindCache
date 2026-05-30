@@ -3,7 +3,7 @@ export interface Keyword {
   score: number;
 }
 
-export interface SearchResult {
+export interface SearchResultItem {
   id: number;
   url: string;
   domain: string;
@@ -13,47 +13,64 @@ export interface SearchResult {
   published_date: string | null;
   last_visited_at: string;
   keywords: Keyword[];
-  source_type?: string | null;
-  extracted_content?: string;
 }
 
 export interface SearchResponse {
   query: string;
-  results: SearchResult[];
+  results: SearchResultItem[];
   ai_summary: string | null;
-}
-
-export interface AppSettings {
-  backendUrl: string;
-  autoTracking: boolean;
-  privacyMode: boolean;
-  excludedDomains: string[];
 }
 
 export interface VisitRequest {
   url: string;
-  title: string;
+  title: string | null;
 }
 
 export interface VisitResponse {
-  status: 'success' | 'duplicate' | 'error';
+  status: string; // 'success', 'duplicate', 'error'
   message: string;
-  document_id?: number;
-  title?: string;
-  domain?: string;
+  document_id: number | null;
+  title: string | null;
+  domain: string | null;
+}
+
+export interface DocumentResponse {
+  id: number;
+  url: string;
+  domain: string;
+  title: string | null;
+  author: string | null;
+  published_date: string | null;
+  extracted_content: string;
+  source_type: string;
+  platform_metadata: Record<string, any> | null;
+  summary: string | null;
+  created_at: string;
+  updated_at: string;
+  keywords: Keyword[];
+  visit_history: string[];
+}
+
+export interface ExtensionSettings {
+  backendUrl: string;
+  autoTracking: boolean;
+  excludedDomains: string[];
+  privacyMode: boolean;
+}
+
+export interface BackendComponentStatus {
+  database: "connected" | "disconnected";
+  faiss_index: {
+    status: string;
+    vectors_count: number;
+  };
+  ollama: {
+    status: "connected" | "offline";
+    model: string | null;
+  };
 }
 
 export interface HealthCheckResponse {
-  status: 'healthy' | 'degraded';
-  components: {
-    database: 'connected' | 'disconnected';
-    faiss_index: {
-      status: string;
-      vectors_count: number;
-    };
-    ollama: {
-      status: 'connected' | 'offline';
-      model: string | null;
-    };
-  };
+  status: "healthy" | "degraded";
+  components: BackendComponentStatus;
 }

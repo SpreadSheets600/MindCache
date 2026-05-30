@@ -1,58 +1,96 @@
-import { describe, test, expect, beforeEach, beforeAll } from 'vitest';
-import { useSearchStore } from '../src/store/useSearchStore';
-import { useConnectionStore } from '../src/store/useConnectionStore';
+import { describe, it, expect, beforeEach } from "vitest";
+import { useSettingsStore } from "../src/store/settingsStore";
+import { useSearchStore } from "../src/store/searchStore";
+import { useConnectionStore } from "../src/store/connectionStore";
 
-describe('Zustand States Store Tests', () => {
-  beforeAll(() => {
-    let mockStore: { [key: string]: string } = {};
-    global.localStorage = {
-      getItem: (key: string) => mockStore[key] || null,
-      setItem: (key: string, value: string) => {
-        mockStore[key] = value;
-      },
-      removeItem: (key: string) => {
-        delete mockStore[key];
-      },
-      clear: () => {
-        mockStore = {};
-      },
-    } as any;
-  });
-
+describe("MindCache Settings Store Tests", () => {
   beforeEach(() => {
-    useSearchStore.getState().resetSearch();
+    useSettingsStore.getState().resetSettings();
+  });
+
+  it("should load defaults correctly", () => {
+    const state = useSettingsStore.getState();
+    expect(state.backendUrl).toBe("http://localhost:8000");
+    expect(state.autoTracking).toBe(true);
+    expect(state.excludedDomains).toContain("localhost");
+  });
+
+  it("should modify settings variables successfully", () => {
+    const store = useSettingsStore.getState();
+    store.setBackendUrl("http://custom-url:9000");
+    store.setAutoTracking(false);
+    store.setPrivacyMode(true);
+
+    const updated = useSettingsStore.getState();
+    expect(updated.backendUrl).toBe("http://custom-url:9000");
+    expect(updated.autoTracking).toBe(false);
+    expect(updated.privacyMode).toBe(true);
+  });
+
+  it("should add and remove excluded domains safely", () => {
+    const store = useSettingsStore.getState();
+    
+    // Add new domain
+    store.addExcludedDomain("github.com");
+    expect(useSettingsStore.getState().excludedDomains).toContain("github.com");
+
+    // Prevent duplicate entries
+    store.addExcludedDomain("github.com");
+    expect(useSettingsStore.getState().excludedDomains.filter((d) => d === "github.com").length).toBe(1);
+
+    // Remove domain
+    store.removeExcludedDomain("github.com");
+    expect(useSettingsStore.getState().excludedDomains).not.toContain("github.com");
+  });
+});
+
+describe("MindCache Search Store Tests", () => {
+  beforeEach(() => {
     useSearchStore.getState().clearRecentSearches();
+    useSearchStore.getState().setQuery("");
   });
 
-  test('should update query and reset states successfully', () => {
+  it("should modify query inputs", () => {
     const store = useSearchStore.getState();
-    expect(store.query).toBe('');
-    
-    // Set query
-    store.setQuery('sqlite faiss indexes');
-    expect(useSearchStore.getState().query).toBe('sqlite faiss indexes');
-    
-    // Reset state
-    useSearchStore.getState().resetSearch();
-    expect(useSearchStore.getState().query).toBe('');
-    expect(useSearchStore.getState().results).toEqual([]);
-    expect(useSearchStore.getState().aiSummary).toBeNull();
+    store.setQuery("FastAPI client");
+    expect(useSearchStore.getState().query).toBe("FastAPI client");
   });
 
-  test('should append and deduplicate recent searches cache', () => {
+  it("should handle recent searches queue constraints", () => {
     const store = useSearchStore.getState();
     
-    store.addRecentSearch('fastapi');
-    store.addRecentSearch('docker setup');
-    store.addRecentSearch('fastapi'); // Duplicate query
+    store.addRecentSearch("FastAPI");
+    store.addRecentSearch("Docker");
+    store.addRecentSearch("FastAPI"); // duplicate
 
-    const history = useSearchStore.getState().recentSearches;
-    expect(history.length).toBe(2);
-    expect(history[0]).toBe('fastapi'); // Newly added duplicate moves to front
-    expect(history[1]).toBe('docker setup');
+    const current = useSearchStore.getState().recentSearches;
+    expect(current[0]).toBe("FastAPI"); // most recent moved to front
+    expect(current[1]).toBe("Docker");
+    expect(current.length).toBe(2);
+  });
+});
+
+describe("MindCache Connection Store Tests", () => {
+  beforeEach(() => {
+    useConnectionStore.getState().clearConnectionStatus();
   });
 
-  test('should toggle connection online state correctly', () => {
-    expect(useConnectionStore.getState().isOnline).toBe(false);
+  it("should transition connection states correctly", () => {
+    const store = useConnectionStore.getState();
+    expect(store.isOnline).toBe(false);
+
+    // Set online
+    const componentsMock = {
+      database: "connected" as const,
+      faiss_index: { status: "initialized", vectors_count: 42 },
+      ollama: { status: "connected" as const, model: "llama3" },
+    };
+    
+    store.setConnectionStatus(true, componentsMock);
+
+    const active = useConnectionStore.getState();
+    expect(active.isOnline).toBe(true);
+    expect(active.components?.database).toBe("connected");
+    expect(active.components?.faiss_index.vectors_count).toBe(42);
   });
 });

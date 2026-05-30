@@ -1,74 +1,62 @@
-# Development and Packaging Manual
+# Development Guide
 
-This document describes the development workflow, build steps, packaging instructions, and browser installation guide for the MindCache extension.
+This guide details the commands and workflows required to develop, test, and package the browser extension.
 
-## Local Setup
+## Environment Requirements
+- **Node.js**: v18 or later
+- **npm**: v9 or later
+- **Local Server**: Running FastAPI on `http://localhost:8000`
 
-Ensure Node.js (version 18 or newer) is installed on your system.
-
+## Installation
+Navigate to the extension directory and install dependencies:
 ```bash
-# Navigate to the extension folder
 cd extension
-
-# Install package dependencies
 npm install
 ```
 
-## Running Development Server
-
-Start Vite's development watch server:
-
+## Running Dev Server
+Vite runs a local development server for popup and settings pages (allowing direct UI prototyping in tab views):
 ```bash
 npm run dev
 ```
 
-During development, Vite watches files and compiles changes dynamically. However, since Chrome extensions require built files to load in the browser, compiling a production watch build is often preferred. You can run the compiler watch mode to automatically rebuild the extension on every change:
+> [!NOTE]
+> Since the background service worker relies on Chrome extension APIs, you cannot fully test tracking logic directly inside the Vite dev server tab. You must compile the project and load it into your browser to test active tab tracking.
 
-```bash
-npx vite build --watch
-```
-
-This compiles your changes to `extension/dist/` in real time, enabling hot-reloading in the browser.
-
-## Compilation and Packaging
-
-Compile the extension for production:
-
+## Compiling for Web Browsers
+To compile TypeScript and bundle assets using Vite:
 ```bash
 npm run build
 ```
-
-This bundles popup React elements, processes TailwindCSS v4 classes, packages the background script as a standalone service worker, and saves the final output inside the `dist/` directory.
-
-### Packing for Chrome Web Store
-
-To prepare the extension for manual distribution or store uploads:
-
-```bash
-# Compress the compiled output directory
-zip -r mindcache-extension.zip dist/
-```
+This generates compiled outputs in the `extension/dist` folder.
 
 ## Browser Installation Guide
+To load the unpacked extension into Chrome, Brave, or Edge:
 
-Follow these steps to load the unpacked extension into Chrome, Brave, Edge, or any Chromium-based browser.
+1. Navigate to the extensions manager page (e.g. `chrome://extensions` or `brave://extensions`).
+2. Toggle the **Developer mode** switch (located in the top-right corner).
+3. Click the **Load unpacked** button (located in the top-left corner).
+4. Select the compiled `extension/dist` directory.
 
-1. Open your browser and navigate to the extensions page:
-   * Chrome: `chrome://extensions`
-   * Brave: `brave://extensions`
-   * Edge: `edge://extensions`
-2. Enable **Developer mode** using the toggle switch in the top-right corner of the page.
-3. Click the **Load unpacked** button in the top-left corner.
-4. Select the compiled output directory: `/home/spreadsheets600/Projects/MindCache/extension/dist`.
-5. The MindCache icon appears in your extensions list and browser toolbar.
+### Ingestion Verification
+Once loaded, visit any public webpage (such as `https://wikipedia.org`). Wait 5 seconds, then open the extension popup or the backend logs. You should see a successful indexing transaction recorded.
 
----
+## Testing Suite
+The extension uses **Vitest** for store, service, and component unit testing:
 
-## Technical Workarounds
+- **Run all tests once**:
+  ```bash
+  npm run test
+  ```
+- **Run tests in watch mode**:
+  ```bash
+  npm run test:watch
+  ```
 
-### Programmatic Popup Triggering
-
-Chrome extensions do not allow background threads to open popups programmatically on arbitrary hotkeys. To achieve a keyboard-driven search spotlight similar to Raycast:
-* MindCache registers a global command `open_search` inside `manifest.json`.
-* The background script listens to this command and invokes `chrome.action.openPopup()`.
-* This matches security requirements while providing a smooth `Ctrl+Shift+K` keyboard shortcut.
+## Packaging for Release
+To package the extension into a ZIP file for Chrome Web Store distribution:
+```bash
+cd dist
+zip -r ../mindcache-extension.zip .
+```
+This compiles the code and generates a clean ZIP container ready for upload.

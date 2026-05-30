@@ -1,69 +1,76 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-:root {
-  font-family: 'JetBrains Mono', monospace;
-  line-height: 1.5;
-  color-scheme: dark;
+@layer base {
+  :root {
+    --background: 240 10% 4%;       /* zinc-950 */
+    --foreground: 0 0% 98%;         /* zinc-50 */
+
+    --card: 240 6% 10%;             /* zinc-900 */
+    --card-foreground: 0 0% 98%;
+
+    --popover: 240 6% 10%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 217 91% 60%;         /* blue-500, used sparingly */
+    --primary-foreground: 0 0% 4%;
+
+    --secondary: 240 6% 14%;        /* zinc-800 */
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 240 6% 14%;
+    --muted-foreground: 240 5% 65%; /* zinc-400 */
+
+    --accent: 217 91% 60%;
+    --accent-foreground: 0 0% 98%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 240 6% 14%;           /* zinc-800 */
+    --input: 240 6% 14%;
+    --ring: 217 91% 60%;
+
+    --radius: 0.5rem;
+  }
 }
 
-body {
-  margin: 0;
-  background-color: #030305;
-  color: #f3f4f6;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
 }
 
-/* Popup-Specific Body Constraints */
-body.popup-body {
-  width: 580px;
-  height: 560px;
-  overflow: hidden;
-}
-
-/* Dashboard-Specific Body Rules */
-body.dashboard-body {
-  width: 100%;
-  min-height: 100vh;
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-
-/* Custom Display Font Style */
-.font-display {
-  font-family: 'Space Grotesk', sans-serif;
-}
-
-/* Custom Technical Font Style */
-.font-technical {
-  font-family: 'JetBrains Mono', monospace;
-}
-
-/* Custom Futuristic Font Style */
-.font-futuristic {
-  font-family: 'Orbitron', sans-serif;
-}
-
-/* Custom Modern Font Style */
-.font-modern {
-  font-family: 'Outfit', sans-serif;
-}
-
-/* Custom Thin Scrollbar */
+/* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
-
 ::-webkit-scrollbar-track {
   background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
-  background: #11121d;
+  background: rgba(255, 255, 255, 0.06);
   border-radius: 9999px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
-  background: #202236;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* Thin accent loading bar */
+@keyframes loadingBar {
+  0% { left: -100%; }
+  50% { left: 0%; }
+  100% { left: 100%; }
+}
+.loading-scan-line {
+  position: absolute;
+  height: 1px;
+  width: 100%;
+  background: linear-gradient(90deg, transparent, hsl(var(--primary)), transparent);
+  animation: loadingBar 2s infinite ease-in-out;
 }

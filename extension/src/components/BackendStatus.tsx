@@ -1,56 +1,57 @@
-import React, { useEffect } from 'react';
-import { useConnectionStore } from '../store/useConnectionStore';
-import { Wifi, WifiOff, Cpu } from 'lucide-react';
+import React, { useEffect } from "react";
+import { useConnectionStore } from "../store/connectionStore";
+import { backendClient } from "../services/BackendClient";
+import { RefreshCw } from "lucide-react";
 
-/**
- * Diagnostic component displaying current local server connection state,
- * total registered vectors, and Ollama status.
- */
 export const BackendStatus: React.FC = () => {
-  const { isOnline, health, checkConnection } = useConnectionStore();
+  const { isOnline, isChecking, components } = useConnectionStore();
+
+  const performHealthCheck = async () => {
+    try {
+      await backendClient.checkHealth();
+    } catch (err) {
+      console.warn("Health check failed:", err);
+    }
+  };
 
   useEffect(() => {
-    // Initial check
-    checkConnection();
-    
-    // Interval check every 10 seconds
-    const interval = setInterval(checkConnection, 10000);
+    performHealthCheck();
+    const interval = setInterval(performHealthCheck, 30000);
     return () => clearInterval(interval);
-  }, [checkConnection]);
+  }, []);
 
   return (
-    <div className="flex items-center justify-between px-4 py-2 border-b border-gray-900 bg-[#0c0d12]">
-      <div className="flex items-center gap-2">
-        {isOnline ? (
-          <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
-            <Wifi className="w-3.5 h-3.5 animate-pulse" />
-            Memory Engine Online
-          </span>
-        ) : (
-          <span className="flex items-center gap-1.5 text-xs font-semibold text-rose-400">
-            <WifiOff className="w-3.5 h-3.5" />
-            Engine Offline
-          </span>
+    <div className="flex items-center justify-between px-3 py-1.5 border-t border-border text-[11px] text-muted-foreground">
+      <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-1.5">
+          <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? "bg-emerald-500" : "bg-red-400"}`} />
+          <span>{isOnline ? "Connected" : "Offline"}</span>
+        </div>
+
+        {isOnline && components && (
+          <>
+            <span className="text-muted-foreground/30">|</span>
+            <span>
+              {components.faiss_index.vectors_count} vectors
+            </span>
+            {components.ollama.status === "connected" && (
+              <>
+                <span className="text-muted-foreground/30">|</span>
+                <span>{components.ollama.model || "AI ready"}</span>
+              </>
+            )}
+          </>
         )}
       </div>
 
-      {isOnline && health && (
-        <div className="flex items-center gap-3 text-[10px] text-gray-500">
-          <span className="flex items-center gap-1 font-mono">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            FAISS: {health.components.faiss_index.vectors_count} docs
-          </span>
-          <span className="flex items-center gap-1">
-            <Cpu className="w-3 h-3 text-purple-400" />
-            Ollama: {health.components.ollama.status === 'connected' ? (
-              <span className="text-purple-300 font-semibold">{health.components.ollama.model}</span>
-            ) : (
-              <span className="text-gray-500 font-medium">offline</span>
-            )}
-          </span>
-        </div>
-      )}
+      <button
+        onClick={performHealthCheck}
+        disabled={isChecking}
+        className="text-muted-foreground/60 hover:text-foreground transition-colors focus:outline-none"
+        title="Refresh"
+      >
+        <RefreshCw className={`w-3 h-3 ${isChecking ? "animate-spin" : ""}`} />
+      </button>
     </div>
   );
 };
-export default BackendStatus;

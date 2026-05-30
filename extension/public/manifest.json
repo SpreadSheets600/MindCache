@@ -1,39 +1,39 @@
 {
   "manifest_version": 3,
-  "name": "MindCache - Personal Memory",
+  "name": "MindCache",
   "version": "1.0.0",
-  "description": "Local, AI-powered browser memory. Semantically search webpage content you have visited.",
+  "description": "Local, AI-powered browser memory and semantic search assistant.",
   "permissions": [
     "tabs",
     "storage"
   ],
+  "host_permissions": [
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "action": {
+    "default_popup": "index.html",
+    "default_title": "Open MindCache Search"
+  },
+  "options_page": "settings.html",
   "background": {
     "service_worker": "background.js",
     "type": "module"
   },
-  "action": {
-    "default_popup": "index.html",
-    "default_icon": {
-      "16": "icon-16.png",
-      "48": "icon-48.png",
-      "128": "icon-128.png"
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_end"
     }
-  },
-  "icons": {
-    "16": "icon-16.png",
-    "48": "icon-48.png",
-    "128": "icon-128.png"
-  },
+  ],
   "commands": {
-    "open_search": {
+    "_execute_action": {
       "suggested_key": {
         "default": "Ctrl+Shift+K",
-        "mac": "Command+Shift+K"
+        "mac": "MacCtrl+Shift+K"
       },
-      "description": "Open MindCache Spotlight Search"
+      "description": "Open MindCache Search Interface"
     }
-  },
-  "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self';"
   }
 }

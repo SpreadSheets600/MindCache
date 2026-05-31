@@ -16,13 +16,17 @@ import {
   Filter, 
   X,
   Play,
-  RotateCcw
+  RotateCcw,
+  Cpu,
+  Building2,
+  User,
+  FolderKanban
 } from "lucide-react";
 
 interface Node {
-  id: string; // "doc_123" or "kw_react"
+  id: string; // "doc_123", "kw_react", or "ent_google"
   label: string;
-  type: "document" | "keyword";
+  type: "document" | "keyword" | "entity";
   url?: string;
   domain?: string;
   updatedAt?: string;
@@ -34,12 +38,14 @@ interface Node {
   color: string;
   originalColor: string;
   visitCount?: number;
+  entityType?: string; // Person, Company, Technology, Project
 }
 
 interface Link {
   source: string;
   target: string;
   value?: number;
+  type?: "keyword" | "entity" | "co_occurs";
 }
 
 interface InteractiveKnowledgeGraphProps {
@@ -57,6 +63,26 @@ const getDomainColor = (domain: string): string => {
   }
   const hue = Math.abs(hash) % 360;
   return `hsl(${hue}, 75%, 55%)`;
+};
+
+// Entity type color mapping
+const getEntityColor = (entityType: string): string => {
+  const typeLower = entityType?.toLowerCase() || "";
+  if (typeLower.includes("person")) return "#f59e0b"; // amber-500
+  if (typeLower.includes("company") || typeLower.includes("organization")) return "#10b981"; // emerald-500
+  if (typeLower.includes("technology") || typeLower.includes("language") || typeLower.includes("library")) return "#8b5cf6"; // violet-500
+  if (typeLower.includes("project")) return "#ec4899"; // pink-500
+  return "#6366f1"; // indigo-500 default
+};
+
+// Entity type icon helper
+const getEntityIcon = (entityType: string) => {
+  const typeLower = entityType?.toLowerCase() || "";
+  if (typeLower.includes("person")) return User;
+  if (typeLower.includes("company") || typeLower.includes("organization")) return Building2;
+  if (typeLower.includes("technology") || typeLower.includes("language") || typeLower.includes("library")) return Cpu;
+  if (typeLower.includes("project")) return FolderKanban;
+  return Cpu;
 };
 
 
@@ -118,6 +144,24 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
     
     return {
       keyword: kw,
+      count: relatedDocs.length,
+      documents: relatedDocs,
+    };
+  }, [selectedNode, documents]);
+
+  const selectedEntDetails = useMemo(() => {
+    if (!selectedNode || selectedNode.type !== "entity") return null;
+    const entName = selectedNode.label;
+    const entType = selectedNode.entityType || "";
+    
+    // Find all documents connected to this entity
+    const relatedDocs = documents.filter((doc) =>
+      doc.entities?.some((e) => e.name.toLowerCase() === entName.toLowerCase())
+    );
+    
+    return {
+      name: entName,
+      type: entType,
       count: relatedDocs.length,
       documents: relatedDocs,
     };
@@ -186,10 +230,30 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
       });
     });
 
+    // Count entities frequency
+    const entityDocsMap: Record<string, { type: string; docIds: string[] }> = {};
+    filteredDocuments.forEach((doc) => {
+      const docId = `doc_${doc.id}`;
+      doc.entities?.forEach((ent) => {
+        const key = `${ent.type}:${ent.name}`.toLowerCase();
+        if (!entityDocsMap[key]) {
+          entityDocsMap[key] = { type: ent.type, docIds: [] };
+        }
+        if (!entityDocsMap[key].docIds.includes(docId)) {
+          entityDocsMap[key].docIds.push(docId);
+        }
+      });
+    });
+
     // Pick top keywords connected to at least `minKwFrequency` documents
     const activeKeywords = Object.entries(keywordDocsMap)
       .filter(([_, docIds]) => docIds.length >= minKwFrequency)
       .map(([name]) => name);
+
+    // Pick entities connected to at least 1 document
+    const activeEntities = Object.entries(entityDocsMap)
+      .filter(([_, data]) => data.docIds.length >= 1)
+      .map(([key, data]) => ({ key, ...data }));
 
     const newNodes: Node[] = [];
     const newLinks: Link[] = [];
@@ -263,6 +327,44 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
             source: docId,
             target: kwId,
             value: 1,
+            type: "keyword",
+          });
+        }
+      });
+    });
+
+    // 3. Position entity nodes and build links
+    activeEntities.forEach((ent) => {
+      const entId = `ent_${ent.key.replace(/[^a-z0-9]/g, "_")}`;
+      const entityColor = getEntityColor(ent.type);
+
+      // Insert entity node if not exists
+      if (!nodeMap.has(entId)) {
+        const entNode: Node = {
+          id: entId,
+          label: ent.key.split(":")[1] || ent.key, // Extract name from "type:name"
+          type: "entity",
+          entityType: ent.type,
+          x: width / 2 + (Math.random() - 0.5) * 180,
+          y: height / 2 + (Math.random() - 0.5) * 180,
+          vx: 0,
+          vy: 0,
+          radius: Math.min(12, 5 + Math.log2(ent.docIds.length) * 2),
+          color: entityColor,
+          originalColor: entityColor,
+        };
+        newNodes.push(entNode);
+        nodeMap.set(entId, entNode);
+      }
+
+      // Link doc to entity
+      ent.docIds.forEach((docId) => {
+        if (nodeMap.has(docId)) {
+          newLinks.push({
+            source: docId,
+            target: entId,
+            value: 1,
+            type: "entity",
           });
         }
       });
@@ -440,6 +542,12 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
           ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
           ctx.lineWidth = isSelected ? 3.5 : 1.5;
           ctx.stroke();
+        } else if (node.type === "entity") {
+          // Entity nodes - diamond shape
+          ctx.fillStyle = isSelected ? "#ffffff" : node.color;
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
         } else {
           // Keyword
           ctx.fillStyle = isSelected ? "#3b82f6" : node.color;
@@ -457,14 +565,17 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
           isRelated || 
           isMatchingSearch || 
           scale > 1.3 || 
-          (node.type === "document" && node.radius > 11);
+          (node.type === "document" && node.radius > 11) ||
+          (node.type === "entity");
 
         if (shouldShowLabel) {
           ctx.save();
           ctx.globalAlpha = opacity;
           ctx.font = node.type === "document" 
             ? "500 10.5px Geist, sans-serif" 
-            : "9.5px Geist Mono, monospace";
+            : node.type === "entity"
+              ? "500 10px Geist, sans-serif"
+              : "9.5px Geist Mono, monospace";
           
           if (isSelected) {
             ctx.fillStyle = "#fafafa";
@@ -472,7 +583,11 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
           } else if (isHovered) {
             ctx.fillStyle = "#fafafa";
           } else {
-            ctx.fillStyle = node.type === "document" ? "rgba(250, 250, 250, 0.8)" : "rgba(161, 161, 170, 0.7)";
+            ctx.fillStyle = node.type === "document" 
+              ? "rgba(250, 250, 250, 0.8)" 
+              : node.type === "entity"
+                ? "rgba(250, 250, 250, 0.75)"
+                : "rgba(161, 161, 170, 0.7)";
           }
 
           let labelText = node.label;
@@ -844,6 +959,11 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
                 <span className="w-2 h-2 rounded-full bg-zinc-400" />
                 <span className="text-zinc-300">Keywords ({nodes.filter(n => n.type === "keyword").length})</span>
               </span>
+              <span className="text-zinc-800">|</span>
+              <span className="flex items-center space-x-1.5">
+                <span className="w-2 h-2 rounded-full bg-violet-500" />
+                <span className="text-zinc-300">Entities ({nodes.filter(n => n.type === "entity").length})</span>
+              </span>
             </div>
 
             {/* Settings & Camera Actions */}
@@ -1011,13 +1131,18 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
           <div>
             <div className="flex items-start justify-between border-b border-zinc-800 pb-3 mb-4">
               <div className="flex items-center space-x-2">
-                {selectedNode.type === "document" ? (
-                  <FileText className="w-4 h-4 text-blue-400" />
-                ) : (
-                  <Hash className="w-4 h-4 text-zinc-400" />
-                )}
+                {selectedNode.type === "document" && <FileText className="w-4 h-4 text-blue-400" />}
+                {selectedNode.type === "keyword" && <Hash className="w-4 h-4 text-zinc-400" />}
+                {selectedNode.type === "entity" && (() => {
+                  const Icon = getEntityIcon(selectedNode.entityType || "");
+                  return <Icon className="w-4 h-4" style={{ color: selectedNode.color }} />;
+                })()}
                 <span className="text-xs uppercase tracking-wider font-semibold text-zinc-400">
-                  {selectedNode.type === "document" ? "Memory Page" : "Topic Keyword"}
+                  {selectedNode.type === "document" 
+                    ? "Memory Page" 
+                    : selectedNode.type === "entity" 
+                      ? `${selectedNode.entityType || "Entity"}`
+                      : "Topic Keyword"}
                 </span>
               </div>
               <button 
@@ -1096,6 +1221,39 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
                     </div>
                   </div>
                 )}
+
+                {selectedDocDetails.entities && selectedDocDetails.entities.length > 0 && (
+                  <div className="space-y-1.5">
+                    <h4 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Extracted Entities</h4>
+                    <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto pt-0.5">
+                      {selectedDocDetails.entities.map((ent, i) => {
+                        const entColor = getEntityColor(ent.type);
+                        return (
+                          <button
+                            key={i}
+                            onClick={() => {
+                              // Find and highlight entity node
+                              const entKey = `${ent.type}:${ent.name}`.toLowerCase();
+                              const entId = `ent_${entKey.replace(/[^a-z0-9]/g, "_")}`;
+                              const entNode = nodes.find(n => n.id === entId);
+                              if (entNode) {
+                                setSelectedNode(entNode);
+                              }
+                            }}
+                            className="text-[10px] border px-2 py-0.5 rounded transition-colors"
+                            style={{
+                              backgroundColor: `${entColor}15`,
+                              borderColor: `${entColor}30`,
+                              color: entColor,
+                            }}
+                          >
+                            {ent.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1115,6 +1273,57 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
                   <h4 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Connected Pages</h4>
                   <div className="space-y-1.5 max-h-[220px] overflow-y-auto">
                     {selectedKwDetails.documents.map((doc) => (
+                      <div 
+                        key={doc.id}
+                        onClick={() => {
+                          const docNode = nodes.find(n => n.id === `doc_${doc.id}`);
+                          if (docNode) {
+                            setSelectedNode(docNode);
+                          }
+                        }}
+                        className="p-2 rounded border border-zinc-800/80 hover:bg-zinc-800/60 hover:border-zinc-700/50 cursor-pointer transition-colors text-left space-y-1"
+                      >
+                        <div className="text-[11.5px] font-medium text-zinc-200 line-clamp-2 leading-tight">
+                          {doc.title || doc.url}
+                        </div>
+                        <div className="text-[9.5px] text-zinc-400 font-mono truncate">
+                          {doc.domain}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Entity Details Block */}
+            {selectedNode.type === "entity" && selectedEntDetails && (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-base font-semibold text-zinc-100 flex items-center space-x-1.5">
+                    <span>{selectedEntDetails.name}</span>
+                  </h3>
+                  <div className="flex items-center space-x-2 mt-2">
+                    <span 
+                      className="px-2 py-0.5 rounded text-[10px] font-semibold"
+                      style={{ 
+                        backgroundColor: `${selectedNode.color}20`, 
+                        color: selectedNode.color,
+                        border: `1px solid ${selectedNode.color}40`
+                      }}
+                    >
+                      {selectedEntDetails.type}
+                    </span>
+                    <span className="text-[11px] text-zinc-400">
+                      Found in <span className="font-semibold" style={{ color: selectedNode.color }}>{selectedEntDetails.count}</span> pages
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <h4 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Mentioned In</h4>
+                  <div className="space-y-1.5 max-h-[220px] overflow-y-auto">
+                    {selectedEntDetails.documents.map((doc) => (
                       <div 
                         key={doc.id}
                         onClick={() => {
@@ -1174,7 +1383,7 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
               </>
             )}
             
-            {selectedNode.type === "keyword" && (
+            {(selectedNode.type === "keyword" || selectedNode.type === "entity") && (
               <button
                 onClick={() => setSelectedNode(null)}
                 className="w-full py-1.5 bg-zinc-850 hover:bg-zinc-800 text-[11px] font-medium rounded-md transition-colors text-zinc-300 border border-zinc-700/50"

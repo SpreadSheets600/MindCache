@@ -5,7 +5,7 @@ import { Globe } from "lucide-react";
 interface Node {
   id: string;
   label: string;
-  type: "document" | "keyword";
+  type: "document" | "keyword" | "entity";
   url?: string;
   x: number;
   y: number;
@@ -13,6 +13,7 @@ interface Node {
   vy: number;
   radius: number;
   color: string;
+  entityType?: string;
 }
 
 interface Link {
@@ -24,6 +25,16 @@ interface KnowledgeGraphProps {
   documents: DocumentResponse[];
   onDocumentClick: (id: number) => void;
 }
+
+// Entity type color mapping
+const getEntityColor = (entityType: string): string => {
+  const typeLower = entityType?.toLowerCase() || "";
+  if (typeLower.includes("person")) return "#f59e0b";
+  if (typeLower.includes("company") || typeLower.includes("organization")) return "#10b981";
+  if (typeLower.includes("technology") || typeLower.includes("language") || typeLower.includes("library")) return "#8b5cf6";
+  if (typeLower.includes("project")) return "#ec4899";
+  return "#6366f1";
+};
 
 export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
   documents,
@@ -73,6 +84,23 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
       .slice(0, 15)
       .map(([kw]) => kw);
 
+    // Count entities
+    const entityCounts: Record<string, { type: string; count: number }> = {};
+    documents.forEach((doc) => {
+      doc.entities?.forEach((ent) => {
+        const key = `${ent.type}:${ent.name}`.toLowerCase();
+        if (!entityCounts[key]) {
+          entityCounts[key] = { type: ent.type, count: 0 };
+        }
+        entityCounts[key].count++;
+      });
+    });
+
+    const topEntities = Object.entries(entityCounts)
+      .sort((a, b) => b[1].count - a[1].count)
+      .slice(0, 10)
+      .map(([key, data]) => ({ key, ...data }));
+
     documents.slice(0, 25).forEach((doc, idx) => {
       const id = `doc_${doc.id}`;
       const angle = (idx / 25) * Math.PI * 2;
@@ -111,6 +139,32 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
             nodeMap.set(kwId, kwNode);
           }
           newLinks.push({ source: id, target: kwId });
+        }
+      });
+
+      // Add entity links
+      doc.entities?.forEach((ent) => {
+        const entKey = `${ent.type}:${ent.name}`.toLowerCase();
+        const isTopEntity = topEntities.some((e) => e.key === entKey);
+        if (isTopEntity) {
+          const entId = `ent_${entKey.replace(/[^a-z0-9]/g, "_")}`;
+          if (!nodeMap.has(entId)) {
+            const entNode: Node = {
+              id: entId,
+              label: ent.name,
+              type: "entity",
+              entityType: ent.type,
+              x: width / 2 + (Math.random() - 0.5) * 120,
+              y: height / 2 + (Math.random() - 0.5) * 120,
+              vx: 0,
+              vy: 0,
+              radius: 5,
+              color: getEntityColor(ent.type),
+            };
+            newNodes.push(entNode);
+            nodeMap.set(entId, entNode);
+          }
+          newLinks.push({ source: id, target: entId });
         }
       });
     });
@@ -211,6 +265,11 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
           ctx.strokeStyle = "rgba(59, 130, 246, 0.12)";
           ctx.lineWidth = isHovered ? 4 : 2;
           ctx.stroke();
+        } else if (node.type === "entity") {
+          ctx.fillStyle = isHovered ? "#ffffff" : node.color;
+          ctx.strokeStyle = `${node.color}30`;
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
         } else {
           ctx.fillStyle = isHovered ? "#a1a1aa" : "#71717a";
         }
@@ -218,7 +277,7 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
 
         if (isHovered || isRelated) {
           ctx.font = node.type === "document" ? "500 10px Geist, sans-serif" : "9px Geist Mono, monospace";
-          ctx.fillStyle = node.type === "document" ? "#fafafa" : "#a1a1aa";
+          ctx.fillStyle = node.type === "document" ? "#fafafa" : node.type === "entity" ? node.color : "#a1a1aa";
           let text = node.label;
           if (text.length > 25) text = text.substring(0, 22) + "...";
           ctx.textAlign = "center";

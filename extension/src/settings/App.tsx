@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSettingsStore } from "../store/settingsStore";
 import { useConnectionStore } from "../store/connectionStore";
@@ -77,6 +77,9 @@ const App: React.FC = () => {
     const [dashAI, setDashAI] = useState(false);
     const [searchStartTime, setSearchStartTime] = useState("");
     const [searchEndTime, setSearchEndTime] = useState("");
+    const [searchSourceType, setSearchSourceType] = useState("all");
+    const [searchSortOrder, setSearchSortOrder] = useState("relevance");
+    const [searchMinScore, setSearchMinScore] = useState(0);
 
     useEffect(() => {
         const timer = setTimeout(() => setDebouncedDashSearch(dashSearch), 250);
@@ -131,9 +134,36 @@ const App: React.FC = () => {
                 searchStartTime || undefined,
                 searchEndTime || undefined,
             ),
-        enabled: isOnline && debouncedDashSearch.trim().length > 0,
         retry: false,
     });
+
+    const processedResults = useMemo(() => {
+        if (!dashSearchResults?.results) return [];
+        let items = [...dashSearchResults.results];
+
+        // 1. Filter by Source Type
+        if (searchSourceType !== "all") {
+            items = items.filter(
+                (item) => item.source_type?.toLowerCase() === searchSourceType.toLowerCase()
+            );
+        }
+
+        // 2. Filter by Minimum Score (0-100)
+        if (searchMinScore > 0) {
+            items = items.filter((item) => Math.round(item.score * 100) >= searchMinScore);
+        }
+
+        // 3. Sort Results
+        if (searchSortOrder === "date_desc") {
+            items.sort((a, b) => new Date(b.last_visited_at).getTime() - new Date(a.last_visited_at).getTime());
+        } else if (searchSortOrder === "date_asc") {
+            items.sort((a, b) => new Date(a.last_visited_at).getTime() - new Date(b.last_visited_at).getTime());
+        } else if (searchSortOrder === "domain") {
+            items.sort((a, b) => (a.domain || "").localeCompare(b.domain || ""));
+        }
+
+        return items;
+    }, [dashSearchResults, searchSourceType, searchMinScore, searchSortOrder]);
 
     useEffect(() => {
         if (isOnline && activePage === "memories") {
@@ -870,6 +900,58 @@ const App: React.FC = () => {
                                             />
                                         </div>
                                     </div>
+
+                                    {/* Source Type Filter */}
+                                    <div className="border-t border-zinc-800/60 pt-3.5 space-y-1.5">
+                                        <label className="text-[11px] text-muted-foreground">
+                                            Source / Platform
+                                        </label>
+                                        <select
+                                            value={searchSourceType}
+                                            onChange={(e) => setSearchSourceType(e.target.value)}
+                                            className="w-full bg-zinc-900 border border-zinc-850/50 rounded-md px-2.5 py-1.5 text-xs text-foreground outline-none focus:border-primary/45 transition-colors"
+                                        >
+                                            <option value="all">All Sources</option>
+                                            <option value="github">GitHub</option>
+                                            <option value="youtube">YouTube</option>
+                                            <option value="reddit">Reddit</option>
+                                            <option value="x">X / Twitter</option>
+                                            <option value="generic">Generic Web</option>
+                                        </select>
+                                    </div>
+
+                                    {/* Sort Order Selector */}
+                                    <div className="border-t border-zinc-800/60 pt-3.5 space-y-1.5">
+                                        <label className="text-[11px] text-muted-foreground">
+                                            Sort Results By
+                                        </label>
+                                        <select
+                                            value={searchSortOrder}
+                                            onChange={(e) => setSearchSortOrder(e.target.value)}
+                                            className="w-full bg-zinc-900 border border-zinc-850/50 rounded-md px-2.5 py-1.5 text-xs text-foreground outline-none focus:border-primary/45 transition-colors"
+                                        >
+                                            <option value="relevance">Relevance (AI Hybrid)</option>
+                                            <option value="date_desc">Visited: Newest First</option>
+                                            <option value="date_asc">Visited: Oldest First</option>
+                                            <option value="domain">Domain (A-Z)</option>
+                                        </select>
+                                    </div>
+
+                                    {/* Min Match Score Slider */}
+                                    <div className="border-t border-zinc-800/60 pt-3.5 space-y-1.5">
+                                        <div className="flex justify-between text-[11px]">
+                                            <span className="text-muted-foreground">Min Match Score</span>
+                                            <span className="text-primary font-mono font-semibold">{searchMinScore}%</span>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="100"
+                                            value={searchMinScore}
+                                            onChange={(e) => setSearchMinScore(parseInt(e.target.value))}
+                                            className="w-full h-1.5 bg-zinc-900 rounded-lg appearance-none cursor-pointer accent-primary"
+                                        />
+                                    </div>
                                 </div>
                             </div>
 
@@ -932,23 +1014,27 @@ const App: React.FC = () => {
                                                 )}
 
                                             {/* Results list */}
-                                            {dashSearchResults.results
-                                                .length === 0 ? (
+                                            {processedResults.length === 0 ? (
                                                 <div className="p-12 text-center border border-dashed border-border rounded-lg">
                                                     <p className="text-xs text-muted-foreground">
-                                                        No matches found. Try
-                                                        widening your query.
+                                                        {dashSearchResults.results.length === 0
+                                                            ? "No matches found. Try widening your query."
+                                                            : "No results match your active filters. Try adjusting them."}
                                                     </p>
                                                 </div>
                                             ) : (
                                                 <div className="space-y-3">
-                                                    {dashSearchResults.results.map(
-                                                        (result) => {
+                                                    {processedResults.map(
+                                                        (result, idx) => {
                                                             const matchPercentage =
                                                                 Math.round(
                                                                     result.score *
                                                                         100,
                                                                 );
+                                                            const isTopResult = idx === 0 && searchSortOrder === "relevance";
+                                                            const borderClass = isTopResult
+                                                                ? "border-blue-500/60 bg-blue-500/5 ring-1 ring-blue-500/20"
+                                                                : "border-border bg-secondary/10";
                                                             return (
                                                                 <div
                                                                     key={
@@ -959,20 +1045,27 @@ const App: React.FC = () => {
                                                                             result.id,
                                                                         )
                                                                     }
-                                                                    className="p-4 rounded-lg border border-border bg-secondary/10 hover:bg-secondary/20 hover:border-border/80 hover:scale-[1.005] cursor-pointer transition-all flex flex-col space-y-2.5"
+                                                                    className={`p-4 rounded-lg border ${borderClass} hover:bg-secondary/20 hover:border-border/80 hover:scale-[1.005] cursor-pointer transition-all flex flex-col space-y-2.5`}
                                                                 >
                                                                     <div className="flex items-start justify-between space-x-3">
                                                                         <h3 className="font-semibold text-sm text-zinc-100 hover:text-blue-400 transition-colors line-clamp-1">
                                                                             {result.title ||
                                                                                 result.url}
                                                                         </h3>
-                                                                        <span className="text-[10.5px] font-mono bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/20">
-                                                                            {
-                                                                                matchPercentage
-                                                                            }
-                                                                            %
-                                                                            match
-                                                                        </span>
+                                                                        <div className="flex items-center space-x-1.5 shrink-0">
+                                                                            {isTopResult && (
+                                                                                <span className="text-[10px] font-bold bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/30 flex items-center gap-1">
+                                                                                    👑 Best Match
+                                                                                </span>
+                                                                            )}
+                                                                            <span className="text-[10.5px] font-mono bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/20">
+                                                                                {
+                                                                                    matchPercentage
+                                                                                }
+                                                                                %
+                                                                                match
+                                                                            </span>
+                                                                        </div>
                                                                     </div>
 
                                                                     <div className="flex items-center space-x-2 text-[10.5px] text-muted-foreground">

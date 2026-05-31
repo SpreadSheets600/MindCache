@@ -13,6 +13,7 @@ export interface SearchResultItem {
   published_date: string | null;
   last_visited_at: string;
   keywords: Keyword[];
+  source_type: string;
 }
 
 export interface SearchResponse {

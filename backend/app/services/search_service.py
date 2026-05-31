@@ -390,6 +390,7 @@ class SearchService:
                 published_date=doc.published_date,
                 last_visited_at=last_visit,
                 keywords=keywords_response,
+                source_type=doc.source_type,
             )
             results_items.append(item)
 

@@ -54,8 +54,41 @@ async def lifespan(app: FastAPI):
     # This prevents blocking the main thread, letting the FastAPI backend start instantly.
     async def warm_up_models_background():
         try:
+            import httpx
+            from app.services.ollama_service import ollama_service
+
+            # 1. Warm up the embedding model
             logger.info(f"Checking/Warming up Ollama Embedding Model '{embedding_service.model_name}' in background...")
-            await embedding_service.check_health()
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    await client.post(
+                        f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/embed",
+                        json={
+                            "model": embedding_service.model_name,
+                            "input": "warmup",
+                            "keep_alive": -1,
+                        }
+                    )
+                logger.info(f"Ollama Embedding model '{embedding_service.model_name}' successfully loaded and kept alive.")
+            except Exception as warmup_err:
+                logger.warning(f"Failed to preload embedding model: {warmup_err}")
+
+            # 2. Warm up the generative model (Qwen)
+            logger.info(f"Checking/Warming up Ollama Generative Model '{ollama_service.model}' in background...")
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    await client.post(
+                        f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/generate",
+                        json={
+                            "model": ollama_service.model,
+                            "prompt": "hello",
+                            "stream": False,
+                            "keep_alive": -1,
+                        }
+                    )
+                logger.info(f"Ollama Generative model '{ollama_service.model}' successfully loaded and kept alive.")
+            except Exception as warmup_err:
+                logger.warning(f"Failed to preload generative model: {warmup_err}")
             
             logger.info("All local AI models successfully loaded and active.")
 

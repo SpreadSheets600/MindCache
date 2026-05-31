@@ -65,6 +65,7 @@ class SearchResultItem(BaseModel):
     published_date: Optional[datetime] = None  # noqa: UP045
     last_visited_at: datetime = Field(..., description="The Timestamp Of The Most Recent Visit.")
     keywords: list[KeywordResponse] = []  # noqa: UP045
+    source_type: str = "Generic"
 
 
 class SearchResponse(BaseModel):

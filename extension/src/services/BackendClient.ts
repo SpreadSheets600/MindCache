@@ -234,6 +234,22 @@ class BackendClient {
       throw err;
     }
   }
+
+  /**
+   * Generate AI Summary for a document
+   */
+  public async summarizeDocument(documentId: number): Promise<{ message: string; summary: string }> {
+    try {
+      const data = await this.request<{ message: string; summary: string }>(
+        `/documents/${documentId}/summarize`,
+        { method: "POST" }
+      );
+      return data;
+    } catch (err: any) {
+      console.error(`Failed to generate summary for document ${documentId}:`, err);
+      throw err;
+    }
+  }
 }
 
 export const backendClient = new BackendClient();

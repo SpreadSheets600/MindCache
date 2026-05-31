@@ -9,6 +9,7 @@ from app.models.document import Entity, Keyword
 from app.repositories.document_repository import document_repository
 from app.schemas.document import DocumentResponse, EntityResponse, KeywordResponse
 from app.services.bm25_service import bm25_service
+from app.services.ollama_service import ollama_service
 from app.services.vector_service import vector_service
 
 router = APIRouter(tags=["Document Management"])
@@ -166,6 +167,56 @@ async def delete_document(
         raise HTTPException(
             status_code=500,
             detail="Failed To Delete Document.",
+        ) from e
+
+
+@router.post(
+    "/documents/{document_id}/summarize",
+    status_code=200,
+    summary="Generate AI Summary For Document",
+)
+async def summarize_document(
+    document_id: int,
+    db: AsyncSession = Depends(get_db),  # noqa: B008
+) -> dict:
+    """Generates An AI Summary For An Existing Document Using Ollama."""
+
+    try:
+        doc = await document_repository.get_by_id(db, document_id)
+
+        if not doc:
+            raise DocumentNotFoundError(document_id)
+
+        if not await ollama_service.check_health():
+            raise HTTPException(
+                status_code=503,
+                detail="Ollama service is offline. Cannot generate summary.",
+            )
+
+        logger.info(f"Generating AI summary for Document ID {document_id}...")
+        summary = await ollama_service.generate_summary(doc.extracted_content[:8000])
+
+        if summary:
+            await document_repository.update_summary(db, document_id, summary)
+            await db.commit()
+            return {"message": "Summary generated successfully.", "summary": summary}
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to generate summary from Ollama.",
+            )
+
+    except MindCacheException as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message) from e
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        logger.error(f"Error Generating Summary For Document ID {document_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to generate summary.",
         ) from e
 
 

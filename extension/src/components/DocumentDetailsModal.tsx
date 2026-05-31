@@ -1,5 +1,5 @@
-import React from "react";
-import { useQuery } from "@tanstack/react-query";
+import React, { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { backendClient } from "../services/BackendClient";
 import { X, Globe, Loader2, Sparkles, ExternalLink } from "lucide-react";
 import { getErrorMessage } from "../utils/error";
@@ -13,6 +13,8 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
   documentId,
   onClose,
 }) => {
+  const queryClient = useQueryClient();
+  const [isGenerating, setIsGenerating] = useState(false);
   const { data: doc, isLoading, error } = useQuery({
     queryKey: ["document", documentId],
     queryFn: () => {
@@ -21,6 +23,20 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
     },
     enabled: documentId !== null,
   });
+
+  const handleGenerateSummary = async () => {
+    if (!documentId) return;
+    setIsGenerating(true);
+    try {
+      await backendClient.summarizeDocument(documentId);
+      queryClient.invalidateQueries({ queryKey: ["document", documentId] });
+      queryClient.invalidateQueries({ queryKey: ["documents"] });
+    } catch (err) {
+      console.error("Failed to generate summary:", err);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   if (!documentId) return null;
 
@@ -107,7 +123,7 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
               </div>
             </div>
 
-            {doc.summary && (
+            {doc.summary ? (
               <div className="p-3 rounded-lg bg-primary/5 space-y-1">
                 <div className="flex items-center space-x-1.5 text-[11px] text-primary font-medium">
                   <Sparkles className="w-3 h-3" />
@@ -117,6 +133,19 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
                   {doc.summary}
                 </p>
               </div>
+            ) : (
+              <button
+                onClick={handleGenerateSummary}
+                disabled={isGenerating}
+                className="flex items-center space-x-1.5 px-3 py-2 rounded-lg border border-border hover:bg-secondary text-xs transition-colors disabled:opacity-50"
+              >
+                {isGenerating ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="w-3.5 h-3.5 text-primary" />
+                )}
+                <span>{isGenerating ? "Generating summary..." : "Generate AI Summary"}</span>
+              </button>
             )}
 
             {doc.keywords && doc.keywords.length > 0 && (

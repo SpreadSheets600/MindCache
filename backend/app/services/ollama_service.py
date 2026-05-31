@@ -132,6 +132,42 @@ class OllamaService:
             logger.warning(f"Ollama Collective Summary Generation Failed: {e}")
             return "Collective summary unavailable. (Is local Ollama running?)"
 
+    async def extract_keywords(self, text: str, top_n: int = 5) -> list[str]:
+        """Extracts top N keywords from the text using Ollama."""
+
+        if not text.strip():
+            return []
+
+        prompt = (
+            f"Analyze the following text and extract the top {top_n} most representative single-word keywords. "
+            f"Respond ONLY with a plain comma-separated list of keywords. Do not include any introductory text, explanation, numbering, or markdown formatting.\n\n"
+            f"Text:\n{text[:4000]}"
+        )
+
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                response = await client.post(
+                    f"{self.base_url}/api/generate",
+                    json={
+                        "model": self.model,
+                        "prompt": prompt,
+                        "stream": False,
+                    },
+                )
+
+                if response.status_code == 200:
+                    res_text = response.json().get("response", "").strip()
+                    # Parse comma-separated keywords
+                    keywords = [k.strip().lower() for k in res_text.split(",") if k.strip()]
+                    # Filter out anything with multiple words or empty
+                    return [k for k in keywords if " " not in k][:top_n]
+
+                return []
+
+        except Exception as e:
+            logger.warning(f"Ollama keyword extraction failed: {e}")
+            return []
+
 
 # Singleton Instance
 ollama_service = OllamaService()

@@ -117,6 +117,20 @@ class GitHubExtractor(ContentExtractor):
                     topics.append(tag_text)
                     seen_topics.add(tag_text)
 
+            # Extract Stars count
+            stars_el = soup.find(id="repo-stars-counter-star") or soup.select_one("span.Counter.js-social-count") or soup.select_one("#repo-stars-counter-star")
+            stars_count = 0
+            if stars_el:
+                stars_title = stars_el.get("title") or stars_el.get_text()
+                stars_str = str(stars_title).replace(",", "").strip()
+                try:
+                    if stars_str.lower().endswith("k"):
+                        stars_count = int(float(stars_str.lower().replace("k", "")) * 1000)
+                    else:
+                        stars_count = int(stars_str)
+                except ValueError:
+                    stars_count = 0
+
             # Extract Rendered README from page if available (extremely reliable and fast)
             readme_el = soup.select_one("article.markdown-body") or soup.find(id="readme")
             if readme_el:
@@ -172,6 +186,7 @@ class GitHubExtractor(ContentExtractor):
             "repo_name": repo,
             "description": description,
             "topics": topics,
+            "stars": stars_count,
             "readme_available": bool(readme_content),
             "partial_extraction": partial_extraction,
         }

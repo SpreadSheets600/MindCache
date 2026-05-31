@@ -1,3 +1,4 @@
+import re
 from typing import Optional
 
 import httpx
@@ -166,6 +167,62 @@ class OllamaService:
 
         except Exception as e:
             logger.warning(f"Ollama keyword extraction failed: {e}")
+            return []
+
+    async def expand_query_concepts(self, query: str, top_n: int = 3) -> list[str]:
+        """Generates conceptual expansions/synonyms for a search query.
+
+        Takes a user query and returns related concept phrases that might help find
+        relevant documents. Does NOT rewrite the query — only adds alternative phrasings.
+
+        Example: 'that repository about stopping bad ai generated content'
+        Returns: ['ai slop', 'ai writing patterns', 'remove ai tells']
+        """
+
+        if not query.strip():
+            return []
+
+        prompt = (
+            f"A user is searching their document history with this query:\n"
+            f"\"{query}\"\n\n"
+            f"Generate exactly {top_n} short alternative search phrases (1-4 words each) that capture "
+            f"the same intent but use different vocabulary. Think of synonyms, related concepts, "
+            f"and how someone else might describe the same thing.\n\n"
+            f"Rules:\n"
+            f"- Each phrase must be 1-4 words\n"
+            f"- Use different vocabulary from the original query\n"
+            f"- Keep phrases concise and searchable\n"
+            f"- Respond ONLY with a comma-separated list, nothing else\n\n"
+            f"Alternative phrases:"
+        )
+
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                response = await client.post(
+                    f"{self.base_url}/api/generate",
+                    json={
+                        "model": settings.OLLAMA_MODEL,
+                        "prompt": prompt,
+                        "stream": False,
+                    },
+                )
+
+                if response.status_code == 200:
+                    res_text = response.json().get("response", "").strip()
+                    # Clean up LLM output: strip markdown, numbering, quotes
+                    concepts = []
+                    for part in res_text.split(","):
+                        cleaned = part.strip().strip("\"'`-").strip()
+                        # Remove leading numbers/bullets like "1. " or "- "
+                        cleaned = re.sub(r"^[\d\-\*\.]+\s*", "", cleaned).strip()
+                        if cleaned and len(cleaned.split()) <= 4:
+                            concepts.append(cleaned.lower())
+                    return concepts[:top_n]
+
+                return []
+
+        except Exception as e:
+            logger.warning(f"Ollama query concept expansion failed: {e}")
             return []
 
 

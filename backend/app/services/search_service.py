@@ -183,6 +183,8 @@ class SearchService:
         # 1. Query Expansion — Extract Keywords From The Query
         query_keywords: list[str] = []
         expanded_query = query
+        bm25_expanded_query = query
+        query_concepts: list[str] = []
 
         try:
             # OPTIMIZATION: Short queries split by spaces of length <= 8 use a lightweight, instant stopword filter.
@@ -195,12 +197,24 @@ class SearchService:
 
             if query_keywords:
                 expanded_query = f"{query} {' '.join(query_keywords)}"
+                bm25_expanded_query = expanded_query
                 logger.debug(f"Expanded Query: '{expanded_query}'")
 
         except Exception as e:
             logger.warning(f"Query Expansion Failed: {e}. Using Original Query.")
 
-        # 2. Generate Query Embedding
+        # 1b. LLM Query Concept Expansion — generate alternative phrasings to broaden BM25 retrieval
+        # Concepts are appended ONLY to the BM25 query, not the embedding query, to avoid semantic drift.
+        try:
+            if await ollama_service.check_health():
+                query_concepts = await ollama_service.expand_query_concepts(query, top_n=3)
+                if query_concepts:
+                    logger.info(f"Query concepts expanded: {query_concepts}")
+                    bm25_expanded_query = f"{bm25_expanded_query} {' '.join(query_concepts)}"
+        except Exception as e:
+            logger.warning(f"Query concept expansion failed: {e}. Continuing without LLM expansion.")
+
+        # 2. Generate Query Embedding (uses original + keywords only, NOT concepts — to avoid semantic drift)
         try:
             query_embedding = embedding_service.generate_embedding(f"{QUERY_PREFIX}{expanded_query}")
 
@@ -215,8 +229,8 @@ class SearchService:
         # 3. FAISS Vector Search — Get Top Candidates
         vector_results = vector_service.search_similar(query_embedding, limit=FAISS_CANDIDATE_POOL)
 
-        # 4. BM25 Lexical Search — Get Top Candidates
-        bm25_results = bm25_service.search(expanded_query, limit=BM25_CANDIDATE_POOL)
+        # 4. BM25 Lexical Search — Get Top Candidates (uses full expansion including concepts)
+        bm25_results = bm25_service.search(bm25_expanded_query, limit=BM25_CANDIDATE_POOL)
 
         # 5. Keyword Search — Find Documents With Matching Stored Keywords
         keyword_docs = await document_repository.search_by_keywords(db, query_keywords, limit=25)

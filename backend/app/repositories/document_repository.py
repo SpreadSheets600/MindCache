@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.logging import get_logger
-from app.models.document import Document, Keyword, VisitHistory
+from app.models.document import Document, Keyword, VisitHistory, Entity, SearchClick, SearchQuery
 
 logger = get_logger(__name__)
 
@@ -173,6 +173,41 @@ class DocumentRepository:
         await db.delete(document)
         logger.info(f"Deleted Document ID {document_id} From SQLite.")
         return True
+
+    async def add_entities(self, db: AsyncSession, document_id: int, entities_list: list[tuple[str, str]]) -> None:
+        """Associates Multiple Extracted Entities (name, type) With A Document."""
+
+        for name, etype in entities_list:
+            entity_record = Entity(
+                document_id=document_id,
+                name=name,
+                type=etype,
+            )
+            db.add(entity_record)
+
+    async def record_click(self, db: AsyncSession, query: str, document_id: int) -> None:
+        """Logs a search result click signal to SQLite."""
+
+        click_record = SearchClick(
+            query=query.strip().lower(),
+            document_id=document_id
+        )
+        db.add(click_record)
+
+    async def get_clicks_for_query(self, db: AsyncSession, query: str) -> list[SearchClick]:
+        """Retrieves all click records for a given search query (case-insensitive)."""
+
+        result = await db.execute(
+            select(SearchClick)
+            .where(SearchClick.query == query.strip().lower())
+        )
+        return list(result.scalars().all())
+
+    async def record_search_query(self, db: AsyncSession, query: str) -> None:
+        """Logs a search query to SQLite."""
+
+        query_record = SearchQuery(query=query.strip())
+        db.add(query_record)
 
 
 # Singleton Instance

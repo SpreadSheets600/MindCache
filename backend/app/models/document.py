@@ -34,6 +34,12 @@ class Document(Base):
     visits: Mapped[list["VisitHistory"]] = relationship(
         "VisitHistory", back_populates="document", cascade="all, delete-orphan", lazy="selectin"
     )
+    entities: Mapped[list["Entity"]] = relationship(
+        "Entity", back_populates="document", cascade="all, delete-orphan", lazy="selectin"
+    )
+    clicks: Mapped[list["SearchClick"]] = relationship(
+        "SearchClick", back_populates="document", cascade="all, delete-orphan", lazy="selectin"
+    )
 
 
 class Keyword(Base):
@@ -50,6 +56,48 @@ class Keyword(Base):
 
     # Relationships
     document: Mapped["Document"] = relationship("Document", back_populates="keywords")
+
+
+class Entity(Base):
+    """Represents An Entity Extracted From A Document (Person, Project, Library, Technology, Company)."""
+
+    __tablename__ = "entities"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    document_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(100), index=True, nullable=False)
+    type: Mapped[str] = mapped_column(String(50), nullable=False)  # 'Person', 'Company', etc.
+
+    # Relationships
+    document: Mapped["Document"] = relationship("Document", back_populates="entities")
+
+
+class SearchClick(Base):
+    """Stores click signals from search results to improve ranking dynamically."""
+
+    __tablename__ = "search_clicks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    query: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
+    document_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    clicked_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), nullable=False)
+
+    # Relationships
+    document: Mapped["Document"] = relationship("Document", back_populates="clicks")
+
+
+class SearchQuery(Base):
+    """Stores query history to capture search intent and history."""
+
+    __tablename__ = "search_queries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    query: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
+    searched_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), nullable=False)
 
 
 class VisitHistory(Base):

@@ -92,3 +92,9 @@ class DocumentResponse(BaseModel):
     updated_at: datetime
     keywords: list[KeywordResponse] = []  # noqa: UP045
     visit_history: list[datetime] = Field(default=[], description="List Of Timestamps When This URL Was Visited.")
+
+
+class ClickRequest(BaseModel):
+    """Payload representing a clicked search result."""
+    query: str = Field(..., description="The query string the user searched for.")
+    document_id: int = Field(..., description="The document ID that the user clicked on.")

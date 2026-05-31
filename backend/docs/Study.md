@@ -446,7 +446,7 @@ flowchart LR
     subgraph "Unidirectional (Old)"
         A1["I"] --> A2["love"] --> A3["NLP"]
     end
-    subgraph "Bidirectional (BERT)")
+    subgraph "Bidirectional (BERT)"
         B1["I"] <--> B2["love"] <--> B3["NLP"]
         B1 <--> B3
     end
@@ -628,8 +628,9 @@ flowchart LR
     end
     R3 -- "User clicks Document C" --> FEEDBACK[Click logged]
     FEEDBACK --> BOOST["+0.10 score boost for slop queries"]
-    BOOST --> subgraph "Next Search for 'slop'"
-        NR1["#1: Document C (boosted)"]
+    BOOST --> NR1["#1: Document C (boosted)"]
+    subgraph "Next Search for 'slop'"
+        NR1
         NR2["#2: Document A"]
         NR3["#3: Document B"]
     end

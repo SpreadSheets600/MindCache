@@ -8,8 +8,8 @@ The MindCache local engine is a high-performance Python backend built on FastAPI
 
 - **FastAPI**: Asynchronous high-performance web routing framework.
 - **SQLAlchemy 2.0 & aiosqlite**: Fully asynchronous database layer for non-blocking storage of document details, keywords, and visit history.
-- **FAISS (Facebook AI Similarity Search)**: Custom flat inner product index wrapper for ultra-fast, L2-normalized cosine similarity search.
-- **SentenceTransformers & KeyBERT**: Local AI processing using `BAAI/bge-small-en-v1.5` for generating 384-dimensional semantic vectors and extracting key topics.
+- **FAISS (Facebook AI Similarity Search)**: Custom flat inner product index wrapper for ultra-fast, L2-normalized cosine similarity search (dimension adjusted dynamically to 768 to support Gemma).
+- **Ollama AI Integration**: Handles semantic vector generation (`embeddinggemma:300m`), page summary generation, and interactive RAG synthesis (`qwen3.5:2b`) without any heavy local ML Python libraries.
 - **Trafilatura & BeautifulSoup4**: Combined HTML scraping pipeline to strip menus and ads, falling back structurally to clean text parsing when needed.
 - **Dedicated Platforms Scrapers**: Custom, high-context extraction pipelines for YouTube, X (Twitter), and Reddit (to capture subreddit names, posts, and top discussion threads).
 
@@ -18,7 +18,7 @@ The MindCache local engine is a high-performance Python backend built on FastAPI
 ## Key Features
 
 - **Non-Blocking Architecture**: Heavy CPU-bound structural parsing and metadata extractions run inside specialized thread pools (`asyncio.to_thread`) to ensure the ASGI event loop remains highly responsive.
-- **Shared Model RAM Optimization**: Shares the pre-loaded `BAAI/bge-small-en-v1.5` SentenceTransformer instance between vector search and KeyBERT keyword extraction, saving over 500MB of system memory.
+- **Zero Python ML Overhead**: Both embedding and keyword extraction models run inside the Ollama daemon process, keeping Python process RAM extremely low (saving over 1GB+ system RAM compared to PyTorch/Transformers) and eliminating Hugging Face gate/token access friction.
 - **Intelligent Deduplication**: Visited URLs are checked in real time. If a page is already indexed, the backend appends a visit record to history and updates timestamps without re-triggering heavy AI scrapers.
 - **Tab Title Fallback**: Integrates incoming pre-rendered tab titles from the browser extension as a fallback in case paywalls, CAPTCHAs, or javascript restrictions block scrapers.
 - **Max-Similarity Vector Merging**: Uses a robust max-selection strategy for document chunks to ensure multiple matches from a single long webpage do not cause score overwrite penalties.

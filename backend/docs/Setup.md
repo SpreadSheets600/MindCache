@@ -31,11 +31,18 @@ MindCache checks settings via environmental variables. Create a `.env` file in t
 ```ini
 DATABASE_URL=sqlite:///data/mindcache.db
 FAISS_INDEX_PATH=data/faiss_index.bin
-EMBEDDING_MODEL_NAME=all-MiniLM-L6-v2
+EMBEDDING_PROVIDER=ollama
+EMBEDDING_MODEL_NAME=embeddinggemma:300m
 OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=llama3
+OLLAMA_MODEL=qwen3.5:2b
 LOG_LEVEL=INFO
 ```
+
+### Rationale: Ollama-Exclusive Integration vs. Hugging Face
+The MindCache AI backend has been optimized to execute all model loads via a local **Ollama** server rather than embedding Python-native Hugging Face / PyTorch loaders (`sentence-transformers` and `KeyBERT`):
+1. **Zero Access Friction / No Gated Licenses**: Models like Gemma require accepting license agreements on Hugging Face. Loading them via Python would trigger crashes unless a valid `HF_TOKEN` was supplied. Ollama bypasses this gating mechanism entirely.
+2. **RAM Preservation**: Running model execution in Ollama leverages its highly optimized C++ (llama.cpp) runtime, avoiding loading heavy models directly into Python's process space (saving 1GB+ RAM in the FastAPI server).
+3. **Keyword Generation & Summary Simplification**: Transitioning from KeyBERT to Ollama prompt-based keyword generation with local statistical fallback ensures keyword indexing is lightweight, robust, and performs at native speeds.
 
 ## Running the Application
 

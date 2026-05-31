@@ -16,46 +16,33 @@ MindCache processes the downloaded HTML through Trafilatura. Trafilatura strips 
 
 If Trafilatura fails or returns empty text, MindCache falls back to BeautifulSoup4. BeautifulSoup4 strips script and style tags, then parses the raw textual representation from the HTML body.
 
-## 2. Shared Model Keyword Extraction (Memory Optimization)
+## 2. Dynamic Keyword Extraction (RAM & Setup Optimization)
 
-To extract relevant topics from webpages, MindCache uses KeyBERT.
+To extract relevant topics from webpages, MindCache utilizes a dual-layer keyword extraction strategy:
 
-### Memory Optimization Architecture
+### Ollama Prompt-based Extraction
+MindCache queries the local Ollama LLM (`qwen3.5:2b`) using a precise extraction prompt. The prompt instructs the model to analyze the clean page text and return exactly five single-word keywords as a comma-separated string, avoiding introductory filler or markdown code blocks.
 
-KeyBERT typically loads its own instance of a SentenceTransformer model, which uses about 450MB of RAM. Since MindCache already loads a SentenceTransformer instance for semantic vector search, it passes the _exact same preloaded model instance_ directly to KeyBERT.
+### Classical Statistical Fallback
+If the Ollama server is offline or busy processing other tasks, MindCache automatically triggers a deterministic, **statistical term-frequency counter**. The system splits the text into tokens, filters out punctuation and common English stop words, and returns the top five most frequent words.
 
-```
-┌───────────────────────────────────────────────────────────┐
-│                    RAM / System Memory                    │
-│                                                           │
-│  ┌─────────────────────────────────────────────────────┐  │
-│  │Shared SentenceTransformer ("BAAI/bge-small-en-v1.5")│  │
-│  └──────────────┬──────────────────────────┬───────────┘  │
-│                 │ (shared instance)        │              │
-│                 ▼                          ▼              │
-│     ┌──────────────────────┐    ┌─────────────────────┐   │
-│     │   EmbeddingService   │    │  KeywordExtractor   │   │
-│     │ (Generates Vectors)  │    │  (KeyBERT scoring)  │   │
-│     └──────────────────────┘    └─────────────────────┘   │
-└───────────────────────────────────────────────────────────┘
-```
-
-This optimization saves nearly 500MB of local RAM and prevents CPU/GPU compilation redundancy, enabling MindCache to run smoothly on lower-end local machines.
-
-### Keyword Extraction Logic
-
-KeyBERT calculates document embeddings, generates candidate terms (n-grams), embeds them using the shared transformer, and uses cosine similarity to select keywords that represent the page content. The system preserves the top five keywords and their scores.
+This hybrid approach guarantees keyword availability and reliability with zero system memory impact (no local PyTorch weights loaded inside the FastAPI server).
 
 ## 3. Semantic Embedding Generation
 
-MindCache uses `BAAI/bge-small-en-v1.5`, a fast sentence-transformer model that yields a 384-dimensional dense vector representing the semantics of the text.
+MindCache uses `embeddinggemma:300m` via local Ollama, which generates a **768-dimensional** dense vector representing the deep semantics of the text.
+
+### Why embeddinggemma:300m and Why Ollama?
+- **Frictionless License Agreement**: Standard Gemma models are gated on Hugging Face. Running them via local SentenceTransformers would fail unless you log in and set up your `HF_TOKEN`. Ollama distributes `embeddinggemma:300m` seamlessly.
+- **Process Memory Isolation**: Offloading vector generation to the local Ollama service means the python backend doesn't load heavy model binaries into the application process memory, saving massive RAM and keeping the API server startup instant.
 
 ### Ingestion Strategy
 
-To capture both the high-level purpose and detailed content of a page, MindCache generates embeddings using a combined text block:
-`Title: [page title] \n\n Content: [first 2000 characters of extracted text]`
+To capture both the high-level purpose and detailed context of a page, MindCache generates embeddings for webpage chunks. Each chunk is enriched with global document metadata (Title, Domain, Platform/Source Type, and Extracted Keywords) prepended to the chunk text:
 
-This ensures search queries matching terms in the webpage title or introductory paragraphs score highly in vector distance.
+`Title: [page title] \n\n Domain: [domain] \n\n Source Type: [type] \n\n Keywords: [keywords] \n\n Content (Chunk X): [content]`
+
+This guarantees that queries matching either global metadata or granular inner-content blocks score highly in FAISS distance calculations.
 
 ## 4. FAISS Vector Search and Cosine Similarity
 

@@ -17,11 +17,12 @@ graph TD
     A[Browser Tabs] -->|On Navigation / Tab Switch| B[Background Service Worker]
     B -->|Ingests URL & Title| C[FastAPI Local Server]
     C -->|Asynchronous Scraping| D[Trafilatura / BeautifulSoup4]
-    D -->|Trimmed Content| E[Shared Embedding Model: bge-small-en-v1.5]
-    E -->|KeyBERT scoring| F[Keyword Extraction]
-    E -->|Normalized vectors| G[FAISS Vector Store]
-    D -->|Full payload| H[SQLite Database]
-    D -->|Optional summary| I[Local Ollama: Llama3]
+    D -->|Trimmed Content| E[Local Ollama: qwen3.5:2b]
+    E -->|Ollama / Stat counter| F[Keyword Extraction]
+    D -->|Doc Text| G[Ollama: embeddinggemma:300m]
+    G -->|Normalized vectors| H[FAISS Vector Store (768d)]
+    D -->|Full payload| I[SQLite Database]
+    D -->|Optional summary| E
 ```
 
 ---
@@ -31,9 +32,9 @@ graph TD
 - **Absolute Local Privacy**: Zero external cloud or API calls. All indexing, vector computations, relational database storage, and AI syntheses occur on your localhost.
 - **Background Ingestion & Tab Tracking**: The Chromium extension automatically registers visited URLs and pre-rendered tab titles, using debounces and domain exclusion rules.
 - **Hybrid Content Scraping**: Utilizes specialized extraction pipelines for YouTube, X (Twitter), and Reddit (to capture subreddits, posts, and top discussion comments), falling back gracefully to Trafilatura and BeautifulSoup4 for generic web content.
-- **Memory-Optimized Local NLP**: Shares a single pre-loaded `BAAI/bge-small-en-v1.5` SentenceTransformer instance between vector search and KeyBERT keyword extraction, saving over 500MB of local system memory.
-- **Spotlight Semantic Search**: Executes high-performance Cosine Similarity matches on FAISS inner product indices with real-time, debounced query auto-updates.
-- **Local RAG Chat Synthesis**: Connects directly to local Ollama installations (e.g. `llama3`) to construct dynamic syntheses and answers from your browsing history with inline citations.
+- **Hugging Face-Free RAM Optimization**: Operates without heavy Hugging Face/SentenceTransformer dependencies in the python backend process, delegating both keyword extraction and embedding generation tasks to Ollama, reducing local process memory bloat and preventing unauthenticated download gates.
+- **Spotlight Semantic Search**: Executes high-performance Cosine Similarity matches on FAISS inner product indices (768 dimensions) with real-time, debounced query auto-updates.
+- **Local RAG Chat Synthesis**: Connects directly to local Ollama installations (`qwen3.5:2b`) to construct dynamic syntheses and answers from your browsing history with inline citations.
 
 ---
 
@@ -41,7 +42,7 @@ graph TD
 
 MindCache is divided into two distinct components:
 
-- **[`/backend`](backend/README.md)**: High-performance FastAPI server managing scrapers, local models (SentenceTransformer/KeyBERT), aiosqlite/SQLAlchemy ORM, and FAISS indices.
+- **[`/backend`](backend/README.md)**: High-performance FastAPI server managing scrapers, local models (Ollama embeddings and prompt-based keyword generation), aiosqlite/SQLAlchemy ORM, and FAISS indices.
 - **[`/extension`](extension/README.md)**: Manifest V3 browser extension and a full-featured spotlight dashboard built with React, TypeScript, Radix UI, Zustand, and TailwindCSS.
 
 ---
@@ -89,8 +90,17 @@ This generates compiled assets in `extension/dist`.
 
 > [!IMPORTANT]
 > **Ollama Integration**  
-> To leverage RAG chat synthesis and automated page summarization, ensure [Ollama](https://ollama.ai/) is running locally and has the `llama3` model pulled:
+> To leverage RAG chat synthesis, automated page summarization, and embeddings generation, ensure [Ollama](https://ollama.ai/) is running locally and has both models pulled:
 >
 > ```bash
-> ollama pull llama3
+> # Pull LLM for summary, keywords, and synthesis
+> ollama pull qwen3.5:2b
+>
+> # Pull Embedding Model for FAISS semantic indexing
+> ollama pull embeddinggemma:300m
 > ```
+>
+> ### Why Ollama and Why Not Hugging Face/SentenceTransformers?
+> - **Zero Credentials & Gated Model Friction**: Models like Google Gemma require a Hugging Face account and license acceptance. Loading `google/embeddinggemma-300m` via Python's SentenceTransformers would crash without setting up `HF_TOKEN`. Ollama handles model distribution seamlessly without token credentials.
+> - **Dramatically Lower Memory Footprint**: Rather than loading multi-gigabyte PyTorch/Hugging Face weight models directly in Python's memory (which bloats backend RAM by 1GB+), we offload embedding and generation to local Ollama, which uses optimized C++ (llama.cpp) with dynamic GPU/CPU offloading.
+> - **Unified AI Backend**: Running both embeddings and text generation through a single local server (Ollama) reduces setup complexity and dependency updates.

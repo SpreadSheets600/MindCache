@@ -24,7 +24,7 @@ This document is a comprehensive learning resource covering the engineering conc
     INSERT INTO search_queries (query) VALUES ('rag architecture');
     ```
 *   **Where we use it:** Mobile apps (iOS/Android), local desktop software, and caching layers.
-*   **How we use it in MindCache:** MindCache stores relational metadata (e.g. documents, visit history, keywords, extracted entities, search queries, and search clicks) in `data/mindcache.db` using SQLAlchemy ORM models defined in [document.py](../app/models/document.py).
+*   **How we use it in MindCache:** MindCache stores relational metadata (e.g. documents, visit history, keywords, extracted entities, search queries, and search clicks) in `data/mindcache.db` using SQLAlchemy ORM models defined in [document.py](https://github.com/SpreadSheets600/MindCache/blob/main/backend/app/models/document.py).
 
 ### 3. REST APIs
 *   **What it is:** Representational State Transfer APIs communicate over standard HTTP protocols. Clients send requests (GET, POST, DELETE) with parameters or JSON body payloads, and servers return structured responses (typically JSON).
@@ -37,7 +37,7 @@ This document is a comprehensive learning resource covering the engineering conc
     }
     ```
 *   **Where we use it:** Web applications, mobile backend services, and microservice architectures.
-*   **How we use it in MindCache:** The FastAPI backend exposes REST endpoints (e.g. `/visit` in [visit.py](../app/api/visit.py), `/search` and `/search/click` in [search.py](../app/api/search.py)) which the browser extension calls to transmit data.
+*   **How we use it in MindCache:** The FastAPI backend exposes REST endpoints (e.g. `/visit` in [visit.py](https://github.com/SpreadSheets600/MindCache/blob/main/backend/app/api/visit.py), `/search` and `/search/click` in [search.py](https://github.com/SpreadSheets600/MindCache/blob/main/backend/app/api/search.py)) which the browser extension calls to transmit data.
 
 ### 4. Web Scraping & HTML Extraction
 *   **What it is:** Extracting clean, structured text content out of raw, noisy HTML markup by parsing structure and discarding noise like ads, navigations, sidebars, and scripts.
@@ -49,7 +49,7 @@ This document is a comprehensive learning resource covering the engineering conc
     clean_text = soup.find("main").text  # "Core text here."
     ```
 *   **Where we use it:** Price trackers, data aggregation feeds, and dataset collection pipelines.
-*   **How we use it in MindCache:** MindCache uses `trafilatura` (with a BeautifulSoup fallback) in [document_processor.py](../app/services/document_processor.py) to extract clean readability text from visited webpages.
+*   **How we use it in MindCache:** MindCache uses `trafilatura` (with a BeautifulSoup fallback) in [document_processor.py](https://github.com/SpreadSheets600/MindCache/blob/main/backend/app/services/document_processor.py) to extract clean readability text from visited webpages.
 
 ### 5. Text Processing
 *   **What it is:** Cleaning and tokenizing raw text (lowercasing, punctuation removal, splitting into lists of terms, and filtering out common "stop words" like "the", "is", "a").
@@ -61,19 +61,19 @@ This document is a comprehensive learning resource covering the engineering conc
     # tokens = ["learn", "rag", "in", "2026"]
     ```
 *   **Where we use it:** Spam filtering, sentiment analysis, and compiler lexers.
-*   **How we use it in MindCache:** Used in [bm25_service.py](../app/services/bm25_service.py) to tokenize index contents and search queries, including logic to split hyphens to match compound query terms like `stop-slop`.
+*   **How we use it in MindCache:** Used in [bm25_service.py](https://github.com/SpreadSheets600/MindCache/blob/main/backend/app/services/bm25_service.py) to tokenize index contents and search queries, including logic to split hyphens to match compound query terms like `stop-slop`.
 
 ### 6. TF-IDF
 *   **What it is:** Term Frequency-Inverse Document Frequency. A statistical measure reflecting how important a word is to a document in a collection (corpus). Term Frequency (TF) counts occurrences, while Inverse Document Frequency (IDF) penalizes common words across all documents.
 *   **Simple Example:** In a dataset of 100 coding articles, the word "the" appears in all 100 (low IDF). The word "PyTorch" appears in only 2 (high IDF). An article containing "PyTorch" frequently will rank high for "PyTorch".
 *   **Where we use it:** Classical search engines, text categorization, and quick search indices.
-*   **How we use it in MindCache:** Used in [keyword_extractor.py](../app/services/keyword_extractor.py) as a highly lightweight fallback keyword extractor using scikit-learn's `TfidfVectorizer` when the local LLM is disabled or unavailable.
+*   **How we use it in MindCache:** Used in [keyword_extractor.py](https://github.com/SpreadSheets600/MindCache/blob/main/backend/app/services/keyword_extractor.py) as a highly lightweight fallback keyword extractor using scikit-learn's `TfidfVectorizer` when the local LLM is disabled or unavailable.
 
 ### 7. BM25
 *   **What it is:** Best Matching 25. A state-of-the-art probabilistic TF-IDF variant. It adjusts term frequency scoring so that term repetition has a saturating effect (preventing keyword stuffing from breaking relevance) and normalizes for document length (penalizing overly wordy documents).
 *   **Simple Example:** If a document mentions "python" 5 times, mentioning it a 6th time doesn't increase its score nearly as much as the jump from 0 to 1 mention.
 *   **Where we use it:** The core matching algorithm in production platforms like Elasticsearch and Apache Solr.
-*   **How we use it in MindCache:** Encapsulated in [bm25_service.py](../app/services/bm25_service.py) using the `rank-bm25` package to generate lexical candidate matches and scores during hybrid queries.
+*   **How we use it in MindCache:** Encapsulated in [bm25_service.py](https://github.com/SpreadSheets600/MindCache/blob/main/backend/app/services/bm25_service.py) using the `rank-bm25` package to generate lexical candidate matches and scores during hybrid queries.
 
 ---
 
@@ -83,7 +83,7 @@ This document is a comprehensive learning resource covering the engineering conc
 *   **What it is:** Numerical vector representations of text in a high-dimensional space (e.g. 384 or 768 dimensions), where mathematically close vectors represent semantically similar concepts.
 *   **Simple Example:** The vector for "dog" is physically closer to "puppy" than it is to "refrigerator".
 *   **Where we use it:** Neural translation, semantic search, text clustering, and LLM text input representations.
-*   **How we use it in MindCache:** MindCache calls local Ollama embeddings API (running models like `embeddinggemma:300m`) in [embedding_service.py](../app/services/embedding_service.py) to generate dense vector representations of text chunks.
+*   **How we use it in MindCache:** MindCache calls local Ollama embeddings API (running models like `embeddinggemma:300m`) in [embedding_service.py](https://github.com/SpreadSheets600/MindCache/blob/main/backend/app/services/embedding_service.py) to generate dense vector representations of text chunks.
 
 ### 2. Cosine Similarity
 *   **What it is:** A mathematical metric measuring the cosine of the angle between two multi-dimensional vectors. It determines how close two vectors point in a space, independent of their length.
@@ -103,7 +103,7 @@ This document is a comprehensive learning resource covering the engineering conc
 *   **What it is:** Facebook AI Similarity Search. A highly optimized library written in C++ (with Python bindings) designed for fast dense vector clustering and similarity searches in memory or on disk.
 *   **Simple Example:** Efficiently searching through millions of 768-dimensional vectors in milliseconds.
 *   **Where we use it:** Large-scale commercial vector retrieval databases (e.g. Milvus, Pinecone, or custom indices).
-*   **How we use it in MindCache:** MindCache uses FAISS in [vector_service.py](../app/services/vector_service.py) to manage its vector store locally (`data/faiss_index.bin`) using normalized inner-product L2 distance to perform Cosine Similarity.
+*   **How we use it in MindCache:** MindCache uses FAISS in [vector_service.py](https://github.com/SpreadSheets600/MindCache/blob/main/backend/app/services/vector_service.py) to manage its vector store locally (`data/faiss_index.bin`) using normalized inner-product L2 distance to perform Cosine Similarity.
 
 ### 5. Hybrid Search
 *   **What it is:** A search strategy combining lexical search (BM25 for exact terms, names, and codes) with semantic search (FAISS for conceptual meaning) to optimize retrieval performance.
@@ -115,7 +115,7 @@ This document is a comprehensive learning resource covering the engineering conc
 *   **What it is:** Appending structured contextual metadata (timestamps, domain name, platform statistics, authorship) directly to raw text chunks during processing to guide vectors and keyword indices.
 *   **Simple Example:** Pre-pending context: `Title: my repo | Stars: 500 | Topics: [rust, compiler]` to a code chunk.
 *   **Where we use it:** E-commerce catalogs, enterprise document filtering, and contextual RAG.
-*   **How we use it in MindCache:** MindCache extracts platform metadata (e.g., GitHub stars/topics in [github.py](../app/services/extractors/github.py), YouTube video channels/transcripts in [youtube.py](../app/services/extractors/youtube.py)) and embeds this structured text directly into the chunk payload before vector generation in [document_processor.py](../app/services/document_processor.py).
+*   **How we use it in MindCache:** MindCache extracts platform metadata (e.g., GitHub stars/topics in [github.py](https://github.com/SpreadSheets600/MindCache/blob/main/backend/app/services/extractors/github.py), YouTube video channels/transcripts in [youtube.py](https://github.com/SpreadSheets600/MindCache/blob/main/backend/app/services/extractors/youtube.py)) and embeds this structured text directly into the chunk payload before vector generation in [document_processor.py](https://github.com/SpreadSheets600/MindCache/blob/main/backend/app/services/document_processor.py).
 
 ### 7. Chunking
 *   **What it is:** Splitting long texts into smaller, manageable passages (e.g. 3000 characters) with overlapping borders to fit embedding model context limits and prevent semantic loss across splits.
@@ -141,13 +141,13 @@ This document is a comprehensive learning resource covering the engineering conc
     *   **MRR (Mean Reciprocal Rank):** Evaluates where the first relevant document is positioned ($1 / \text{rank}$ of the first correct answer).
 *   **Simple Example:** If a search returns 5 documents, and the 2nd document is the target, the Reciprocal Rank is $1/2 = 0.5$.
 *   **Where we use it:** A/B testing search engines, fine-tuning ranking parameters.
-*   **How we use it in MindCache:** A regression search evaluation suite in [test_api.py](../tests/test_api.py#L269) reads [search_evaluation.json](../tests/search_evaluation.json) and executes queries to assert that expected documents consistently rank #1 (MRR = 1.0).
+*   **How we use it in MindCache:** A regression search evaluation suite in [test_api.py](https://github.com/SpreadSheets600/MindCache/blob/main/backend/tests/test_api.py#L269) reads [search_evaluation.json](https://github.com/SpreadSheets600/MindCache/blob/main/backend/tests/search_evaluation.json) and executes queries to assert that expected documents consistently rank #1 (MRR = 1.0).
 
 ### 3. Reranking
 *   **What it is:** Re-evaluating and re-sorting a subset of top candidate documents (e.g. top 50) using more comprehensive, slow, or multi-dimensional scoring features than initial retrieval allowed.
 *   **Simple Example:** Retrieving 100 candidate documents quickly using BM25, then running them through a heavy cross-encoder neural network to pick the best 10.
 *   **Where we use it:** Search portals (Google, Bing), commercial hybrid search engines.
-*   **How we use it in MindCache:** The `search_service` merges FAISS and BM25 candidates, then computes a weighted score fusion formula in [search_service.py](../app/services/search_service.py):
+*   **How we use it in MindCache:** The `search_service` merges FAISS and BM25 candidates, then computes a weighted score fusion formula in [search_service.py](https://github.com/SpreadSheets600/MindCache/blob/main/backend/app/services/search_service.py):
     $$\text{score} = 0.55 \cdot V_{\text{score}} + 0.25 \cdot B_{\text{score}} + 0.10 \cdot T_{\text{score}} + 0.05 \cdot K_{\text{score}} + 0.02 \cdot R_{\text{score}} + 0.03 \cdot S_{\text{score}}$$
     Where components stand for Vector, BM25, Title-overlap, Ingested Keywords, Recency decay, and Source Type boost.
 
@@ -162,7 +162,7 @@ This document is a comprehensive learning resource covering the engineering conc
 *   **What it is:** Named Entity Recognition (NER). Identifying and classifying key nouns in unstructured text into predefined categories (e.g. Person, Company, Technology, Project).
 *   **Simple Example:** `"I read about PyTorch on Google."` $\to$ `{'PyTorch': 'Technology', 'Google': 'Company'}`
 *   **Where we use it:** Automated tagging, text indexing, and building semantic relationship graphs.
-*   **How we use it in MindCache:** Managed in [entity_extractor.py](../app/services/entity_extractor.py), which uses Ollama (`qwen3.5:2b`) with a JSON regex extraction fallback to identify entities, store them in SQLite, and prepend them to embeddings.
+*   **How we use it in MindCache:** Managed in [entity_extractor.py](https://github.com/SpreadSheets600/MindCache/blob/main/backend/app/services/entity_extractor.py), which uses Ollama (`qwen3.5:2b`) with a JSON regex extraction fallback to identify entities, store them in SQLite, and prepend them to embeddings.
 
 ### 6. Learning to Rank (Click Boosting)
 *   **What it is:** Optimizing rank order by leveraging historical user interaction feedback datasets.

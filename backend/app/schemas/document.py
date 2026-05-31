@@ -53,6 +53,13 @@ class KeywordResponse(BaseModel):
     score: float
 
 
+class EntityResponse(BaseModel):
+    """Representation Of An Extracted Entity."""
+
+    name: str
+    type: str  # Person, Company, Technology, Project, etc.
+
+
 class SearchResultItem(BaseModel):
     """Single Matching Document Result From Vector Search."""
 
@@ -92,6 +99,7 @@ class DocumentResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     keywords: list[KeywordResponse] = []  # noqa: UP045
+    entities: list[EntityResponse] = []  # noqa: UP045
     visit_history: list[datetime] = Field(default=[], description="List Of Timestamps When This URL Was Visited.")
 
 

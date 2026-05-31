@@ -31,7 +31,7 @@ def reindex() -> None:
     conn.row_factory = sqlite3.Row
 
     # 1. Fetch All Documents
-    rows = conn.execute("SELECT id, url, domain, title, extracted_content, source_type FROM documents").fetchall()
+    rows = conn.execute("SELECT id, url, domain, title, extracted_content, source_type, platform_metadata FROM documents").fetchall()
     logger.info(f"Found {len(rows)} Documents To Re-Index.")
 
     if not rows:
@@ -61,21 +61,22 @@ def reindex() -> None:
         os.remove(BM25_INDEX_PATH)
         logger.info("Old BM25 Index Deleted.")
 
-    # 4. Load New Embedding Model
-    from sentence_transformers import SentenceTransformer
+    # 4. Initialize Embedding Service (uses Ollama)
+    from app.services.embedding_service import embedding_service
 
-    logger.info(f"Loading New Embedding Model: {settings.EMBEDDING_MODEL_NAME}...")
-    model = SentenceTransformer(settings.EMBEDDING_MODEL_NAME)
-    logger.info("Embedding Model Loaded.")
+    logger.info(f"Embedding Service Ready (Model: {settings.EMBEDDING_MODEL_NAME}).")
 
     # 5. Initialize FAISS Index
     import faiss
     import numpy as np
 
-    flat_index = faiss.IndexFlatIP(settings.EMBEDDING_DIMENSION)
+    dimension = embedding_service.get_dimension()
+    logger.info(f"Embedding Dimension: {dimension}")
+    flat_index = faiss.IndexFlatIP(dimension)
     faiss_index = faiss.IndexIDMap(flat_index)
 
     # 6. Re-Index All Documents
+    import json
     from app.services.bm25_service import bm25_service
 
     bm25_service._doc_ids = []
@@ -88,6 +89,15 @@ def reindex() -> None:
         domain = row["domain"]
         source_type = row["source_type"]
         kw_list = doc_keywords.get(doc_id, [])
+
+        # Parse platform_metadata from JSON
+        platform_metadata = None
+        raw_meta = row["platform_metadata"]
+        if raw_meta:
+            try:
+                platform_metadata = json.loads(raw_meta) if isinstance(raw_meta, str) else raw_meta
+            except (json.JSONDecodeError, TypeError):
+                platform_metadata = None
 
         # Chunk the content up to a high limit (e.g. 40,000 characters)
         content_to_chunk = content[:40000]
@@ -116,8 +126,8 @@ def reindex() -> None:
             )
             chunk_texts.append(chunk_text)
 
-        # Generate Embeddings
-        vectors = model.encode(chunk_texts, show_progress_bar=False)
+        # Generate Embeddings via Ollama
+        vectors = embedding_service.generate_embeddings(chunk_texts)
         vectors = np.array(vectors, dtype=np.float32)
         if len(vectors.shape) == 1:
             vectors = vectors.reshape(1, -1)
@@ -130,7 +140,7 @@ def reindex() -> None:
         faiss_index.add_with_ids(vectors, ids)
 
         # Index Into BM25
-        bm25_service.add_document(doc_id, title, content, kw_list)
+        bm25_service.add_document(doc_id, title, content, kw_list, platform_metadata)
 
         logger.info(f"  [{i}/{len(rows)}] Re-Indexed Document ID {doc_id} with {num_vectors} chunks: {title[:60]}")
 

@@ -16,6 +16,15 @@ BM25_INDEX_PATH = settings.BM25_INDEX_PATH
 class BM25Service:
     """Service To Maintain A BM25 Lexical Index For Hybrid Keyword+Semantic Search."""
 
+    # Suffixes ordered longest-first to avoid premature stripping (e.g., 'ization' before 'tion')
+    _SUFFIXES = [
+        'ization', 'ational', 'fulness', 'ousness', 'iveness',
+        'tion', 'ment', 'ness', 'ance', 'ence', 'able', 'ible',
+        'ling', 'ing', 'ful', 'ous', 'ive', 'ize', 'ise', 'ity',
+        'ism', 'ist', 'ant', 'ent', 'ate', 'ify', 'ily',
+        'ed', 'er', 'al', 'ly', 'es',
+    ]
+
     def __init__(self, index_path: str | None = None) -> None:
         self.index_path = index_path or settings.BM25_INDEX_PATH
         self._index: BM25Okapi | None = None
@@ -23,11 +32,33 @@ class BM25Service:
         self._corpus: list[list[str]] = []
         self._load_index()
 
+    @staticmethod
+    def _stem(token: str) -> str:
+        """Minimal suffix-stripping stemmer. Conservative — only strips if resulting stem >= 3 chars."""
+        if len(token) < 4:
+            return token
+        for suffix in BM25Service._SUFFIXES:
+            if token.endswith(suffix):
+                stem = token[:-len(suffix)]
+                if len(stem) >= 3:
+                    return stem
+        return token
+
     def _tokenize(self, text: str) -> list[str]:
-        """Tokenizes Text Into Lowercase Alphanumeric Tokens (allowing hyphens and underscores)."""
+        """Tokenizes Text Into Lowercase Alphanumeric Tokens, splitting hyphenated tokens and applying stemming."""
         if not text:
             return []
-        return re.findall(r"\b[a-zA-Z0-9_-]+\b", text.lower())
+        raw_tokens = re.findall(r"\b[a-zA-Z0-9_-]+\b", text.lower())
+        expanded = []
+        for token in raw_tokens:
+            expanded.append(token)
+            # Split hyphenated tokens into sub-tokens (e.g., 'stop-slop' -> 'stop', 'slop')
+            if '-' in token and len(token) > 1:
+                for part in token.split('-'):
+                    if part:
+                        expanded.append(part)
+        # Apply stemming to all tokens for morphological matching
+        return [self._stem(t) for t in expanded]
 
     def _load_index(self) -> None:
         """Loads BM25 Index From Disk If It Exists."""
@@ -65,11 +96,32 @@ class BM25Service:
         except Exception as e:
             logger.error(f"Failed To Save BM25 Index: {e}", exc_info=True)
 
-    def add_document(self, doc_id: int, title: str, content: str, keywords: list[str]) -> None:
+    def add_document(self, doc_id: int, title: str, content: str, keywords: list[str],
+                     metadata: dict | None = None) -> None:
         """Adds Or Updates A Document In The BM25 Index."""
 
         # Build A Rich Text Representation For Lexical Matching
-        index_text = f"{title} {title} {title} {' '.join(keywords)} {' '.join(keywords)} {content[:4000]}"
+        parts = []
+
+        # Enrich with platform metadata (repo name, description, topics) for better lexical matching
+        if metadata:
+            repo_name = metadata.get('repo_name', '')
+            if repo_name:
+                parts.append(f"{repo_name} {repo_name} {repo_name} {repo_name} {repo_name}")
+            desc = metadata.get('description', '')
+            if desc:
+                parts.append(f"{desc} {desc} {desc}")
+            topics = metadata.get('topics', [])
+            if topics:
+                topics_str = ' '.join(topics) if isinstance(topics, list) else str(topics)
+                parts.append(f"{topics_str} {topics_str} {topics_str}")
+
+        parts.extend([
+            f"{title} {title} {title}",
+            ' '.join(keywords), ' '.join(keywords),
+            content[:4000],
+        ])
+        index_text = ' '.join(parts)
 
         tokens = self._tokenize(index_text)
 

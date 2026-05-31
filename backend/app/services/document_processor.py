@@ -326,7 +326,7 @@ class DocumentProcessor:
 
         # 9. Index Into FAISS And BM25
         vector_service.add_document_chunks(doc.id, embeddings)
-        bm25_service.add_document(doc.id, title or "", extracted_content, keyword_names)
+        bm25_service.add_document(doc.id, title or "", extracted_content, keyword_names, platform_metadata)
 
         # 10. Generate Ollama Summary (Optional Background/Graceful Summary Addition)
         if await ollama_service.check_health():
@@ -357,6 +357,11 @@ class DocumentProcessor:
         )
         documents = list(result.scalars().all())
         logger.info(f"Found {len(documents)} documents to re-index.")
+
+        # Clear BM25 index for full rebuild with enriched metadata
+        bm25_service._doc_ids = []
+        bm25_service._corpus = []
+        bm25_service._index = None
 
         for doc in documents:
             logger.info(f"Re-indexing document ID {doc.id}: {doc.title or doc.url}")
@@ -402,9 +407,13 @@ class DocumentProcessor:
                 import asyncio
                 embeddings = await asyncio.to_thread(embedding_service.generate_embeddings, chunk_texts)
                 await asyncio.to_thread(vector_service.add_document_chunks, doc.id, embeddings)
+                # Rebuild BM25 with enriched platform metadata
+                bm25_service.add_document(doc.id, doc.title or "", doc.extracted_content, keyword_names, doc.platform_metadata)
             except Exception as e:
                 logger.error(f"Failed to re-index document {doc.id}: {e}", exc_info=True)
 
+        # Save BM25 index after full rebuild
+        bm25_service.save()
         logger.info("Re-indexing of all documents completed.")
 
 

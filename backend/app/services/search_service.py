@@ -16,8 +16,8 @@ from app.services.vector_service import vector_service
 
 logger = get_logger(__name__)
 
-FAISS_CANDIDATE_POOL = 25
-BM25_CANDIDATE_POOL = 25
+FAISS_CANDIDATE_POOL = 30
+BM25_CANDIDATE_POOL = 40
 KEYWORD_BOOST = 0.15
 # BGE prefix removed - not compatible with embeddinggemma:300m
 QUERY_PREFIX = ""
@@ -306,6 +306,24 @@ class SearchService:
             else:
                 k_score = 0.0
 
+            # Metadata Match Score (repo name, description, topics overlap with query keywords)
+            repo_name_score = 0.0
+            if doc.platform_metadata and query_keywords:
+                meta_tokens = set()
+                repo_name = doc.platform_metadata.get('repo_name', '')
+                if repo_name:
+                    meta_tokens.update(re.findall(r'\b[a-zA-Z0-9_]+\b', repo_name.replace('-', ' ').lower()))
+                desc = doc.platform_metadata.get('description', '')
+                if desc:
+                    meta_tokens.update(re.findall(r'\b[a-zA-Z0-9_]+\b', desc.replace('-', ' ').lower()))
+                topics = doc.platform_metadata.get('topics', [])
+                if topics:
+                    for t in topics:
+                        meta_tokens.update(re.findall(r'\b[a-zA-Z0-9_]+\b', t.replace('-', ' ').lower()))
+                if meta_tokens:
+                    overlap = len(meta_tokens.intersection(set(query_keywords)))
+                    repo_name_score = min(overlap / len(query_keywords), 1.0)
+
             # Recency Score (decay based on last visited timestamp, reduced weight)
             last_visit = max((visit.visited_at for visit in doc.visits), default=doc.created_at)
             now = datetime.now(timezone.utc) if last_visit.tzinfo else datetime.now()
@@ -320,12 +338,13 @@ class SearchService:
             elif doc.source_type in ("YouTube", "Reddit", "X"):
                 s_score = 0.5
 
-            # Evolve score formula to user-recommended weights (including source type boost)
+            # Weighted scoring formula with metadata match signal and rebalanced weights
             final_score = (
-                0.55 * v_score +
+                0.45 * v_score +
                 0.25 * b_score +
                 0.10 * title_score +
                 0.05 * k_score +
+                0.05 * repo_name_score +
                 0.02 * r_score +
                 0.03 * s_score
             )

@@ -10,13 +10,14 @@ from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-BM25_INDEX_PATH = str(Path(settings.DATA_DIR) / "bm25_index.pkl")
+BM25_INDEX_PATH = settings.BM25_INDEX_PATH
 
 
 class BM25Service:
     """Service To Maintain A BM25 Lexical Index For Hybrid Keyword+Semantic Search."""
 
-    def __init__(self) -> None:
+    def __init__(self, index_path: str | None = None) -> None:
+        self.index_path = index_path or settings.BM25_INDEX_PATH
         self._index: BM25Okapi | None = None
         self._doc_ids: list[int] = []
         self._corpus: list[list[str]] = []
@@ -31,9 +32,9 @@ class BM25Service:
     def _load_index(self) -> None:
         """Loads BM25 Index From Disk If It Exists."""
 
-        if os.path.exists(BM25_INDEX_PATH) and os.path.getsize(BM25_INDEX_PATH) > 0:
+        if os.path.exists(self.index_path) and os.path.getsize(self.index_path) > 0:
             try:
-                with open(BM25_INDEX_PATH, "rb") as f:
+                with open(self.index_path, "rb") as f:
                     data = pickle.load(f)
 
                 self._doc_ids = data["doc_ids"]
@@ -54,9 +55,9 @@ class BM25Service:
         """Serializes The BM25 Corpus And Doc IDs To Disk."""
 
         try:
-            os.makedirs(os.path.dirname(BM25_INDEX_PATH), exist_ok=True)
+            os.makedirs(os.path.dirname(self.index_path), exist_ok=True)
 
-            with open(BM25_INDEX_PATH, "wb") as f:
+            with open(self.index_path, "wb") as f:
                 pickle.dump({"doc_ids": self._doc_ids, "corpus": self._corpus}, f)
 
             logger.debug(f"BM25 Index Saved. Documents: {len(self._doc_ids)}.")

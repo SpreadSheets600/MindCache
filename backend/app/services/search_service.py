@@ -12,7 +12,6 @@ from app.services.bm25_service import bm25_service
 from app.services.embedding_service import embedding_service
 from app.services.keyword_extractor import keyword_extractor
 from app.services.ollama_service import ollama_service
-from app.services.reranker_service import reranker_service
 from app.services.vector_service import vector_service
 
 logger = get_logger(__name__)
@@ -154,7 +153,7 @@ class SearchService:
             "yourself",
             "yourselves",
         }
-        words = re.findall(r"\b[a-zA-Z0-9_-]+\b", query.lower())
+        words = re.findall(r"\b[a-zA-Z0-9_]+\b", query.replace("-", " ").lower())
         return [w for w in words if w not in STOP_WORDS and len(w) > 2]
 
     async def search(
@@ -172,6 +171,13 @@ class SearchService:
 
         if not query.strip():
             return SearchResponse(query=query, results=[], ai_summary="Search query cannot be empty.")
+
+        # Record search query history for intent analytics tracking
+        try:
+            await document_repository.record_search_query(db, query)
+            await db.commit()
+        except Exception as e:
+            logger.warning(f"Failed to record search query analytics: {e}")
 
         # 1. Query Expansion — Extract Keywords From The Query
         query_keywords: list[str] = []
@@ -226,18 +232,22 @@ class SearchService:
         merged_scores: dict[int, float] = {}
 
         # FAISS Scores (Normalized Cosine Similarity, 0-1 Range)
+        vector_scores: dict[int, float] = {}
         for doc_id, score in vector_results:
             if valid_ids is not None and doc_id not in valid_ids:
                 continue
             normalized_vector_score = max(float(score), 0.0)
+            vector_scores[doc_id] = normalized_vector_score
             merged_scores[doc_id] = max(merged_scores.get(doc_id, 0.0), 0.5 * normalized_vector_score)
 
         # BM25 Scores (Normalize To 0-1 Range Using Simple Scaling, combine linearly)
         max_bm25 = max((score for _, score in bm25_results), default=1.0)
+        bm25_scores: dict[int, float] = {}
         for doc_id, score in bm25_results:
             if valid_ids is not None and doc_id not in valid_ids:
                 continue
             normalized_bm25_score = score / max_bm25 if max_bm25 > 0 else 0.0
+            bm25_scores[doc_id] = normalized_bm25_score
             merged_scores[doc_id] = merged_scores.get(doc_id, 0.0) + 0.5 * normalized_bm25_score
 
         # Keyword Boost & baseline score for direct SQLite keyword matches
@@ -256,81 +266,107 @@ class SearchService:
             return SearchResponse(query=query, results=[], ai_summary="No matching documents found in your history.")
 
         # 8. Retrieve Candidate Documents From SQLite
-        # OPTIMIZATION: Dynamically scale reranking pool based on requested limit.
-        # Reranking 10 documents instead of 25 reduces Cross-Encoder CPU execution time by 60% (~300-400ms saved).
-        rerank_pool_size = max(limit * 2, 10)
+        rerank_pool_size = max(limit * 3, 15)
         candidate_ids = sorted(merged_scores, key=merged_scores.get, reverse=True)[:rerank_pool_size]  # type: ignore[arg-type]
         documents = await document_repository.get_by_ids(db, candidate_ids)
 
         if not documents:
             return SearchResponse(query=query, results=[], ai_summary="No matching documents found in your history.")
 
-        # 8. Cross-Encoder Reranking On Top Candidates
-        rerank_payloads: list[dict] = []
+        # 9. Compute Final Weighted Score For Each Document
+        import math
+        from datetime import timezone
+
+        # Retrieve clicks for dynamic learning-to-rank search analytics boost
+        clicks = await document_repository.get_clicks_for_query(db, query)
+        click_counts: dict[int, int] = {}
+        for click in clicks:
+            click_counts[click.document_id] = click_counts.get(click.document_id, 0) + 1
+
+        scored_documents: list[tuple[Document, float]] = []
 
         for doc in documents:
-            # Build rich document text representation including metadata and keywords
-            kw_str = ", ".join([k.keyword for k in doc.keywords])
-            meta_str = ""
-            if doc.platform_metadata:
-                if doc.source_type == "GitHub":
-                    repo_name = doc.platform_metadata.get("repo_name") or ""
-                    topics_list = doc.platform_metadata.get("topics") or []
-                    desc = doc.platform_metadata.get("description") or ""
-                    meta_str = f"Repo: {repo_name} | Topics: {', '.join(topics_list)} | Description: {desc}"
-                elif doc.source_type == "YouTube":
-                    channel = doc.platform_metadata.get("channel") or ""
-                    tags_list = doc.platform_metadata.get("tags") or []
-                    meta_str = f"Channel: {channel} | Tags: {', '.join(tags_list)}"
-                elif doc.source_type == "X":
-                    author = doc.platform_metadata.get("author") or ""
-                    meta_str = f"Author: @{author}"
+            v_score = vector_scores.get(doc.id, 0.0)
+            b_score = bm25_scores.get(doc.id, 0.0)
 
-            rich_content = (
-                f"Title: {doc.title or ''}\n"
-                f"Domain: {doc.domain or ''}\n"
-                f"Source Type: {doc.source_type or ''}\n"
-                f"Keywords: {kw_str}\n"
-                f"Metadata: {meta_str}\n"
-                f"Content: {(doc.extracted_content or '')[:2000]}"
+            # Title Score (proportion of query keywords matching document title, splitting hyphens)
+            title_words = set(re.findall(r"\b[a-zA-Z0-9_]+\b", (doc.title or "").replace("-", " ").lower()))
+            if query_keywords:
+                overlap = len(title_words.intersection(query_keywords))
+                title_score = overlap / len(query_keywords)
+            else:
+                title_score = 1.0 if (query.lower() in (doc.title or "").lower()) else 0.0
+
+            # Keyword Score (proportion of query keywords matching document keywords)
+            doc_kw_set = {k.keyword.lower() for k in doc.keywords}
+            if query_keywords:
+                overlap = len(doc_kw_set.intersection(query_keywords))
+                k_score = overlap / len(query_keywords)
+            else:
+                k_score = 0.0
+
+            # Recency Score (decay based on last visited timestamp, reduced weight)
+            last_visit = max((visit.visited_at for visit in doc.visits), default=doc.created_at)
+            now = datetime.now(timezone.utc) if last_visit.tzinfo else datetime.now()
+            days_since_last_visit = max((now - last_visit).total_seconds() / 86400.0, 0.0)
+            # 30-day half-life decay
+            r_score = math.exp(-days_since_visit / 30.0) if 'days_since_visit' in locals() else math.exp(-days_since_last_visit / 30.0)
+
+            # Source Type Score (boosting developer-oriented sources)
+            s_score = 0.0
+            if doc.source_type == "GitHub":
+                s_score = 1.0
+            elif doc.source_type in ("YouTube", "Reddit", "X"):
+                s_score = 0.5
+
+            # Evolve score formula to user-recommended weights (including source type boost)
+            final_score = (
+                0.55 * v_score +
+                0.25 * b_score +
+                0.10 * title_score +
+                0.05 * k_score +
+                0.02 * r_score +
+                0.03 * s_score
             )
+            
+            # Click analytics boost (capped at +0.30 max boost)
+            click_boost = min(click_counts.get(doc.id, 0) * 0.10, 0.30)
+            final_score = min(final_score + click_boost, 1.0)
 
-            rerank_payloads.append(
-                {
-                    "id": doc.id,
-                    "title": doc.title or "",
-                    "content": rich_content,
-                }
-            )
+            # If YouTube, try to locate the matching segment timestamp
+            if doc.source_type == "YouTube" and doc.extracted_content:
+                content_lower = doc.extracted_content.lower()
+                best_pos = -1
+                search_terms = query_keywords if query_keywords else [query]
+                for term in search_terms:
+                    pos = content_lower.find(term.lower())
+                    if pos != -1:
+                        best_pos = pos
+                        break
 
-        reranked = reranker_service.rerank(query, rerank_payloads, top_k=limit)
+                if best_pos != -1:
+                    snippet_before = doc.extracted_content[:best_pos]
+                    matches = list(re.finditer(r"\[([0-9]{2,}:[0-9]{2})\]", snippet_before))
+                    if matches:
+                        timestamp = matches[-1].group(1)
+                        if doc.title:
+                            if "(Found at" not in doc.title:
+                                doc.title = f"{doc.title} (Found at {timestamp})"
+                        else:
+                            doc.title = f"YouTube Video (Found at {timestamp})"
 
-        # Build Final Ordered Doc Map
-        # Build Final Ordered Doc Map
-        import math
+            scored_documents.append((doc, final_score))
 
-        reranked_ids: list[int] = [doc_id for doc_id, _ in reranked]
+        # Sort documents by final score descending
+        scored_documents.sort(key=lambda x: x[1], reverse=True)
+        top_scored = scored_documents[:limit]
 
-        # Normalize raw Cross-Encoder logit scores to [0.0, 1.0] range using a shifted sigmoid.
-        # This resolves the display bug showing "0% match" in the UI.
-        reranked_scores: dict[int, float] = {}
-        for doc_id, score in reranked:
-            # Shifted sigmoid maps logit range [-4, 2] nicely into [0.1, 0.98]
-            prob = 1.0 / (1.0 + math.exp(-(score + 1.5)))
-            reranked_scores[doc_id] = float(prob)
-
-        final_docs = [doc for doc in documents if doc.id in reranked_ids]
-        final_docs.sort(key=lambda d: reranked_ids.index(d.id))
-
-        # 9. Format Search Results
+        # 10. Format Search Results
         results_items: list[SearchResultItem] = []
         summary_payloads: list[dict] = []
 
-        for doc in final_docs:
-            score = reranked_scores.get(doc.id, merged_scores.get(doc.id, 0.0))
-
-            # OPTIMIZATION: Filter out completely irrelevant results (0% or extremely low match scores).
-            # This keeps the search clean and prevents showing irrelevant database entries.
+        for doc, score in top_scored:
+            # Filter out completely irrelevant results (less than 15% match)
             if score < 0.15:
                 logger.info(f"Filtering out irrelevant document ID {doc.id} with low score {score:.4f}")
                 continue
@@ -366,7 +402,7 @@ class SearchService:
                 }
             )
 
-        # 10. Optional Ollama Summary Synthesis
+        # 11. Optional Ollama Summary Synthesis
         ai_summary: Optional[str] = None  # noqa: UP045
 
         if generate_summary and results_items:

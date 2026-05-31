@@ -27,6 +27,17 @@ async def record_visit(
     try:
         status, doc = await document_processor.process_url(db, request.url, request.title)
 
+        if status == "skipped":
+            from urllib.parse import urlparse
+            parsed = urlparse(request.url)
+            return VisitResponse(
+                status="skipped",
+                message="Web Page Skipped from indexing because it was identified as noise (e.g. insufficient information content).",
+                document_id=None,
+                title=request.title or parsed.netloc,
+                domain=parsed.netloc,
+            )
+
         if status == "duplicate":
             return VisitResponse(
                 status="duplicate",

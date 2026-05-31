@@ -29,6 +29,7 @@ async def lifespan(app: FastAPI):
         logger.info("Synchronizing SQLite Database Schemas ...")
 
         from sqlalchemy import text
+        from app.models.document import Document, Keyword, VisitHistory, Entity, SearchClick, SearchQuery
 
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
@@ -49,20 +50,35 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.critical(f"Critical Error During Database Schema Sync : {e}", exc_info=True)
 
-    # Asynchronously Warm Up Local AI Model Pipeline in background
+    # Asynchronously Warm Up Local AI Model Pipeline and check for reindexing in background
     # This prevents blocking the main thread, letting the FastAPI backend start instantly.
     async def warm_up_models_background():
         try:
-            logger.info("Warming up BGE Embedding Model in background...")
-            _ = embedding_service.model
-            
-            logger.info("Warming up Cross-Encoder Reranker Model in background...")
-            from app.services.reranker_service import reranker_service
-            _ = reranker_service.model
+            logger.info(f"Checking/Warming up Ollama Embedding Model '{embedding_service.model_name}' in background...")
+            await embedding_service.check_health()
             
             logger.info("All local AI models successfully loaded and active.")
+
+            # Check if FAISS index is empty or dimension mismatch occurred, and re-index from DB if necessary
+            from app.db.session import AsyncSessionLocal
+            from sqlalchemy import select, func
+            from app.models.document import Document
+            from app.services.document_processor import document_processor
+
+            async with AsyncSessionLocal() as db:
+                cursor = await db.execute(select(func.count(Document.id)))
+                db_doc_count = cursor.scalar() or 0
+
+                if vector_service.needs_reindexing or (vector_service._index is not None and vector_service._index.ntotal == 0 and db_doc_count > 0):
+                    logger.info(
+                        f"FAISS index needs rebuild/re-index (needs_reindexing={vector_service.needs_reindexing}, "
+                        f"vectors={vector_service._index.ntotal if vector_service._index else 0}, db_docs={db_doc_count}). Re-indexing now..."
+                    )
+                    await document_processor.reindex_all_documents(db)
+                    await db.commit()
+
         except Exception as err:
-            logger.error(f"Background AI model warmup had issues: {err}", exc_info=True)
+            logger.error(f"Background AI model warmup or re-indexing failed: {err}", exc_info=True)
 
     # Spawn the background task immediately on startup
     asyncio.create_task(warm_up_models_background())

@@ -15,7 +15,9 @@ class VectorService:
 
     def __init__(self) -> None:
         self.index_path: str = settings.FAISS_INDEX_PATH
-        self.dimension: int = settings.EMBEDDING_DIMENSION
+        from app.services.embedding_service import embedding_service
+        self.dimension: int = embedding_service.get_dimension()
+        self.needs_reindexing: bool = False
         self._index: faiss.Index | None = None
         self._load_index()
 
@@ -25,8 +27,21 @@ class VectorService:
         try:
             if os.path.exists(self.index_path) and os.path.getsize(self.index_path) > 0:
                 logger.info(f"Loading Existing FAISS Index From {self.index_path}...")
-                self._index = faiss.read_index(self.index_path)
-                logger.info(f"FAISS Index Loaded. Total Vectors: {self._index.ntotal}.")
+                loaded_index = faiss.read_index(self.index_path)
+                
+                # Check if dimension matches
+                if loaded_index.d == self.dimension:
+                    self._index = loaded_index
+                    logger.info(f"FAISS Index Loaded. Total Vectors: {self._index.ntotal}.")
+                else:
+                    logger.warning(
+                        f"FAISS Index dimension mismatch: index on disk has dimension {loaded_index.d}, "
+                        f"but configured dimension is {self.dimension}. Re-initializing a new index..."
+                    )
+                    flat_index = faiss.IndexFlatIP(self.dimension)
+                    self._index = faiss.IndexIDMap(flat_index)
+                    self.save()
+                    self.needs_reindexing = True
 
             else:
                 logger.info("Initializing A New FAISS Index With L2-Normalized Inner Product...")

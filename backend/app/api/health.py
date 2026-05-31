@@ -39,6 +39,12 @@ async def health_check(db: AsyncSession = Depends(get_db)) -> dict:  # noqa: B00
     # Check For Model Server
     ollama_online = await ollama_service.check_health()
 
+    # Check For Embedding Model Server/Local Status
+    from app.services.embedding_service import embedding_service
+    embedding_online = await embedding_service.check_health()
+    embedding_model = embedding_service.model_name
+    embedding_provider = embedding_service.provider
+
     # Determine Overall Status
     is_healthy = db_connected and faiss_status == "initialized"
     status_str = "healthy" if is_healthy else "degraded"
@@ -54,6 +60,11 @@ async def health_check(db: AsyncSession = Depends(get_db)) -> dict:  # noqa: B00
             "ollama": {
                 "status": "connected" if ollama_online else "offline",
                 "model": ollama_service.model if ollama_online else None,
+            },
+            "embedding": {
+                "status": "connected" if embedding_online else "offline",
+                "model": embedding_model,
+                "provider": embedding_provider,
             },
         },
     }

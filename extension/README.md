@@ -4,9 +4,10 @@ MindCache is an AI-powered, local-first browser memory extension. It automatical
 
 ## Features
 
-- **Interactive Knowledge Graph Dashboard**: View total indexed memory stats, browse raw content pages in a scrollable records explorer, delete individual documents, and navigate an interactive Canvas-based Knowledge Graph detailing connections between pages and keywords.
+- **Interactive Knowledge Graph Dashboard**: View total indexed memory stats (documents, vectors, entities), browse raw content pages in a scrollable records explorer, delete individual documents, and navigate an interactive Canvas-based Knowledge Graph with three node types: **Pages** (documents), **Keywords** (topics), and **Entities** (Persons, Companies, Technologies, Projects). Supports entity co-occurrence edges, color-coded entity types, keyword frequency filtering, and multiple color modes (Domain, Classic, Recency).
 - **Raycast-Style Spotlight Search**: Open search panels instantly to retrieve past pages with semantic matching and relevance percentage scores.
 - **RAG Summaries**: Uses local Ollama installations (e.g. Llama3) to synthesize a unified response summarizing your search results.
+- **Entity Extraction**: Automatically extracts named entities (Persons, Companies, Technologies, Projects) from page content during ingestion using local Ollama models with regex fallback.
 - **Privacy Controls**: Set custom exclusion rules, view live diagnostics checks (SQLite, FAISS, Ollama), and toggle background tracking easily.
 - **Refined Slate-Blue Aesthetic**: Styled with a minimal, dark slate-gray and steel-blue palette with zero neon glows.
 - **Absolute Privacy**: Relies entirely on localhost servers; zero cloud API calls or tracking data leaves your computer.

@@ -1,6 +1,6 @@
 # REST API Documentation
 
-The MindCache backend runs on `http://localhost:8000` by default. It provides five operational endpoints and a system health diagnostic.
+The MindCache backend runs on `http://localhost:8000` by default. It provides operational endpoints for ingestion, search, document management, knowledge graph, and system health diagnostics.
 
 ## Visit Ingestion
 
@@ -44,6 +44,18 @@ Ingests and indexes a visited web page.
 }
 ```
 
+#### Response (Skipped - Noise Detection - Status 201)
+
+```json
+{
+    "status": "skipped",
+    "message": "Page skipped: insufficient knowledge content (score < 2).",
+    "document_id": null,
+    "title": "Login Page",
+    "domain": "example.com"
+}
+```
+
 #### Common Error Responses
 
 - **Invalid URL (Status 400)**: URL is malformed or lacks HTTP/HTTPS scheme.
@@ -65,7 +77,7 @@ Ingests and indexes a visited web page.
 
 ### `POST /search`
 
-Searches history using natural language query matching.
+Searches history using natural language query matching with optional time filtering.
 
 #### Request Payload
 
@@ -73,9 +85,19 @@ Searches history using natural language query matching.
 {
     "query": "local vector database search",
     "limit": 5,
-    "generate_summary": true
+    "generate_summary": true,
+    "start_time": "2026-05-01T00:00:00Z",
+    "end_time": "2026-05-31T23:59:59Z"
 }
 ```
+
+#### Query Parameters
+
+- `query` (required): Natural language search query.
+- `limit` (default: 5): Maximum number of results (1-50).
+- `generate_summary` (default: false): Generate AI summary of results.
+- `start_time` (optional): ISO timestamp to filter results visited after this time.
+- `end_time` (optional): ISO timestamp to filter results visited before this time.
 
 #### Response (Status 200)
 
@@ -101,10 +123,33 @@ Searches history using natural language query matching.
                     "keyword": "database",
                     "score": 0.85
                 }
-            ]
+            ],
+            "source_type": "Generic"
         }
     ],
     "ai_summary": "Your visited history contains an article about local browser memory databases. It details running vector indices locally to preserve privacy [1]."
+}
+```
+
+### `POST /search/click`
+
+Records a click signal for search result ranking optimization.
+
+#### Request Payload
+
+```json
+{
+    "query": "local vector database",
+    "document_id": 4
+}
+```
+
+#### Response (Status 200)
+
+```json
+{
+    "status": "success",
+    "message": "Click signal recorded for query 'local vector database' on document 4."
 }
 ```
 
@@ -119,7 +164,7 @@ Lists indexed documents ordered by updated timestamp descending.
 #### Query Parameters
 
 - `skip` (default: 0): Skip N records.
-- `limit` (default: 20): Max records to return.
+- `limit` (default: 20, max: 100): Max records to return.
 
 #### Response (Status 200)
 
@@ -133,6 +178,8 @@ Lists indexed documents ordered by updated timestamp descending.
         "author": "John Doe",
         "published_date": "2026-05-29T00:00:00",
         "extracted_content": "Full parsed page content...",
+        "source_type": "Generic",
+        "platform_metadata": null,
         "summary": "This article discusses running browser memory databases locally.",
         "created_at": "2026-05-30T11:40:00",
         "updated_at": "2026-05-30T11:42:00",
@@ -142,6 +189,16 @@ Lists indexed documents ordered by updated timestamp descending.
                 "score": 0.91
             }
         ],
+        "entities": [
+            {
+                "name": "FAISS",
+                "type": "Technology"
+            },
+            {
+                "name": "Meta",
+                "type": "Company"
+            }
+        ],
         "visit_history": ["2026-05-30T11:40:00", "2026-05-30T11:42:00"]
     }
 ]
@@ -149,7 +206,7 @@ Lists indexed documents ordered by updated timestamp descending.
 
 ### `GET /documents/{id}`
 
-Retrieves full extracted content, metadata, and history for a document.
+Retrieves full extracted content, metadata, entities, keywords, and visit history for a document.
 
 #### Response (Status 200)
 
@@ -178,11 +235,99 @@ Removes a webpage from database records and FAISS vector index.
 
 ---
 
+## Knowledge Graph
+
+### `GET /graph`
+
+Returns entities, keywords, and relationships for knowledge graph visualization.
+
+#### Query Parameters
+
+- `limit` (default: 100, max: 500): Maximum number of documents to include.
+- `min_keyword_freq` (default: 2, min: 1): Minimum keyword frequency to include as a node.
+
+#### Response (Status 200)
+
+```json
+{
+    "nodes": {
+        "documents": [
+            {
+                "id": "doc_4",
+                "label": "Local AI Personal Memory Systems",
+                "type": "document",
+                "url": "https://example.com/ai-memory-article",
+                "domain": "example.com",
+                "source_type": "Generic",
+                "updated_at": "2026-05-30T11:42:00",
+                "visit_count": 2
+            }
+        ],
+        "entities": [
+            {
+                "id": "ent_0",
+                "label": "FAISS",
+                "type": "entity",
+                "entity_type": "Technology",
+                "document_count": 3
+            },
+            {
+                "id": "ent_1",
+                "label": "Meta",
+                "type": "entity",
+                "entity_type": "Company",
+                "document_count": 2
+            }
+        ],
+        "keywords": [
+            {
+                "id": "kw_vector",
+                "label": "vector",
+                "type": "keyword",
+                "document_count": 5
+            }
+        ]
+    },
+    "edges": [
+        {
+            "source": "doc_4",
+            "target": "kw_vector",
+            "type": "has_keyword"
+        },
+        {
+            "source": "doc_4",
+            "target": "ent_0",
+            "type": "has_entity"
+        },
+        {
+            "source": "ent_0",
+            "target": "ent_1",
+            "type": "co_occurs",
+            "weight": 2
+        }
+    ],
+    "stats": {
+        "document_count": 10,
+        "entity_count": 15,
+        "keyword_count": 8,
+        "edge_count": 45
+    }
+}
+```
+
+#### Edge Types
+
+- `has_keyword`: Document references a keyword.
+- `has_entity`: Document mentions an entity.
+- `co_occurs`: Two entities/keywords appear in the same document.
+
+---
+
 ## System Health
 
 ### `GET /health`
 
-Checks diagnostic status.
+Checks diagnostic status of all system components.
 
 #### Response (Status 200)
 
@@ -190,14 +335,22 @@ Checks diagnostic status.
 {
     "status": "healthy",
     "components": {
-        "database": "connected",
+        "database": {
+            "status": "connected",
+            "documents_count": 128
+        },
         "faiss_index": {
             "status": "initialized",
-            "vectors_count": 128
+            "vectors_count": 256
         },
         "ollama": {
             "status": "connected",
-            "model": "llama3"
+            "model": "qwen3.5:2b"
+        },
+        "embedding": {
+            "status": "connected",
+            "model": "embeddinggemma:300m",
+            "provider": "ollama"
         }
     }
 }

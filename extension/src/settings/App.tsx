@@ -452,6 +452,15 @@ const App: React.FC = () => {
                                         {excludedDomains.length} domains
                                     </div>
                                 </div>
+
+                                <div className="p-4 rounded-lg border border-border">
+                                    <div className="text-xs text-muted-foreground">
+                                        Domains Indexed
+                                    </div>
+                                    <div className="text-lg font-semibold mt-1">
+                                        {new Set(documents.map(d => d.domain)).size} domains
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>

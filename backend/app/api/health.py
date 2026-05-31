@@ -3,6 +3,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.repositories.document_repository import document_repository
 from app.services.ollama_service import ollama_service
 from app.services.vector_service import vector_service
 
@@ -15,10 +16,12 @@ async def health_check(db: AsyncSession = Depends(get_db)) -> dict:  # noqa: B00
 
     # Check For SQLite Database Connection
     db_connected = False
+    documents_count = 0
 
     try:
         await db.execute(text("SELECT 1"))
         db_connected = True
+        documents_count = await document_repository.count_documents(db)
 
     except Exception:
         pass
@@ -52,7 +55,10 @@ async def health_check(db: AsyncSession = Depends(get_db)) -> dict:  # noqa: B00
     return {
         "status": status_str,
         "components": {
-            "database": "connected" if db_connected else "disconnected",
+            "database": {
+                "status": "connected" if db_connected else "disconnected",
+                "documents_count": documents_count,
+            },
             "faiss_index": {
                 "status": faiss_status,
                 "vectors_count": vector_count,

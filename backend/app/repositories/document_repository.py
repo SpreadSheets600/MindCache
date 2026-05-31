@@ -1,7 +1,7 @@
 import datetime
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -15,12 +15,12 @@ class DocumentRepository:
     """Repository To Manage All Asynchronous CRUD Operations For Documents, Keywords, And VisitHistory."""
 
     async def get_by_id(self, db: AsyncSession, document_id: int) -> Optional[Document]:  # noqa: UP045
-        """Retrieves A Document By Its Primary Key, Preloading Keywords And Visits."""
+        """Retrieves A Document By Its Primary Key, Preloading Keywords, Entities, And Visits."""
 
         result = await db.execute(
             select(Document)
             .where(Document.id == document_id)
-            .options(selectinload(Document.keywords), selectinload(Document.visits))
+            .options(selectinload(Document.keywords), selectinload(Document.entities), selectinload(Document.visits))
         )
         return result.scalars().first()
 
@@ -58,9 +58,15 @@ class DocumentRepository:
             .order_by(Document.updated_at.desc())
             .offset(skip)
             .limit(limit)
-            .options(selectinload(Document.keywords), selectinload(Document.visits))
+            .options(selectinload(Document.keywords), selectinload(Document.entities), selectinload(Document.visits))
         )
         return list(result.scalars().all())
+
+    async def count_documents(self, db: AsyncSession) -> int:
+        """Returns the total number of documents in the database."""
+
+        result = await db.execute(select(func.count(Document.id)))
+        return result.scalar() or 0
 
     async def create(
         self,

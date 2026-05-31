@@ -19,7 +19,8 @@ async def test_health_endpoint(client_override: AsyncSession) -> None:
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "healthy"
-    assert data["components"]["database"] == "connected"
+    assert data["components"]["database"]["status"] == "connected"
+    assert data["components"]["database"]["documents_count"] == 0
     assert data["components"]["faiss_index"]["status"] == "initialized"
     assert data["components"]["ollama"]["status"] == "connected"
 

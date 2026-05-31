@@ -20,7 +20,7 @@ graph TD
     D -->|Trimmed Content| E[Local Ollama: qwen3.5:2b]
     E -->|Ollama / Stat counter| F[Keyword Extraction]
     D -->|Doc Text| G[Ollama: embeddinggemma:300m]
-    G -->|Normalized vectors| H[FAISS Vector Store (768d)]
+    G -->|Normalized vectors| H["FAISS Vector Store (768d)"]
     D -->|Full payload| I[SQLite Database]
     D -->|Optional summary| E
 ```

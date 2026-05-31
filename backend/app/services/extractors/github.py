@@ -57,6 +57,7 @@ class GitHubExtractor(ContentExtractor):
         topics = []
         readme_content = ""
         partial_extraction = False
+        stars_count = 0
 
         headers = {
             "User-Agent": (
@@ -119,7 +120,6 @@ class GitHubExtractor(ContentExtractor):
 
             # Extract Stars count
             stars_el = soup.find(id="repo-stars-counter-star") or soup.select_one("span.Counter.js-social-count") or soup.select_one("#repo-stars-counter-star")
-            stars_count = 0
             if stars_el:
                 stars_title = stars_el.get("title") or stars_el.get_text()
                 stars_str = str(stars_title).replace(",", "").strip()

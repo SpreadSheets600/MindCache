@@ -24,6 +24,26 @@ async def record_visit(
     """Accepts A URL, Extracts Page Content/Metadata, Generates Keywords & Embeddings, And Indexes It."""
 
     logger.info(f"Accepting Visit URL : {request.url}")
+    
+    from urllib.parse import urlparse
+    parsed = urlparse(request.url)
+    
+    # Ignore all localhost and internal URLs
+    if parsed.hostname in ("localhost", "127.0.0.1", "0.0.0.0") or (
+        parsed.hostname and parsed.hostname.startswith("192.168.")
+    ) or (
+        parsed.hostname and parsed.hostname.startswith("10.")
+    ) or (
+        parsed.hostname and parsed.hostname.startswith("172.") and parsed.hostname.split(".")[1].isdigit() and 16 <= int(parsed.hostname.split(".")[1]) <= 31
+    ):
+        logger.info(f"Skipping localhost/internal URL: {request.url}")
+        return VisitResponse(
+            status="skipped",
+            message="Localhost and internal URLs are not indexed.",
+            document_id=None,
+            title=request.title or parsed.netloc,
+            domain=parsed.netloc,
+        )
     try:
         status, doc = await document_processor.process_url(db, request.url, request.title)
 

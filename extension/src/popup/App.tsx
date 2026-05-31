@@ -67,7 +67,7 @@ export const App: React.FC = () => {
               <span>Memories Indexed</span>
             </span>
             <span className="font-mono text-zinc-300 font-medium">
-              {isOnline && components ? `${components.faiss_index.vectors_count} pages` : "—"}
+              {isOnline && components ? `${components.database?.documents_count ?? components.faiss_index.vectors_count} pages` : "—"}
             </span>
           </div>
 

@@ -2,6 +2,7 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { backendClient } from "../services/BackendClient";
 import { ArrowLeft, Globe, Loader2, Sparkles, ExternalLink } from "lucide-react";
+import { getErrorMessage } from "../utils/error";
 
 interface DocumentDetailProps {
   documentId: number;
@@ -51,7 +52,7 @@ export const DocumentDetail: React.FC<DocumentDetailProps> = ({
         <div className="flex flex-col items-center justify-center h-64 text-center space-y-3">
           <p className="text-sm text-red-400">Failed to load document</p>
           <p className="text-xs text-muted-foreground max-w-xs">
-            {(error as Error).message}
+            {getErrorMessage(error)}
           </p>
         </div>
       )}

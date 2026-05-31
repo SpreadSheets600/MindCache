@@ -23,6 +23,7 @@ import {
     Network,
     Sparkles,
 } from "lucide-react";
+import { getErrorMessage } from "../utils/error";
 
 type Page = "dashboard" | "search" | "graph" | "memories" | "settings";
 
@@ -134,6 +135,7 @@ const App: React.FC = () => {
                 searchStartTime || undefined,
                 searchEndTime || undefined,
             ),
+        enabled: isOnline && !!debouncedDashSearch.trim(),
         retry: false,
     });
 
@@ -252,7 +254,7 @@ const App: React.FC = () => {
                                     Memories
                                 </div>
                                 <div className="text-xl font-semibold mt-1">
-                                    {documents.length}
+                                    {components?.database?.documents_count ?? documents.length}
                                 </div>
                             </div>
                             <div className="p-4 rounded-lg border border-border">
@@ -359,13 +361,21 @@ const App: React.FC = () => {
                                                 </span>
                                                 <span
                                                     className={
-                                                        components.database ===
+                                                        components.database?.status ===
                                                         "connected"
                                                             ? "text-emerald-400"
                                                             : "text-red-400"
                                                     }
                                                 >
-                                                    {components.database}
+                                                    {components.database?.status}
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-muted-foreground">
+                                                    Documents
+                                                </span>
+                                                <span>
+                                                    {components.database?.documents_count ?? 0}
                                                 </span>
                                             </div>
                                             <div className="flex justify-between">
@@ -984,9 +994,7 @@ const App: React.FC = () => {
 
                                 {isDashSearchError && (
                                     <div className="p-4 rounded-md bg-red-950/20 border border-red-900/30 text-red-400 text-xs">
-                                        {dashSearchError instanceof Error
-                                            ? dashSearchError.message
-                                            : "An error occurred during semantic search."}
+                                        {getErrorMessage(dashSearchError)}
                                     </div>
                                 )}
 

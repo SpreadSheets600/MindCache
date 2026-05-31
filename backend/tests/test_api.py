@@ -5,6 +5,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.main import app
+from app.repositories.document_repository import document_repository
 from app.services.document_processor import document_processor
 
 
@@ -158,49 +159,162 @@ async def test_search_with_time_filtering(client_override: AsyncSession) -> None
     doc_id = response.json()["document_id"]
 
     # 2. Search with window containing current time (should return results)
-    from app.services.reranker_service import reranker_service
-    with patch.object(reranker_service, "rerank", return_value=[(doc_id, 0.95)]):
-        async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.post(
-                "/search",
-                json={
-                    "query": "visit timestamps",
-                    "limit": 3,
-                    "start_time": "2026-01-01T00:00:00",
-                    "end_time": "2026-12-31T23:59:59",
-                },
-            )
-        assert response.status_code == 200
-        search_data = response.json()
-        assert len(search_data["results"]) == 1
-        assert search_data["results"][0]["id"] == doc_id
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+        response = await ac.post(
+            "/search",
+            json={
+                "query": "visit timestamps",
+                "limit": 3,
+                "start_time": "2026-01-01T00:00:00",
+                "end_time": "2026-12-31T23:59:59",
+            },
+        )
+    assert response.status_code == 200
+    search_data = response.json()
+    assert len(search_data["results"]) == 1
+    assert search_data["results"][0]["id"] == doc_id
 
-        # 3. Search with start_time in the future (should return no results)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.post(
-                "/search",
-                json={
-                    "query": "visit timestamps",
-                    "limit": 3,
-                    "start_time": "2027-01-01T00:00:00",
-                },
-            )
-        assert response.status_code == 200
-        search_data = response.json()
-        assert len(search_data["results"]) == 0
-        assert "no matching documents" in search_data["ai_summary"].lower()
+    # 3. Search with start_time in the future (should return no results)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+        response = await ac.post(
+            "/search",
+            json={
+                "query": "visit timestamps",
+                "limit": 3,
+                "start_time": "2027-01-01T00:00:00",
+            },
+        )
+    assert response.status_code == 200
+    search_data = response.json()
+    assert len(search_data["results"]) == 0
+    assert "no matching documents" in search_data["ai_summary"].lower()
 
-        # 4. Search with end_time in the past (should return no results)
+    # 4. Search with end_time in the past (should return no results)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+        response = await ac.post(
+            "/search",
+            json={
+                "query": "visit timestamps",
+                "limit": 3,
+                "end_time": "2025-12-31T23:59:59",
+            },
+        )
+    assert response.status_code == 200
+    search_data = response.json()
+    assert len(search_data["results"]) == 0
+    assert "no matching documents" in search_data["ai_summary"].lower()
+
+
+@pytest.mark.asyncio
+async def test_visit_noise_skipping(client_override: AsyncSession) -> None:
+    """Verifies that pages identified as noise are skipped during visit ingestion."""
+    test_url = "https://example.com/noise-test"
+    mock_html = """
+    <html>
+    <head><title>Short Page</title></head>
+    <body>
+    <p>Too short.</p>
+    </body>
+    </html>
+    """
+    transport = httpx.ASGITransport(app=app)
+
+    with patch.object(document_processor, "_download_page", AsyncMock(return_value=mock_html)):
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.post(
-                "/search",
-                json={
-                    "query": "visit timestamps",
-                    "limit": 3,
-                    "end_time": "2025-12-31T23:59:59",
-                },
-            )
+            response = await ac.post("/visit", json={"url": test_url})
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["status"] == "skipped"
+    assert "Skipped from indexing" in data["message"]
+    assert data["document_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_search_click_analytics(client_override: AsyncSession) -> None:
+    """Verifies that search clicks are recorded and retrieved successfully to boost ranks."""
+    transport = httpx.ASGITransport(app=app)
+
+    # Ingest a mock page to get a document ID
+    test_url = "https://example.com/click-test-page"
+    mock_html = """
+    <html>
+    <head><title>Click Target Page</title></head>
+    <body>
+    <p>This is a page that we will click on from the search results list to train our ranker.</p>
+    </body>
+    </html>
+    """
+    with patch.object(document_processor, "_download_page", AsyncMock(return_value=mock_html)):
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+            response = await ac.post("/visit", json={"url": test_url})
+
+    assert response.status_code == 201
+    doc_id = response.json()["document_id"]
+
+    # Record a search click
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+        click_response = await ac.post("/search/click", json={"query": "ranker training", "document_id": doc_id})
+
+    assert click_response.status_code == 200
+    assert click_response.json()["status"] == "success"
+
+    # Retrieve clicks to verify it was stored
+    clicks = await document_repository.get_clicks_for_query(client_override, "ranker training")
+    assert len(clicks) == 1
+    assert clicks[0].document_id == doc_id
+
+
+@pytest.mark.asyncio
+async def test_search_evaluation_dataset(client_override: AsyncSession) -> None:
+    """Validates that search queries return the expected documents from the evaluation dataset."""
+    import json
+    from pathlib import Path
+
+    # 1. Load evaluation dataset
+    dataset_path = Path(__file__).parent / "search_evaluation.json"
+    with open(dataset_path, "r") as f:
+        evaluation_items = json.load(f)
+
+    transport = httpx.ASGITransport(app=app)
+
+    # 2. Ingest the expected documents
+    doc_ids = {}
+    for item in evaluation_items:
+        title = item["expected_title"]
+        url = f"https://example.com/{title.lower().replace(' ', '-')}"
+        mock_html = f"""
+        <html>
+        <head><title>{title}</title></head>
+        <body>
+        <p>This is a page about {title}. It covers topics related to {item['query']}.</p>
+        </body>
+        </html>
+        """
+
+        with patch.object(document_processor, "_download_page", AsyncMock(return_value=mock_html)):
+            async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+                response = await ac.post("/visit", json={"url": url})
+        assert response.status_code == 201
+        doc_ids[title] = response.json()["document_id"]
+
+    # 3. Execute searches and verify expected doc ranks #1
+    for item in evaluation_items:
+        query = item["query"]
+        expected_title = item["expected_title"]
+
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+            response = await ac.post("/search", json={"query": query, "limit": 3})
+
         assert response.status_code == 200
-        search_data = response.json()
-        assert len(search_data["results"]) == 0
-        assert "no matching documents" in search_data["ai_summary"].lower()
+        results = response.json()["results"]
+
+        print(f"\nQUERY: {query} (Expected: {expected_title})")
+        for idx, res in enumerate(results):
+            print(f"  #{idx+1}: {res['title']} (Score: {res['score']})")
+
+        assert len(results) > 0, f"Query '{query}' returned no results"
+
+        # The expected document should be the top 1 result
+        top_title = results[0]["title"]
+        assert top_title == expected_title, f"Query '{query}' failed. Expected top result '{expected_title}' but got '{top_title}'"

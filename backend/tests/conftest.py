@@ -2,7 +2,6 @@ import asyncio
 import os
 
 # Mock heavy modules before importing app components
-# This prevents importing sentence-transformers and keybert from triggering model downloads during tests
 import sys
 import tempfile
 from collections.abc import AsyncGenerator, Generator
@@ -13,11 +12,6 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-mock_sentence_transformers = MagicMock()
-sys.modules["sentence_transformers"] = mock_sentence_transformers
-mock_keybert = MagicMock()
-sys.modules["keybert"] = mock_keybert
-
 # Now import app modules
 from app.core.config import settings
 from app.db.base import Base
@@ -27,7 +21,7 @@ from app.services.bm25_service import bm25_service
 from app.services.embedding_service import embedding_service
 from app.services.keyword_extractor import keyword_extractor
 from app.services.ollama_service import ollama_service
-from app.services.reranker_service import reranker_service
+from app.services.entity_extractor import entity_extractor
 from app.services.vector_service import vector_service
 
 # Use standard fast in-memory SQLite for test database
@@ -87,50 +81,62 @@ def mock_ai_services() -> Generator[None, None, None]:
 
     # 2. Mock Keyword Extraction
     mock_keywords = [("test", 0.95), ("browser", 0.8), ("memory", 0.75)]
+    mock_entities = [("Google", "Company"), ("Rust", "Technology")]
 
-    # 3. Temporary FAISS index file path for tests to avoid overwriting production data
+    # 3. Temporary FAISS & BM25 index file paths for tests to avoid overwriting production data
     with tempfile.NamedTemporaryFile(suffix=".bin", delete=False) as tmp_faiss:
         test_faiss_path = tmp_faiss.name
+    with tempfile.NamedTemporaryFile(suffix=".pkl", delete=False) as tmp_bm25:
+        test_bm25_path = tmp_bm25.name
 
     old_faiss_path = settings.FAISS_INDEX_PATH
     settings.FAISS_INDEX_PATH = test_faiss_path
 
-    # Set private models directly to avoid property setter issues
-    old_emb_model = embedding_service._model
-    old_kw_model = keyword_extractor._kw_model
-    embedding_service._model = MagicMock()
-    keyword_extractor._kw_model = MagicMock()
+    old_bm25_path = settings.BM25_INDEX_PATH
+    settings.BM25_INDEX_PATH = test_bm25_path
 
     # Apply patches
     with (
+        patch.object(embedding_service, "get_dimension", return_value=384),
         patch.object(embedding_service, "generate_embedding", return_value=mock_vector),
         patch.object(embedding_service, "generate_embeddings", return_value=np.array([mock_vector])),
-        patch.object(keyword_extractor, "extract_keywords", return_value=mock_keywords),
+        patch.object(keyword_extractor, "extract_keywords", AsyncMock(return_value=mock_keywords)),
+        patch.object(entity_extractor, "extract_entities", AsyncMock(return_value=mock_entities)),
         patch.object(ollama_service, "check_health", AsyncMock(return_value=True)),
         patch.object(ollama_service, "generate_summary", AsyncMock(return_value="Mocked AI summary.")),
         patch.object(
             ollama_service, "generate_collective_summary", AsyncMock(return_value="Mocked collective AI synthesis.")
         ),
-        patch.object(reranker_service, "rerank", return_value=[(1, 0.95)]),
-        patch.object(bm25_service, "search", return_value=[]),
     ):
         # Reset FAISS vector service to load from temporary test path
         vector_service.index_path = test_faiss_path
+        vector_service.dimension = 384
         vector_service._load_index()
+
+        # Reset BM25 service to load from temporary test path
+        bm25_service.index_path = test_bm25_path
+        bm25_service._load_index()
 
         yield
 
-    # Restore models
-    embedding_service._model = old_emb_model
-    keyword_extractor._kw_model = old_kw_model
-
-    # Clean up test FAISS index file
+    # Clean up test files
     if os.path.exists(test_faiss_path):
         try:
             os.remove(test_faiss_path)
         except OSError:
             pass
     settings.FAISS_INDEX_PATH = old_faiss_path
+    vector_service.index_path = old_faiss_path
+    vector_service._load_index()
+
+    if os.path.exists(test_bm25_path):
+        try:
+            os.remove(test_bm25_path)
+        except OSError:
+            pass
+    settings.BM25_INDEX_PATH = old_bm25_path
+    bm25_service.index_path = old_bm25_path
+    bm25_service._load_index()
 
 
 @pytest_asyncio.fixture

@@ -252,6 +252,7 @@ async def test_github_extractor_success():
             <meta name="description" content="Antigravity is a secret project to make code float.">
         </head>
         <body>
+            <span id="repo-stars-counter-star" class="Counter js-social-count" title="3,412">3.4k</span>
             <a href="/topics/python" class="topic-tag">python</a>
             <a href="/topics/ai" class="topic-tag">ai</a>
             <article class="markdown-body">
@@ -281,6 +282,7 @@ async def test_github_extractor_success():
         assert meta["owner"] == "google-deepmind"
         assert meta["repo_name"] == "antigravity"
         assert "python" in meta["topics"]
+        assert meta["stars"] == 3412
         assert meta["readme_available"] is True
 
 

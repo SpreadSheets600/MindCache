@@ -1,0 +1,18 @@
+[
+  {
+    "query": "stop ai slop",
+    "expected_title": "stop-slop"
+  },
+  {
+    "query": "karpathy coding rules",
+    "expected_title": "karpathy-guidelines"
+  },
+  {
+    "query": "fastapi web framework",
+    "expected_title": "FastAPI Web Server"
+  },
+  {
+    "query": "rust programming language",
+    "expected_title": "Rust Programming"
+  }
+]

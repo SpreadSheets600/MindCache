@@ -58,9 +58,10 @@ def test_embedding_service_generation():
     assert isinstance(emb, np.ndarray)
 
 
-def test_keyword_extractor_extract():
+@pytest.mark.asyncio
+async def test_keyword_extractor_extract():
     """Ensures keywords are successfully extracted from text with scores."""
-    kws = keyword_extractor.extract_keywords("This is some sample text for extracting browser keywords.", top_n=3)
+    kws = await keyword_extractor.extract_keywords("This is some sample text for extracting browser keywords.", top_n=3)
     assert len(kws) == 3
     assert kws[0][0] == "test"
     assert kws[0][1] == 0.95
@@ -104,6 +105,9 @@ def test_bm25_service_tokenization_and_search():
 
     # Test adding and searching
     local_bm25.add_document(123, "stop-slop", "Let's stop AI slop in the browser.", ["ai", "slop"])
+    local_bm25.add_document(124, "unrelated one", "This is some completely different text.", ["different"])
+    local_bm25.add_document(125, "unrelated two", "Another piece of writing that has nothing in common.", ["nothing"])
+    
     results = local_bm25.search("stop-slop", limit=1)
     assert len(results) >= 1
     assert results[0][0] == 123

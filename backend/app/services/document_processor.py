@@ -39,8 +39,9 @@ class DocumentProcessor:
 
         return parsed.netloc
 
-    async def _download_page(self, url: str) -> str:
-        """Downloads A Web Page Asynchronously Using Httpx With A Standard User-Agent."""
+    async def _download_page(self, url: str) -> tuple[str, str]:
+        """Downloads A Web Page Asynchronously Using Httpx With A Standard User-Agent.
+        Returns (html_content, final_url) where final_url is the URL after any redirects."""
 
         headers = {
             "User-Agent": (
@@ -56,7 +57,7 @@ class DocumentProcessor:
             async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
                 response = await client.get(url, headers=headers)
                 response.raise_for_status()
-                return response.text
+                return response.text, str(response.url)
 
         except Exception as httpx_err:
             logger.warning(
@@ -74,7 +75,8 @@ class DocumentProcessor:
                         charset = "utf-8"
                         if "charset=" in content_type:
                             charset = content_type.split("charset=")[-1].strip()
-                        return resp.read().decode(charset, errors="ignore")
+                        final_url = resp.url  # urllib follows redirects and exposes final URL
+                        return resp.read().decode(charset, errors="ignore"), final_url
 
                 return await asyncio.to_thread(_urllib_download)
             except Exception as urllib_err:
@@ -188,7 +190,7 @@ class DocumentProcessor:
         domain = self._validate_and_parse_url(url)
         visited_at = datetime.now(UTC).replace(tzinfo=None)
 
-        # 2. Check For Duplicate In DB
+        # 2. Check For Duplicate In DB (check original URL)
         existing_doc = await document_repository.get_by_url(db, url)
 
         if existing_doc:
@@ -215,6 +217,17 @@ class DocumentProcessor:
         extracted_content = extraction_result.content
         source_type = extraction_result.source_type
         platform_metadata = extraction_result.platform_metadata
+        final_url = extraction_result.final_url or url
+
+        # 3b. Check if redirected URL already exists in DB
+        if final_url != url:
+            existing_doc = await document_repository.get_by_url(db, final_url)
+            if existing_doc:
+                logger.info(f"Redirected URL Already Processed: '{url}' -> '{final_url}'. Recording Visit.")
+                await document_repository.add_visit(db, existing_doc.id, visited_at)
+                existing_doc.updated_at = visited_at
+                await db.commit()
+                return "duplicate", existing_doc
 
         if not extracted_content.strip():
             raise ContentExtractionError(url, "Webpage has no parseable text content.")
@@ -290,7 +303,7 @@ class DocumentProcessor:
         # 8. SQLite Save (Document, Keywords, and Entities)
         doc = await document_repository.create(
             db=db,
-            url=url,
+            url=final_url,
             domain=domain,
             title=title,
             author=author,

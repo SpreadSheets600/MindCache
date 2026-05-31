@@ -41,7 +41,7 @@ async def test_visit_and_search_flow(client_override: AsyncSession) -> None:
 
     # 1. Ingestion: POST /visit
     # Mock download_page to avoid downloading from real internet
-    with patch.object(document_processor, "_download_page", AsyncMock(return_value=mock_html)):
+    with patch.object(document_processor, "_download_page", AsyncMock(return_value=(mock_html, test_url))):
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
             response = await ac.post("/visit", json={"url": test_url})
 
@@ -125,7 +125,7 @@ async def test_visit_with_custom_title(client_override: AsyncSession) -> None:
     transport = httpx.ASGITransport(app=app)
 
     # Ingestion: POST /visit with custom title
-    with patch.object(document_processor, "_download_page", AsyncMock(return_value=mock_html)):
+    with patch.object(document_processor, "_download_page", AsyncMock(return_value=(mock_html, test_url))):
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
             response = await ac.post("/visit", json={"url": test_url, "title": "My Custom Title"})
 
@@ -152,7 +152,7 @@ async def test_search_with_time_filtering(client_override: AsyncSession) -> None
     transport = httpx.ASGITransport(app=app)
 
     # 1. Ingest page
-    with patch.object(document_processor, "_download_page", AsyncMock(return_value=mock_html)):
+    with patch.object(document_processor, "_download_page", AsyncMock(return_value=(mock_html, test_url))):
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
             response = await ac.post("/visit", json={"url": test_url})
     
@@ -220,7 +220,7 @@ async def test_visit_noise_skipping(client_override: AsyncSession) -> None:
     """
     transport = httpx.ASGITransport(app=app)
 
-    with patch.object(document_processor, "_download_page", AsyncMock(return_value=mock_html)):
+    with patch.object(document_processor, "_download_page", AsyncMock(return_value=(mock_html, test_url))):
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
             response = await ac.post("/visit", json={"url": test_url})
 
@@ -245,7 +245,7 @@ async def test_search_click_analytics(client_override: AsyncSession) -> None:
     </body>
     </html>
     """
-    with patch.object(document_processor, "_download_page", AsyncMock(return_value=mock_html)):
+    with patch.object(document_processor, "_download_page", AsyncMock(return_value=(mock_html, test_url))):
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
             response = await ac.post("/visit", json={"url": test_url})
 
@@ -292,7 +292,7 @@ async def test_search_evaluation_dataset(client_override: AsyncSession) -> None:
         </html>
         """
 
-        with patch.object(document_processor, "_download_page", AsyncMock(return_value=mock_html)):
+        with patch.object(document_processor, "_download_page", AsyncMock(return_value=(mock_html, url))):
             async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
                 response = await ac.post("/visit", json={"url": url})
         assert response.status_code == 201

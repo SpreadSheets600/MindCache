@@ -14,6 +14,7 @@ class ExtractionResult:
     published_date: Optional[datetime] = None  # noqa: UP045
     source_type: str = "Generic"
     platform_metadata: dict[str, Any] = field(default_factory=dict)
+    final_url: Optional[str] = None  # noqa: UP045  # URL after redirects
 
 
 class ContentExtractor(ABC):

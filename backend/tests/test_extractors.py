@@ -329,7 +329,7 @@ async def test_google_search_extractor_success():
     </html>
     """
 
-    with patch("app.services.document_processor.document_processor._download_page", return_value=mock_html):
+    with patch("app.services.document_processor.document_processor._download_page", return_value=(mock_html, url)):
         extractor = GoogleSearchExtractor()
         result = await extractor.extract(url)
 

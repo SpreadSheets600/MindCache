@@ -135,7 +135,7 @@ class GenericExtractor(ContentExtractor):
         logger.info(f"GenericExtractor Selected For URL: '{url}'")
         from app.services.document_processor import document_processor
 
-        html_content = await document_processor._download_page(url)
+        html_content, final_url = await document_processor._download_page(url)
 
         # Run heavy HTML parsing and extraction in a worker thread
         (
@@ -177,4 +177,5 @@ class GenericExtractor(ContentExtractor):
             published_date=published_date,
             source_type="Generic",
             platform_metadata={},
+            final_url=final_url,
         )

@@ -37,7 +37,7 @@ class GoogleSearchExtractor(ContentExtractor):
         try:
             from app.services.document_processor import document_processor
 
-            html = await document_processor._download_page(url)
+            html, final_url = await document_processor._download_page(url)
             soup = BeautifulSoup(html, "html.parser")
 
             # Extract h3 tags which typically denote search result headings

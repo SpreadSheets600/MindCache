@@ -17,24 +17,6 @@ logger = get_logger(__name__)
 class GenericExtractor(ContentExtractor):
     """Fallback Extractor For Standard Websites Using Trafilatura And BeautifulSoup."""
 
-    async def _download_page(self, url: str) -> str:
-        """Downloads A Web Page Asynchronously Using Httpx With A Standard User-Agent."""
-        headers = {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/124.0.0.0 Safari/537.36"
-            )
-        }
-        try:
-            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
-                response = await client.get(url, headers=headers)
-                response.raise_for_status()
-                return response.text
-        except Exception as e:
-            logger.error(f"GenericExtractor: Failed To Download URL '{url}': {e}", exc_info=True)
-            raise ContentExtractionError(url, f"Network Request Failed: {e}") from e
-
     def _fallback_extract(self, html: str) -> tuple[str, Optional[str]]:  # noqa: UP045
         """Fallback Content Extractor Using BeautifulSoup When Trafilatura Fails."""
         try:

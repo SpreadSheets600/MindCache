@@ -65,6 +65,31 @@ class GoogleSearchExtractor(ContentExtractor):
         except Exception as e:
             logger.warning(f"Could not parse live Google search results: {e}. Falling back to query extraction only.")
 
+        # Fallback to DuckDuckGo Search (ddgs) if Google search scraping failed or returned nothing
+        if not results_list and search_query and search_query != "Google Search":
+            try:
+                logger.info(
+                    f"GoogleSearchExtractor: Scraping failed or empty. Falling back to DDGS search for query: '{search_query}'"
+                )
+                import asyncio
+
+                from ddgs import DDGS
+
+                def _ddg_search():
+                    with DDGS() as ddgs:
+                        return list(ddgs.text(search_query, max_results=5))
+
+                ddg_results = await asyncio.to_thread(_ddg_search)
+                for r in ddg_results:
+                    title = r.get("title")
+                    link = r.get("href")
+                    if title and link:
+                        results_list.append(f"- {title} ({link})")
+                    elif title:
+                        results_list.append(f"- {title}")
+            except Exception as ddg_err:
+                logger.warning(f"GoogleSearchExtractor: DDGS fallback search failed: {ddg_err}")
+
         # 3. Construct rich content representation
         content_parts = [
             f'User Searched Google For:\n"{search_query}"',

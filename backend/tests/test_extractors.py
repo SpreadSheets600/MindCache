@@ -345,6 +345,33 @@ async def test_google_search_extractor_success():
 
 
 @pytest.mark.asyncio
+async def test_google_search_extractor_ddg_fallback():
+    """Verifies that GoogleSearchExtractor falls back to DDG search when HTML scraping fails."""
+    url = "https://www.google.com/search?q=fallback+search+query"
+
+    with patch("app.services.document_processor.document_processor._download_page", side_effect=Exception("Blocked")):
+        mock_ddg_results = [
+            {"title": "DDG Result 1", "href": "https://ddg1.com"},
+            {"title": "DDG Result 2", "href": "https://ddg2.com"},
+        ]
+        mock_ddg_instance = MagicMock()
+        mock_ddg_instance.__enter__.return_value = mock_ddg_instance
+        mock_ddg_instance.text.return_value = mock_ddg_results
+        
+        with patch("ddgs.DDGS", return_value=mock_ddg_instance):
+            extractor = GoogleSearchExtractor()
+            result = await extractor.extract(url)
+            
+            assert result.source_type == "GoogleSearch"
+            assert result.title == "Google Search: fallback search query"
+            assert "DDG Result 1" in result.content
+            assert "https://ddg1.com" in result.content
+            assert "DDG Result 2" in result.content
+            assert "https://ddg2.com" in result.content
+            assert result.platform_metadata["search_query"] == "fallback search query"
+
+
+@pytest.mark.asyncio
 async def test_reddit_extractor_post_success():
     """Verifies that RedditExtractor successfully fetches and parses Reddit posts using old.reddit HTML."""
     url = "https://www.reddit.com/r/python/comments/12345/my_awesome_post/"

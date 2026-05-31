@@ -47,7 +47,9 @@ class DocumentProcessor:
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/124.0.0.0 Safari/537.36"
-            )
+            ),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
         }
 
         try:
@@ -56,9 +58,33 @@ class DocumentProcessor:
                 response.raise_for_status()
                 return response.text
 
-        except Exception as e:
-            logger.error(f"Failed To Download URL '{url}': {e}", exc_info=True)
-            raise ContentExtractionError(url, f"Network Request Failed: {e}") from e
+        except Exception as httpx_err:
+            logger.warning(
+                f"httpx download failed for '{url}': {httpx_err}. Retrying with urllib fallback."
+            )
+            try:
+                # Fallback to urllib which bypasses TLS JA3 fingerprints checks (e.g. Cloudflare on Medium)
+                import urllib.request
+                import asyncio
+
+                def _urllib_download():
+                    req = urllib.request.Request(url, headers=headers)
+                    with urllib.request.urlopen(req, timeout=10.0) as resp:
+                        content_type = resp.headers.get("Content-Type", "")
+                        charset = "utf-8"
+                        if "charset=" in content_type:
+                            charset = content_type.split("charset=")[-1].strip()
+                        return resp.read().decode(charset, errors="ignore")
+
+                return await asyncio.to_thread(_urllib_download)
+            except Exception as urllib_err:
+                logger.error(
+                    f"Failed To Download URL '{url}' via both httpx ({httpx_err}) and urllib ({urllib_err})",
+                    exc_info=True,
+                )
+                raise ContentExtractionError(
+                    url, f"Network Request Failed (httpx: {httpx_err}, urllib: {urllib_err})"
+                ) from urllib_err
 
     def _fallback_extract(self, html: str) -> tuple[str, Optional[str]]:  # noqa: UP045
         """Fallback Content Extractor Using BeautifulSoup When Trafilatura Fails.
@@ -207,7 +233,7 @@ class DocumentProcessor:
             knowledge_score += 2
         if url_path and url_path != "/":
             knowledge_score += 1
-        if source_type and source_type.lower() in ["github", "youtube", "reddit"]:
+        if source_type and source_type.lower() in ["github", "youtube", "reddit", "googlesearch"]:
             knowledge_score += 2
 
         if "PYTEST_CURRENT_TEST" in os.environ:

@@ -17,8 +17,7 @@
   },
   "options_page": "settings.html",
   "background": {
-    "service_worker": "background.js",
-    "type": "module"
+    "service_worker": "background.js"
   },
   "content_scripts": [
     {
@@ -28,12 +27,12 @@
     }
   ],
   "commands": {
-    "_execute_action": {
+    "toggle-search-overlay": {
       "suggested_key": {
         "default": "Ctrl+Shift+K",
         "mac": "MacCtrl+Shift+K"
       },
-      "description": "Open MindCache Search Interface"
+      "description": "Toggle MindCache Search Overlay"
     }
   }
 }

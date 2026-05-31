@@ -124,4 +124,91 @@ chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
   }
 });
 
+// 3. Monitor extension command hotkeys (e.g. Ctrl+Shift+K)
+chrome.commands.onCommand.addListener((command) => {
+  if (command === "toggle-search-overlay") {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const activeTab = tabs[0];
+      if (activeTab && activeTab.id) {
+        chrome.tabs.sendMessage(activeTab.id, { action: "toggle-overlay" }).catch((err) => {
+          console.warn("[MindCache Background] Error sending toggle message to content script:", err);
+        });
+      }
+    });
+  }
+});
+
+// 4. Handle messages from content script overlays (CORS bypass for searches)
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message.action === "get-active-tabs") {
+    chrome.tabs.query({}, (tabs) => {
+      const formatted = tabs.map((t) => ({
+        id: t.id,
+        windowId: t.windowId,
+        title: t.title || "Untitled Tab",
+        url: t.url || "",
+        favIconUrl: t.favIconUrl || "",
+        active: t.active,
+      }));
+      sendResponse({ status: "ok", tabs: formatted });
+    });
+    return true; // Keep message channel open for async response
+  }
+
+  if (message.action === "search-memory") {
+    const query = message.query || "";
+    const limit = message.limit || 8;
+    backendClient
+      .search(query, limit, false)
+      .then((res) => {
+        sendResponse({ status: "ok", results: res.results || [] });
+      })
+      .catch((err) => {
+        console.error("[MindCache Background] Search memory failed:", err);
+        sendResponse({ status: "error", error: err.message || "Failed to query backend" });
+      });
+    return true;
+  }
+
+  if (message.action === "check-backend-health") {
+    backendClient
+      .checkHealth()
+      .then((res) => {
+        sendResponse({ status: "ok", health: res });
+      })
+      .catch((err) => {
+        sendResponse({ status: "error", error: err.message || "Offline" });
+      });
+    return true;
+  }
+
+  if (message.action === "switch-to-tab") {
+    const { tabId, windowId } = message;
+    if (tabId) {
+      chrome.tabs.update(tabId, { active: true }, () => {
+        if (windowId) {
+          chrome.windows.update(windowId, { focused: true });
+        }
+      });
+      sendResponse({ status: "ok" });
+    } else {
+      sendResponse({ status: "error", error: "Missing tabId" });
+    }
+    return true;
+  }
+
+  if (message.action === "open-url") {
+    const { url } = message;
+    if (url) {
+      chrome.tabs.create({ url });
+      sendResponse({ status: "ok" });
+    } else {
+      sendResponse({ status: "error", error: "Missing url" });
+    }
+    return true;
+  }
+
+  return false;
+});
+
 console.log("[MindCache Background] Service worker initialized successfully.");

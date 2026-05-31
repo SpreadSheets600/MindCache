@@ -6,6 +6,7 @@ import {
   SearchResponse,
   HealthCheckResponse,
   DocumentResponse,
+  GraphResponse,
 } from "../types";
 
 export class BackendClientError extends Error {
@@ -44,16 +45,23 @@ class BackendClient {
         const response = await fetch(url, { ...options, headers });
 
         if (!response.ok) {
-          let errorDetails = "";
+          let errorDetails: any = "";
           try {
             const errJson = await response.json();
-            errorDetails = errJson.detail || JSON.stringify(errJson);
+            errorDetails = errJson.detail !== undefined ? errJson.detail : errJson;
           } catch {
             errorDetails = await response.text();
           }
 
+          let errMsg = "";
+          if (errorDetails && typeof errorDetails === "object") {
+            errMsg = JSON.stringify(errorDetails);
+          } else {
+            errMsg = String(errorDetails);
+          }
+
           throw new BackendClientError(
-            errorDetails || `HTTP Error ${response.status}`,
+            errMsg || `HTTP Error ${response.status}`,
             response.status,
             errorDetails
           );
@@ -205,6 +213,24 @@ class BackendClient {
       return data;
     } catch (err: any) {
       console.error("Failed to list documents:", err);
+      throw err;
+    }
+  }
+
+  /**
+   * Fetch Knowledge Graph Data (entities, keywords, relationships)
+   */
+  public async getGraphData(limit = 100, minKeywordFreq = 2): Promise<GraphResponse> {
+    try {
+      const data = await this.request<GraphResponse>(
+        `/graph?limit=${limit}&min_keyword_freq=${minKeywordFreq}`
+      );
+      if (!data || !data.nodes || !data.edges) {
+        throw new Error("Invalid graph data response schema");
+      }
+      return data;
+    } catch (err: any) {
+      console.error("Failed to fetch graph data:", err);
       throw err;
     }
   }

@@ -12,7 +12,7 @@ describe("BackendClient Service API Tests", () => {
     const healthMockResponse = {
       status: "healthy",
       components: {
-        database: "connected",
+        database: { status: "connected", documents_count: 42 },
         faiss_index: { status: "initialized", vectors_count: 12 },
         ollama: { status: "connected", model: "llama3" },
       },
@@ -26,7 +26,8 @@ describe("BackendClient Service API Tests", () => {
 
     const res = await backendClient.checkHealth();
     expect(res.status).toBe("healthy");
-    expect(res.components.database).toBe("connected");
+    expect(res.components.database.status).toBe("connected");
+    expect(res.components.database.documents_count).toBe(42);
     expect(useConnectionStore.getState().isOnline).toBe(true);
     expect(useConnectionStore.getState().components?.faiss_index.vectors_count).toBe(12);
   });

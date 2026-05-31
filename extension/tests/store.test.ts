@@ -81,7 +81,7 @@ describe("MindCache Connection Store Tests", () => {
 
     // Set online
     const componentsMock = {
-      database: "connected" as const,
+      database: { status: "connected" as const, documents_count: 42 },
       faiss_index: { status: "initialized", vectors_count: 42 },
       ollama: { status: "connected" as const, model: "llama3" },
     };
@@ -90,7 +90,8 @@ describe("MindCache Connection Store Tests", () => {
 
     const active = useConnectionStore.getState();
     expect(active.isOnline).toBe(true);
-    expect(active.components?.database).toBe("connected");
+    expect(active.components?.database.status).toBe("connected");
+    expect(active.components?.database.documents_count).toBe(42);
     expect(active.components?.faiss_index.vectors_count).toBe(42);
   });
 });

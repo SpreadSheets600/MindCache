@@ -3,6 +3,11 @@ export interface Keyword {
   score: number;
 }
 
+export interface Entity {
+  name: string;
+  type: string;  // Person, Company, Technology, Project, etc.
+}
+
 export interface SearchResultItem {
   id: number;
   url: string;
@@ -49,7 +54,43 @@ export interface DocumentResponse {
   created_at: string;
   updated_at: string;
   keywords: Keyword[];
+  entities: Entity[];
   visit_history: string[];
+}
+
+export interface GraphNode {
+  id: string;
+  label: string;
+  type: "document" | "keyword" | "entity";
+  url?: string;
+  domain?: string;
+  source_type?: string;
+  updated_at?: string;
+  visit_count?: number;
+  entity_type?: string;
+  document_count?: number;
+}
+
+export interface GraphEdge {
+  source: string;
+  target: string;
+  type: "has_keyword" | "has_entity" | "co_occurs";
+  weight?: number;
+}
+
+export interface GraphResponse {
+  nodes: {
+    documents: GraphNode[];
+    entities: GraphNode[];
+    keywords: GraphNode[];
+  };
+  edges: GraphEdge[];
+  stats: {
+    document_count: number;
+    entity_count: number;
+    keyword_count: number;
+    edge_count: number;
+  };
 }
 
 export interface ExtensionSettings {
@@ -60,7 +101,10 @@ export interface ExtensionSettings {
 }
 
 export interface BackendComponentStatus {
-  database: "connected" | "disconnected";
+  database: {
+    status: "connected" | "disconnected";
+    documents_count: number;
+  };
   faiss_index: {
     status: string;
     vectors_count: number;

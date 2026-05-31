@@ -169,6 +169,6 @@ $$\text{final\_score} = 0.55 \cdot V_{\text{score}} + 0.25 \cdot B_{\text{score}
 
 ## 5. Key Configuration Files
 
-- **[.env](file:///home/spreadsheets600/Projects/MindCache/backend/.env)**: Sets the backend ports, model names, and base URL directions.
-- **[config.py](file:///home/spreadsheets600/Projects/MindCache/backend/app/core/config.py)**: Loads configuration options and sets defaults for environment variables.
-- **[main.py](file:///home/spreadsheets600/Projects/MindCache/backend/app/main.py)**: Launches FastAPI, connects routes, and triggers background checks for local database re-indexing on lifespan start.
+- **[.env](../.env)**: Sets the backend ports, model names, and base URL directions.
+- **[config.py](../app/core/config.py)**: Loads configuration options and sets defaults for environment variables.
+- **[main.py](../app/main.py)**: Launches FastAPI, connects routes, and triggers background checks for local database re-indexing on lifespan start.

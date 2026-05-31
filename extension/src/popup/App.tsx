@@ -70,6 +70,26 @@ export const App: React.FC = () => {
               {isOnline && components ? `${components.faiss_index.vectors_count} pages` : "—"}
             </span>
           </div>
+
+          <div className="flex justify-between items-center py-1 border-b border-zinc-900/60">
+            <span className="text-zinc-400 flex items-center space-x-1.5">
+              <span>🤖</span>
+              <span>AI Model</span>
+            </span>
+            <span className="font-mono text-[11px] text-zinc-300 truncate max-w-[140px]" title={components?.ollama.model || ""}>
+              {isOnline && components?.ollama.status === "connected" ? components.ollama.model || "Active" : "OFFLINE"}
+            </span>
+          </div>
+
+          <div className="flex justify-between items-center py-1 border-b border-zinc-900/60">
+            <span className="text-zinc-400 flex items-center space-x-1.5">
+              <span>🧬</span>
+              <span>Embedding Model</span>
+            </span>
+            <span className="font-mono text-[11px] text-zinc-300 truncate max-w-[140px]" title={components?.embedding?.model || ""}>
+              {isOnline && components?.embedding?.status === "connected" ? components.embedding.model : "OFFLINE"}
+            </span>
+          </div>
           
           <div className="flex justify-between items-center py-1 border-b border-zinc-900/60">
             <span className="text-zinc-400 flex items-center space-x-1.5">

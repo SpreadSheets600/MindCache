@@ -40,6 +40,12 @@ export const BackendStatus: React.FC = () => {
                 <span>{components.ollama.model || "AI ready"}</span>
               </>
             )}
+            {components.embedding && components.embedding.status === "connected" && (
+              <>
+                <span className="text-muted-foreground/30">|</span>
+                <span>{components.embedding.model} (Embed)</span>
+              </>
+            )}
           </>
         )}
       </div>

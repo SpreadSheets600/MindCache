@@ -68,6 +68,11 @@ export interface BackendComponentStatus {
     status: "connected" | "offline";
     model: string | null;
   };
+  embedding?: {
+    status: "connected" | "offline";
+    model: string;
+    provider: string;
+  };
 }
 
 export interface HealthCheckResponse {

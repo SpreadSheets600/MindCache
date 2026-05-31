@@ -219,39 +219,24 @@ class DocumentProcessor:
         if not extracted_content.strip():
             raise ContentExtractionError(url, "Webpage has no parseable text content.")
 
-        # 4. Noise Detection Check
+        # 4. Content Quality Score (used for logging, not filtering)
         words = extracted_content.split()
         word_count = len(words)
         unique_words = len(set(w.lower() for w in words))
         parsed_url = urlparse(url)
         url_path = parsed_url.path or ""
-        is_home_page = not url_path or url_path == "/"
 
         knowledge_score = 0
-        if is_home_page:
-            # Home pages get lower thresholds - they are intentional landing pages
-            if word_count > 80:
-                knowledge_score += 2
-            if unique_words > 40:
-                knowledge_score += 2
-            knowledge_score += 1  # Base bonus for being a home page
-        else:
-            if word_count > 300:
-                knowledge_score += 2
-            if unique_words > 100:
-                knowledge_score += 2
-            knowledge_score += 1  # Non-root path bonus
+        if word_count > 300:
+            knowledge_score += 2
+        if unique_words > 100:
+            knowledge_score += 2
+        if url_path and url_path != "/":
+            knowledge_score += 1
         if source_type and source_type.lower() in ["github", "youtube", "reddit", "googlesearch"]:
             knowledge_score += 2
 
-        if "PYTEST_CURRENT_TEST" in os.environ:
-            if "noise-test" in url and knowledge_score < 2:
-                logger.info(f"Skipping indexing for noisy document (knowledge_score={knowledge_score}): {url}")
-                return "skipped", None
-        else:
-            if knowledge_score < 2:
-                logger.info(f"Skipping indexing for noisy document (knowledge_score={knowledge_score}): {url}")
-                return "skipped", None
+        logger.info(f"Content quality score={knowledge_score} (words={word_count}, unique={unique_words}): {url}")
 
         # Limit Content Size For Keyword And Embedding Generation
         trimmed_content = extracted_content[:8000]

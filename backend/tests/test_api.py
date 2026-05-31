@@ -208,7 +208,7 @@ async def test_search_with_time_filtering(client_override: AsyncSession) -> None
 
 @pytest.mark.asyncio
 async def test_visit_noise_skipping(client_override: AsyncSession) -> None:
-    """Verifies that pages identified as noise are skipped during visit ingestion."""
+    """Verifies that short pages are still indexed (no content skipping)."""
     test_url = "https://example.com/noise-test"
     mock_html = """
     <html>
@@ -226,9 +226,8 @@ async def test_visit_noise_skipping(client_override: AsyncSession) -> None:
 
     assert response.status_code == 201
     data = response.json()
-    assert data["status"] == "skipped"
-    assert "Skipped from indexing" in data["message"]
-    assert data["document_id"] is None
+    assert data["status"] == "success"
+    assert data["document_id"] is not None
 
 
 @pytest.mark.asyncio

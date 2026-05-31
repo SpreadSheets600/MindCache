@@ -19,7 +19,8 @@ logger = get_logger(__name__)
 FAISS_CANDIDATE_POOL = 25
 BM25_CANDIDATE_POOL = 25
 KEYWORD_BOOST = 0.15
-BGE_PREFIX = "Represent this sentence for searching relevant passages: "
+# BGE prefix removed - not compatible with embeddinggemma:300m
+QUERY_PREFIX = ""
 
 
 class SearchService:
@@ -199,9 +200,9 @@ class SearchService:
         except Exception as e:
             logger.warning(f"Query Expansion Failed: {e}. Using Original Query.")
 
-        # 2. Generate Query Embedding (BGE Prefix For Better Retrieval)
+        # 2. Generate Query Embedding
         try:
-            query_embedding = embedding_service.generate_embedding(f"{BGE_PREFIX}{expanded_query}")
+            query_embedding = embedding_service.generate_embedding(f"{QUERY_PREFIX}{expanded_query}")
 
         except Exception as e:
             logger.error(f"Failed To Generate Query Embedding: {e}", exc_info=True)

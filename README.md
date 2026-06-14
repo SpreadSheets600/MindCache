@@ -87,3 +87,9 @@ MindCache/
 │   └── public/       # Manifest V3
 └── docs/             # Unified documentation (8 files)
 ```
+
+---
+
+## Architecture Overview
+
+![](.github/image/Overview.png)

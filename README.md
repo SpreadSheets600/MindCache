@@ -30,7 +30,7 @@ graph TD
 ## Core Features
 
 - **Absolute Local Privacy**: Zero external cloud or API calls. All indexing, vector computations, relational database storage, and AI syntheses occur on your localhost.
-- **Background Ingestion & Tab Tracking**: The Chromium extension automatically registers visited URLs and pre-rendered tab titles, using debounces and domain exclusion rules.
+- **Background Ingestion & Tab Tracking**: The Chromium extension automatically registers visited URLs and titles, tracking active dwell time and utilizing a three-stage noise filter (blacklisted paths, 10-second dwell threshold, high-value document exceptions) to prevent search engine and landing page pollution.
 - **Hybrid Content Scraping**: Utilizes specialized extraction pipelines for YouTube, X (Twitter), and Reddit (to capture subreddits, posts, and top discussion comments), falling back gracefully to Trafilatura and BeautifulSoup4 for generic web content.
 - **Hugging Face-Free RAM Optimization**: Operates without heavy Hugging Face/SentenceTransformer dependencies in the python backend process, delegating both keyword extraction and embedding generation tasks to Ollama, reducing local process memory bloat and preventing unauthenticated download gates.
 - **Spotlight Semantic Search**: Executes high-performance Cosine Similarity matches on FAISS inner product indices (768 dimensions) with real-time, debounced query auto-updates.
@@ -101,6 +101,7 @@ This generates compiled assets in `extension/dist`.
 > ```
 >
 > ### Why Ollama and Why Not Hugging Face/SentenceTransformers?
+>
 > - **Zero Credentials & Gated Model Friction**: Models like Google Gemma require a Hugging Face account and license acceptance. Loading `google/embeddinggemma-300m` via Python's SentenceTransformers would crash without setting up `HF_TOKEN`. Ollama handles model distribution seamlessly without token credentials.
 > - **Dramatically Lower Memory Footprint**: Rather than loading multi-gigabyte PyTorch/Hugging Face weight models directly in Python's memory (which bloats backend RAM by 1GB+), we offload embedding and generation to local Ollama, which uses optimized C++ (llama.cpp) with dynamic GPU/CPU offloading.
 > - **Unified AI Backend**: Running both embeddings and text generation through a single local server (Ollama) reduces setup complexity and dependency updates.

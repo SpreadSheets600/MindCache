@@ -83,15 +83,23 @@ sequenceDiagram
     end
 ```
 
-### Noise Detection Metrics
+### Noise Detection & URL Exclusion
 
-The `knowledge_score` determines if a page is worth indexing:
+MindCache filters incoming page visits to avoid indexing low-value or transient content.
 
+#### 1. Platform Search Exclusions
+To prevent search history noise from degrading semantic index quality, platform search result pages are skipped immediately prior to ingestion:
+* **Google Search Results**: URLs matching `google.com/search` (and regional variations/subdomains)
+* **YouTube Search Results**: URLs matching `youtube.com/results`
+
+#### 2. Knowledge Quality Score
+For eligible pages, a `knowledge_score` is computed to determine if the page has sufficient readable text:
 - **Word count > 300**: $+2$ points
 - **Unique words > 100**: $+2$ points
 - **URL path is not root (`/`)**: $+1$ point
 - **Platform Match (GitHub, YouTube, Reddit)**: $+2$ points
-- _Skip vector/BM25 indexing if score is less than 2._
+
+*Note: The page is skipped from vector and BM25 indexing if its computed knowledge score is less than 2.*
 
 ### Metadata-Enriched Chunking
 
@@ -147,17 +155,35 @@ flowchart TD
 
 ### Weighted Score Fusion Formula
 
-Instead of utilizing expensive, slow deep learning rerankers on CPU, candidate pages are ranked using a custom weighted fusion of six distinct components:
+Instead of utilizing expensive, slow deep learning rerankers on CPU, candidate pages are ranked using a custom weighted fusion of components followed by a Quality Score multiplier:
 
-$$\text{final\_score} = 0.55 \cdot V_{\text{score}} + 0.25 \cdot B_{\text{score}} + 0.10 \cdot T_{\text{score}} + 0.05 \cdot K_{\text{score}} + 0.02 \cdot R_{\text{score}} + 0.03 \cdot S_{\text{score}}$$
+$$\text{base\_score} = 0.45 \cdot V_{\text{score}} + 0.25 \cdot B_{\text{score}} + 0.10 \cdot T_{\text{score}} + 0.05 \cdot K_{\text{score}} + 0.05 \cdot M_{\text{score}} + 0.02 \cdot R_{\text{score}} + 0.03 \cdot S_{\text{score}}$$
 
 1. **Vector Score ($V_{\text{score}}$)**: FAISS Cosine Similarity score, normalized to $[0, 1]$.
 2. **BM25 Score ($B_{\text{score}}$)**: Lexical score normalized against the maximum score in the current candidate set.
 3. **Title Score ($T_{\text{score}}$)**: Proportion of query terms found directly in the webpage's title string.
 4. **Keyword Score ($K_{\text{score}}$)**: Overlap proportion between the query terms and the keywords extracted at ingestion time.
-5. **Recency Score ($R_{\text{score}}$)**: Time-decay function prioritizing recently read files (capped at a weight of $0.02$ to prevent overpowering relevance):
+5. **Metadata Score ($M_{\text{score}}$)**: Overlap proportion between the query terms and platform metadata (such as GitHub repository name, description, and topics).
+6. **Recency Score ($R_{\text{score}}$)**: Time-decay function prioritizing recently read files (capped at a weight of $0.02$ to prevent overpowering relevance):
    $$R_{\text{score}} = e^{-\frac{\text{days since last visit}}{30}}$$
-6. **Source Score ($S_{\text{score}}$)**: Developer-oriented source type boost ($1.0$ for GitHub, $0.5$ for YouTube, Reddit, X, $0.0$ for generic).
+7. **Source Score ($S_{\text{score}}$)**: Developer-oriented source type boost ($1.0$ for GitHub, $0.5$ for YouTube, Reddit, X, $0.0$ for generic).
+
+#### Dynamic Document Quality Multiplier
+
+After computing the base score, a document's overall retrieval rank is boosted by its **Document Quality Score** (stored column in the `documents` table, calculated dynamically on ingestion and updated on page revisits, ranging from `0` to `8`):
+
+$$\text{quality\_score} = D_{\text{boost}} + W_{\text{boost}} + H_{\text{boost}} + T_{\text{boost}} + V_{\text{boost}}$$
+* **Dwell Time Boost ($D_{\text{boost}}$)**: $+2$ points if user stayed focused on the tab for $> 60$ seconds.
+* **Word Count Boost ($W_{\text{boost}}$)**: $+2$ points if text length $> 500$ words.
+* **High-Value Source Boost ($H_{\text{boost}}$)**: $+2$ points if domain/source is PDF, GitHub, or Documentation.
+* **Transcript Boost ($T_{\text{boost}}$)**: $+1$ point if video transcript is available.
+* **Revisit Boost ($V_{\text{boost}}$)**: $+1$ point if page has been revisited ($\text{visit\_count} > 1$).
+
+The final combined score is then calculated as:
+
+$$\text{final\_score} = \text{base\_score} \cdot (1 + \text{quality\_score} \cdot 0.05)$$
+
+This allows research papers, repository hubs, and structured documentation pages to rise dynamically to the top of search rankings while pushing down platform landing pages and short-session clutter.
 
 ### Rank Overrides & Refinements
 

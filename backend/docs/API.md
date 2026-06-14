@@ -20,6 +20,29 @@ Ingests and indexes a visited web page.
 }
 ```
 
+When the extension performs client-side extraction (via Defuddle), it sends enriched payloads. The backend skips server-side HTTP download and extraction when `extracted_content` is present:
+
+```json
+{
+    "url": "https://example.com/ai-memory-article",
+    "title": "Local AI Personal Memory Systems",
+    "dwell_time": 42.5,
+    "extracted_content": "## AI Memory Systems\n\nThis article discusses...",
+    "extracted_content_html": "<h2>AI Memory Systems</h2><p>This article discusses...</p>",
+    "description": "A deep dive into local AI memory systems",
+    "author": "Jane Doe",
+    "site_name": "Example Blog",
+    "published_date": "2026-05-29",
+    "language": "en",
+    "schema_org": {"@type": "Article", "headline": "..."},
+    "meta_tags": [{"name": "keywords", "content": "ai, memory"}],
+    "keywords": ["ai", "memory", "vector"],
+    "highlights": [{"text": "key passage", "content": "<em>key passage</em>", "xpath": "/html/body/p[1]"}],
+    "selection": "selected text in markdown",
+    "selection_html": "<p>selected text in HTML</p>"
+}
+```
+
 #### Response (New Document Success - Status 201)
 
 ```json
@@ -44,15 +67,17 @@ Ingests and indexes a visited web page.
 }
 ```
 
-#### Response (Skipped - Noise Detection - Status 201)
+#### Response (Skipped - Noise Detection / Platform Search - Status 201)
+
+Returned when a page is skipped because it is identified as noise (e.g. low information content page) or when it is a platform search query page (such as a Google Search or YouTube search results page).
 
 ```json
 {
     "status": "skipped",
-    "message": "Page skipped: insufficient knowledge content (score < 2).",
+    "message": "Web Page Skipped from indexing because it was identified as noise (e.g. insufficient information content).",
     "document_id": null,
-    "title": "Login Page",
-    "domain": "example.com"
+    "title": "Google Search: best vector database for rag",
+    "domain": "google.com"
 }
 ```
 

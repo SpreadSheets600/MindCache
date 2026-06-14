@@ -2,6 +2,17 @@
 
 This document explains how MindCache downloads, parses, indexes, and retrieves web content using local machine learning pipelines.
 
+## 0. Client-Side Extraction Bypass
+
+When the browser extension's content script can access the page DOM, the backend receives **pre-extracted content** via the `POST /visit` endpoint. The backend detects the presence of `extracted_content` in the request body and **skips** server-side HTTP download and HTML parsing entirely.
+
+**Benefits:**
+- Pages behind auth/paywalls work (the user is already logged in)
+- JS-rendered SPAs yield full content (browser has the rendered DOM)
+- Performance improves (no server round-trip for download)
+
+**Fallback:** If `extracted_content` is absent, the server downloads and extracts the page as before (see Section 1).
+
 ## 1. Web Page Download and Extraction
 
 MindCache handles webpage ingestion asynchronously to prevent blocking the FastAPI event loop.

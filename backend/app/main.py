@@ -44,6 +44,9 @@ async def lifespan(app: FastAPI):
             if "platform_metadata" not in columns:
                 logger.info("Upgrading Database: Adding platform_metadata column to documents...")
                 await conn.execute(text("ALTER TABLE documents ADD COLUMN platform_metadata TEXT"))
+            if "quality_score" not in columns:
+                logger.info("Upgrading Database: Adding quality_score column to documents...")
+                await conn.execute(text("ALTER TABLE documents ADD COLUMN quality_score FLOAT DEFAULT 0.0"))
 
         logger.info("Database Schemas Synchronized Successfully.")
 
@@ -67,9 +70,11 @@ async def lifespan(app: FastAPI):
                             "model": embedding_service.model_name,
                             "input": "warmup",
                             "keep_alive": -1,
-                        }
+                        },
                     )
-                logger.info(f"Ollama Embedding model '{embedding_service.model_name}' successfully loaded and kept alive.")
+                logger.info(
+                    f"Ollama Embedding model '{embedding_service.model_name}' successfully loaded and kept alive."
+                )
             except Exception as warmup_err:
                 logger.warning(f"Failed to preload embedding model: {warmup_err}")
 
@@ -84,12 +89,12 @@ async def lifespan(app: FastAPI):
                             "prompt": "hello",
                             "stream": False,
                             "keep_alive": -1,
-                        }
+                        },
                     )
                 logger.info(f"Ollama Generative model '{ollama_service.model}' successfully loaded and kept alive.")
             except Exception as warmup_err:
                 logger.warning(f"Failed to preload generative model: {warmup_err}")
-            
+
             logger.info("All local AI models successfully loaded and active.")
 
             # Check if FAISS index is empty or dimension mismatch occurred, and re-index from DB if necessary
@@ -102,7 +107,9 @@ async def lifespan(app: FastAPI):
                 cursor = await db.execute(select(func.count(Document.id)))
                 db_doc_count = cursor.scalar() or 0
 
-                if vector_service.needs_reindexing or (vector_service._index is not None and vector_service._index.ntotal == 0 and db_doc_count > 0):
+                if vector_service.needs_reindexing or (
+                    vector_service._index is not None and vector_service._index.ntotal == 0 and db_doc_count > 0
+                ):
                     logger.info(
                         f"FAISS index needs rebuild/re-index (needs_reindexing={vector_service.needs_reindexing}, "
                         f"vectors={vector_service._index.ntotal if vector_service._index else 0}, db_docs={db_doc_count}). Re-indexing now..."

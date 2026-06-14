@@ -4,6 +4,7 @@ from app.services.extractors.base import ContentExtractor
 from app.services.extractors.generic import GenericExtractor
 from app.services.extractors.github import GitHubExtractor
 from app.services.extractors.google_search import GoogleSearchExtractor
+from app.services.extractors.pdf import PDFExtractor
 from app.services.extractors.reddit import RedditExtractor
 from app.services.extractors.x import XExtractor
 from app.services.extractors.youtube import YouTubeExtractor
@@ -22,6 +23,7 @@ class ExtractorFactory:
     _github_extractor = GitHubExtractor()
     _google_search_extractor = GoogleSearchExtractor()
     _reddit_extractor = RedditExtractor()
+    _pdf_extractor = PDFExtractor()
 
     # Domain Registry mapping hostnames to their corresponding extractor instance
     _registry: dict[str, ContentExtractor] = {
@@ -47,6 +49,15 @@ class ExtractorFactory:
             # Normalize hostname by stripping 'www.'
             if hostname.startswith("www."):
                 hostname = hostname[4:]
+
+            # Check if the URL path points to a PDF
+            path_lower = path.lower()
+            if (
+                path_lower.endswith(".pdf")
+                or (hostname == "arxiv.org" and "/pdf/" in path_lower)
+                or ("/pdf/" in path_lower and not path_lower.endswith((".html", ".htm", ".js", ".css", ".php", ".aspx")))
+            ):
+                return cls._pdf_extractor
 
             # Check for Google Search pages specifically
             if hostname == "google.com" and path.startswith("/search"):

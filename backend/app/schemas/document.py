@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -9,6 +9,23 @@ class VisitRequest(BaseModel):
 
     url: str = Field(..., description="The Fully Qualified URL Visited By The User.")
     title: Optional[str] = Field(None, description="The Pre-Rendered Tab Title Captured By The Extension.")
+    dwell_time: Optional[float] = Field(None, description="The dwell time in seconds for this visit.")
+
+    extracted_content: Optional[str] = Field(None, description="Client-extracted clean markdown body. When present, backend skips server-side download and extraction.")
+    extracted_content_html: Optional[str] = Field(None, description="Client-extracted clean HTML body.")
+    description: Optional[str] = Field(None, description="Client-extracted meta description.")
+    author: Optional[str] = Field(None, description="Client-extracted author name.")
+    site_name: Optional[str] = Field(None, description="Client-extracted site name.")
+    published_date: Optional[str] = Field(None, description="Client-extracted published date string.")
+    language: Optional[str] = Field(None, description="Client-extracted page language.")
+
+    schema_org: Optional[Any] = Field(None, description="JSON-LD schema.org data extracted client-side.")
+    meta_tags: Optional[list[dict[str, Any]]] = Field(None, description="Meta tags extracted client-side.")
+    keywords: Optional[list[str]] = Field(None, description="Client-extracted keywords.")
+
+    highlights: Optional[list[dict[str, Any]]] = Field(None, description="Highlighted text fragments from the page.")
+    selection: Optional[str] = Field(None, description="Currently selected text on the page.")
+    selection_html: Optional[str] = Field(None, description="HTML of the current selection.")
 
     @field_validator("url")
     @classmethod

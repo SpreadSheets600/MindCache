@@ -24,17 +24,22 @@ async def record_visit(
     """Accepts A URL, Extracts Page Content/Metadata, Generates Keywords & Embeddings, And Indexes It."""
 
     logger.info(f"Accepting Visit URL : {request.url}")
-    
+
     from urllib.parse import urlparse
+
     parsed = urlparse(request.url)
-    
-    # Ignore all localhost and internal URLs
-    if parsed.hostname in ("localhost", "127.0.0.1", "0.0.0.0") or (
-        parsed.hostname and parsed.hostname.startswith("192.168.")
-    ) or (
-        parsed.hostname and parsed.hostname.startswith("10.")
-    ) or (
-        parsed.hostname and parsed.hostname.startswith("172.") and parsed.hostname.split(".")[1].isdigit() and 16 <= int(parsed.hostname.split(".")[1]) <= 31
+
+    # Ignore All Internal And LocalHosts URLs TO Avoid Indexing Noise And Non-Informative Content
+    if (
+        parsed.hostname in ("localhost", "127.0.0.1", "0.0.0.0")
+        or (parsed.hostname and parsed.hostname.startswith("192.168."))
+        or (parsed.hostname and parsed.hostname.startswith("10."))
+        or (
+            parsed.hostname
+            and parsed.hostname.startswith("172.")
+            and parsed.hostname.split(".")[1].isdigit()
+            and 16 <= int(parsed.hostname.split(".")[1]) <= 31
+        )
     ):
         logger.info(f"Skipping localhost/internal URL: {request.url}")
         return VisitResponse(
@@ -45,10 +50,32 @@ async def record_visit(
             domain=parsed.netloc,
         )
     try:
-        status, doc = await document_processor.process_url(db, request.url, request.title)
+        if request.extracted_content:
+            status, doc = await document_processor.process_pre_extracted(
+                db,
+                url=request.url,
+                title=request.title,
+                dwell_time=request.dwell_time,
+                extracted_content=request.extracted_content,
+                extracted_content_html=request.extracted_content_html,
+                description=request.description,
+                author=request.author,
+                site_name=request.site_name,
+                published_date=request.published_date,
+                language=request.language,
+                schema_org=request.schema_org,
+                meta_tags=request.meta_tags,
+                keywords=request.keywords,
+                highlights=request.highlights,
+                selection=request.selection,
+                selection_html=request.selection_html,
+            )
+        else:
+            status, doc = await document_processor.process_url(
+                db, request.url, request.title, dwell_time=request.dwell_time
+            )
 
         if status == "skipped":
-            from urllib.parse import urlparse
             parsed = urlparse(request.url)
             return VisitResponse(
                 status="skipped",

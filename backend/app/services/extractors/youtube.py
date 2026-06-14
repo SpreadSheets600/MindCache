@@ -130,7 +130,11 @@ class YouTubeExtractor(ContentExtractor):
                 formatted_lines = []
                 last_time_marked = -100.0  # Mark every 30 seconds
                 for entry in transcript_list:
-                    start_time = entry.get("start", 0.0) if isinstance(entry, dict) else (getattr(entry, "start", 0.0) if hasattr(entry, "start") else 0.0)
+                    start_time = (
+                        entry.get("start", 0.0)
+                        if isinstance(entry, dict)
+                        else (getattr(entry, "start", 0.0) if hasattr(entry, "start") else 0.0)
+                    )
                     text_val = get_entry_text(entry)
                     if start_time - last_time_marked >= 30.0:
                         timestamp_str = format_timestamp(start_time)

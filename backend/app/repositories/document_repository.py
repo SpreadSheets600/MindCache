@@ -80,6 +80,7 @@ class DocumentRepository:
         summary: Optional[str] = None,  # noqa: UP045
         source_type: str = "Generic",
         platform_metadata: Optional[dict] = None,  # noqa: UP045
+        quality_score: float = 0.0,
     ) -> Document:
         """Creates And Persists A New Web Document Record In The Database."""
 
@@ -93,6 +94,7 @@ class DocumentRepository:
             summary=summary,
             source_type=source_type,
             platform_metadata=platform_metadata,
+            quality_score=quality_score,
         )
         db.add(document)
         await db.flush()  # Generates The document.id

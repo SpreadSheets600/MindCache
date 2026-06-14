@@ -1,4 +1,3 @@
-import os
 import re
 from datetime import UTC, datetime
 from typing import Optional
@@ -26,6 +25,38 @@ logger = get_logger(__name__)
 class DocumentProcessor:
     """Orchestrates The Entire Asynchronous Page Fetching, Extraction, AI Analysis, And Indexing Pipeline."""
 
+    @staticmethod
+    def calculate_document_quality_score(
+        word_count: int,
+        source_type: str,
+        dwell_time: Optional[float],
+        platform_metadata: Optional[dict],
+        revisit_count: int = 1,
+    ) -> float:
+        quality_score = 0.0
+
+        # 1. Dwell time check
+        if dwell_time is not None and dwell_time > 60.0:
+            quality_score += 2.0
+
+        # 2. Word count check
+        if word_count > 500:
+            quality_score += 2.0
+
+        # 3. High value document type check
+        if source_type in ["PDF", "GitHub", "Documentation"]:
+            quality_score += 2.0
+
+        # 4. Transcript availability check
+        if platform_metadata and platform_metadata.get("transcript_available"):
+            quality_score += 1.0
+
+        # 5. Revisit count check
+        if revisit_count > 1:
+            quality_score += 1.0
+
+        return quality_score
+
     def _validate_and_parse_url(self, url: str) -> str:
         """Validates That A URL Is Malformed Or Invalid, Returning Its Parsed Domain."""
 
@@ -38,6 +69,196 @@ class DocumentProcessor:
             raise InvalidURLError(url, "Only HTTP and HTTPS protocols are supported.")
 
         return parsed.netloc
+
+    @staticmethod
+    def _classify_url(url: str) -> dict:
+        """Analyzes a URL and returns classification info: hostname, path flags, etc."""
+        parsed = urlparse(url)
+        hostname = (parsed.hostname or "").lower()
+        if hostname.startswith("www."):
+            hostname = hostname[4:]
+        path = parsed.path or ""
+        path_lower = path.lower()
+
+        path_parts = [p for p in path.split("/") if p]
+
+        search_domains = [
+            "google.com", "youtube.com", "reddit.com", "github.com",
+            "stackoverflow.com", "dev.to", "medium.com",
+        ]
+        is_matching_domain = (
+            any(hostname == d or hostname.endswith("." + d) for d in search_domains)
+            or ".google." in hostname
+        )
+
+        is_search_page = False
+        if is_matching_domain:
+            query_lower = (parsed.query or "").lower()
+            has_search_path = path_lower.startswith("/search") or path_lower.startswith("/results")
+            has_search_query = "q=" in query_lower or "query=" in query_lower or "search_query=" in query_lower
+            if has_search_path or has_search_query:
+                is_search_page = True
+
+        is_pdf = (
+            path_lower.endswith(".pdf")
+            or (hostname == "arxiv.org" and "/pdf/" in path_lower)
+            or ("/pdf/" in path_lower and not path_lower.endswith((".html", ".htm", ".js", ".css", ".php", ".aspx")))
+        )
+        is_github_repo = (
+            hostname == "github.com"
+            and len(path_parts) >= 2
+            and path_parts[0] not in ["search", "settings", "notifications", "explore", "trending"]
+        )
+        is_docs = (
+            hostname.startswith("docs.")
+            or hostname.startswith("developer.")
+            or "/docs/" in path_lower
+            or "/documentation/" in path_lower
+            or "/guide/" in path_lower
+        )
+
+        return {
+            "hostname": hostname,
+            "path": path,
+            "path_lower": path_lower,
+            "path_parts": path_parts,
+            "is_search_page": is_search_page,
+            "is_high_value": is_pdf or is_github_repo or is_docs,
+            "parsed": parsed,
+        }
+
+    @staticmethod
+    def _check_skip_page(url: str, info: dict, dwell_time: Optional[float]) -> Optional[str]:
+        """Returns 'skip' if the page should not be indexed, None otherwise."""
+        path_lower = info["path_lower"]
+        if any(p in path_lower for p in ["/login", "/signin", "/signup", "/auth", "/cart", "/checkout", "/logout"]):
+            logger.info(f"Skipping generic noise page visit (path blacklist): {url}")
+            return "skipped"
+
+        if dwell_time is not None:
+            if info["is_search_page"]:
+                if dwell_time < 10.0:
+                    logger.info(f"Skipping platform search URL due to low dwell time ({dwell_time}s): {url}")
+                    return "skipped"
+                logger.info(f"Indexing platform search URL (dwell time threshold met {dwell_time}s): {url}")
+            elif not info["is_high_value"]:
+                if dwell_time < 10.0:
+                    logger.info(f"Skipping page visit due to low dwell time ({dwell_time}s): {url}")
+                    return "skipped"
+        else:
+            if info["is_search_page"]:
+                logger.info(f"Skipping platform search page (no dwell time context provided): {url}")
+                return "skipped"
+
+        return None
+
+    async def _handle_duplicate(
+        self, db: AsyncSession, doc: Document, visited_at: datetime, dwell_time: Optional[float]
+    ) -> Document:
+        """Records a revisit and updates quality score for an existing document."""
+        logger.info(f"URL Already Processed: '{doc.url}'. Recording Visit.")
+        await document_repository.add_visit(db, doc.id, visited_at)
+        revisit_count = len(doc.visits) + 1
+        words = (doc.extracted_content or "").split()
+        word_count = len(words)
+        doc.quality_score = self.calculate_document_quality_score(
+            word_count=word_count,
+            source_type=doc.source_type,
+            dwell_time=dwell_time,
+            platform_metadata=doc.platform_metadata,
+            revisit_count=revisit_count,
+        )
+        doc.updated_at = visited_at
+        await db.commit()
+        return doc
+
+    @staticmethod
+    def _chunk_content(content: str, max_length: int = 40000, chunk_size: int = 3000, overlap: int = 500) -> list[str]:
+        """Splits content into overlapping chunks."""
+        content_to_chunk = content[:max_length]
+        if len(content_to_chunk) <= chunk_size:
+            return [content_to_chunk]
+        chunks = []
+        start = 0
+        while start < len(content_to_chunk):
+            end = start + chunk_size
+            chunks.append(content_to_chunk[start:end])
+            if end >= len(content_to_chunk):
+                break
+            start += chunk_size - overlap
+        return chunks
+
+    @staticmethod
+    def _build_chunk_texts(
+        chunks: list[str], title: str, domain: str, source_type: str,
+        keyword_names: list[str], entity_names: list[str], meta_str: str,
+    ) -> list[str]:
+        """Prepends metadata to each chunk for embedding context."""
+        chunk_texts = []
+        for i, chunk in enumerate(chunks):
+            chunk_text = (
+                f"Title: {title or ''}\n\n"
+                f"Domain: {domain}\n\n"
+                f"Source Type: {source_type}\n\n"
+                f"Keywords: {', '.join(keyword_names)}\n\n"
+                f"Entities: {', '.join(entity_names)}\n\n"
+                f"Metadata: {meta_str}\n\n"
+                f"Content (Chunk {i+1}/{len(chunks)}):\n{chunk}"
+            )
+            chunk_texts.append(chunk_text)
+        return chunk_texts
+
+    @staticmethod
+    def _compute_knowledge_score(word_count: int, unique_words: int, path: str, source_type: Optional[str] = None) -> int:
+        """Computes a knowledge signal score for logging purposes."""
+        knowledge_score = 0
+        if word_count > 300:
+            knowledge_score += 2
+        if unique_words > 100:
+            knowledge_score += 2
+        if path and path != "/":
+            knowledge_score += 1
+        if source_type and source_type.lower() in ["github", "youtube", "reddit", "googlesearch"]:
+            knowledge_score += 2
+        return knowledge_score
+
+    async def _generate_and_store_index(
+        self,
+        db: AsyncSession,
+        doc: Document,
+        extracted_content: str,
+        title: str,
+        domain: str,
+        source_type: str,
+        keyword_names: list[str],
+        entity_names: list[str],
+        platform_metadata: dict,
+        visited_at: datetime,
+    ) -> None:
+        """Chunks content, generates embeddings, indexes into FAISS and BM25, then generates summary."""
+        meta_parts = []
+        if platform_metadata:
+            for k, v in platform_metadata.items():
+                if v:
+                    meta_parts.append(f"{k.capitalize()}: {v}")
+        meta_str = " | ".join(meta_parts)
+
+        chunks = self._chunk_content(extracted_content)
+        chunk_texts = self._build_chunk_texts(chunks, title, domain, source_type, keyword_names, entity_names, meta_str)
+        embeddings = embedding_service.generate_embeddings(chunk_texts)
+
+        vector_service.add_document_chunks(doc.id, embeddings)
+        bm25_service.add_document(doc.id, title or "", extracted_content, keyword_names, platform_metadata)
+
+        trimmed_content = extracted_content[:8000]
+        if await ollama_service.check_health():
+            logger.info(f"Ollama Is Online. Generating AI Summary For Document ID {doc.id}...")
+            summary = await ollama_service.generate_summary(trimmed_content)
+            if summary:
+                await document_repository.update_summary(db, doc.id, summary)
+                await db.commit()
+                await db.refresh(doc)
+                logger.info(f"Ollama Summary Saved For Document ID {doc.id}.")
 
     async def _download_page(self, url: str) -> tuple[str, str]:
         """Downloads A Web Page Asynchronously Using Httpx With A Standard User-Agent.
@@ -183,29 +404,137 @@ class DocumentProcessor:
                 logger.debug(f"Failed To Parse Publication Date: {date_str}")
                 return None
 
-    async def process_url(self, db: AsyncSession, url: str, title: Optional[str] = None) -> tuple[str, Document]:
-        """Runs The Asynchronous Pipeline To Ingest, Extract, Analyze, And Index A Webpage."""
+    async def process_pre_extracted(
+        self,
+        db: AsyncSession,
+        url: str,
+        title: Optional[str] = None,
+        dwell_time: Optional[float] = None,
+        extracted_content: Optional[str] = None,
+        extracted_content_html: Optional[str] = None,
+        description: Optional[str] = None,
+        author: Optional[str] = None,
+        site_name: Optional[str] = None,
+        published_date: Optional[str] = None,
+        language: Optional[str] = None,
+        schema_org: Optional[dict] = None,
+        meta_tags: Optional[list[dict]] = None,
+        keywords: Optional[list[str]] = None,
+        highlights: Optional[list[dict]] = None,
+        selection: Optional[str] = None,
+        selection_html: Optional[str] = None,
+    ) -> tuple[str, Optional[Document]]:
+        """Processes A Pre-Extracted Page (From Client-Side Defuddle Extraction).
 
-        # 1. Validate URL
+        Skips server-side HTTP download and content extraction entirely.
+        Uses the provided content and metadata directly, then proceeds with
+        the standard chunking -> keyword/entity extraction -> embeddings -> indexing pipeline.
+        """
         domain = self._validate_and_parse_url(url)
         visited_at = datetime.now(UTC).replace(tzinfo=None)
 
-        # 2. Check For Duplicate In DB (check original URL)
+        info = self._classify_url(url)
+        skip_reason = self._check_skip_page(url, info, dwell_time)
+        if skip_reason:
+            return "skipped", None
+
         existing_doc = await document_repository.get_by_url(db, url)
-
         if existing_doc:
-            logger.info(f"URL Already Processed: '{url}'. Recording Visit.")
-
-            # Record A New Visit To History
-            await document_repository.add_visit(db, existing_doc.id, visited_at)
-
-            # Update UpdatedAt
-            existing_doc.updated_at = visited_at
-            await db.commit()
-
+            await self._handle_duplicate(db, existing_doc, visited_at, dwell_time)
             return "duplicate", existing_doc
 
-        # 3. Select Extractor and Extract Content & Metadata
+        if not extracted_content or not extracted_content.strip():
+            logger.warning(f"Pre-extracted content is empty for {url}. Falling back to server-side extraction.")
+            return await self.process_url(db, url, title, dwell_time)
+
+        title_from_extraction = title or description or info["parsed"].netloc
+
+        platform_metadata = {}
+        if schema_org:
+            platform_metadata["schema_org"] = schema_org
+        if meta_tags:
+            platform_metadata["meta_tags"] = meta_tags
+        if highlights:
+            platform_metadata["highlights"] = highlights
+        if selection:
+            platform_metadata["selection"] = selection
+        if selection_html:
+            platform_metadata["selection_html"] = selection_html
+        if language:
+            platform_metadata["language"] = language
+        if site_name:
+            platform_metadata["site_name"] = site_name
+
+        published_dt = self._parse_date(published_date) if published_date else None
+
+        words = extracted_content.split()
+        word_count = len(words)
+        unique_words = len(set(w.lower() for w in words))
+        knowledge_score = self._compute_knowledge_score(word_count, unique_words, info["path"])
+        logger.info(f"Content quality score={knowledge_score} (words={word_count}, unique={unique_words}): {url}")
+
+        trimmed_content = extracted_content[:8000]
+        extracted_keywords = await keyword_extractor.extract_keywords(trimmed_content, top_n=5)
+        entities = await entity_extractor.extract_entities(trimmed_content)
+        keyword_names = [kw for kw, _ in extracted_keywords]
+        entity_names = [f"{name}:{etype}" for name, etype in entities]
+
+        quality_score = self.calculate_document_quality_score(
+            word_count=word_count,
+            source_type="Generic",
+            dwell_time=dwell_time,
+            platform_metadata=platform_metadata,
+            revisit_count=1,
+        )
+
+        doc = await document_repository.create(
+            db=db,
+            url=url,
+            domain=domain,
+            title=title_from_extraction,
+            author=author,
+            published_date=published_dt,
+            extracted_content=extracted_content,
+            source_type="Generic",
+            platform_metadata=platform_metadata if platform_metadata else None,
+            quality_score=quality_score,
+        )
+
+        await document_repository.add_keywords(db, doc.id, extracted_keywords)
+        await document_repository.add_entities(db, doc.id, entities)
+        await document_repository.add_visit(db, doc.id, visited_at)
+        await db.commit()
+        await db.refresh(doc)
+
+        await self._generate_and_store_index(
+            db, doc, extracted_content, title_from_extraction, domain, "Generic",
+            keyword_names, entity_names, platform_metadata, visited_at,
+        )
+
+        return "success", doc
+
+    async def process_url(
+        self,
+        db: AsyncSession,
+        url: str,
+        title: Optional[str] = None,
+        dwell_time: Optional[float] = None,
+    ) -> tuple[str, Optional[Document]]:
+        """Runs The Asynchronous Pipeline To Ingest, Extract, Analyze, And Index A Webpage."""
+
+        domain = self._validate_and_parse_url(url)
+        visited_at = datetime.now(UTC).replace(tzinfo=None)
+
+        info = self._classify_url(url)
+        skip_reason = self._check_skip_page(url, info, dwell_time)
+        if skip_reason:
+            return "skipped", None
+
+        existing_doc = await document_repository.get_by_url(db, url)
+        if existing_doc:
+            await self._handle_duplicate(db, existing_doc, visited_at, dwell_time)
+            return "duplicate", existing_doc
+
         logger.info(f"Processing New URL: '{url}'")
         extractor = ExtractorFactory.get_extractor(url)
         extraction_result = await extractor.extract(url)
@@ -219,88 +548,35 @@ class DocumentProcessor:
         platform_metadata = extraction_result.platform_metadata
         final_url = extraction_result.final_url or url
 
-        # 3b. Check if redirected URL already exists in DB
         if final_url != url:
             existing_doc = await document_repository.get_by_url(db, final_url)
             if existing_doc:
-                logger.info(f"Redirected URL Already Processed: '{url}' -> '{final_url}'. Recording Visit.")
-                await document_repository.add_visit(db, existing_doc.id, visited_at)
-                existing_doc.updated_at = visited_at
-                await db.commit()
+                await self._handle_duplicate(db, existing_doc, visited_at, dwell_time)
                 return "duplicate", existing_doc
 
         if not extracted_content.strip():
             raise ContentExtractionError(url, "Webpage has no parseable text content.")
 
-        # 4. Content Quality Score (used for logging, not filtering)
         words = extracted_content.split()
         word_count = len(words)
         unique_words = len(set(w.lower() for w in words))
-        parsed_url = urlparse(url)
-        url_path = parsed_url.path or ""
-
-        knowledge_score = 0
-        if word_count > 300:
-            knowledge_score += 2
-        if unique_words > 100:
-            knowledge_score += 2
-        if url_path and url_path != "/":
-            knowledge_score += 1
-        if source_type and source_type.lower() in ["github", "youtube", "reddit", "googlesearch"]:
-            knowledge_score += 2
-
+        knowledge_score = self._compute_knowledge_score(word_count, unique_words, info["path"], source_type)
         logger.info(f"Content quality score={knowledge_score} (words={word_count}, unique={unique_words}): {url}")
 
-        # Limit Content Size For Keyword And Embedding Generation
         trimmed_content = extracted_content[:8000]
-
-        # 6. Extract Keywords & Entities Using Ollama / Term Frequency Fallback
         keywords = await keyword_extractor.extract_keywords(trimmed_content, top_n=5)
         entities = await entity_extractor.extract_entities(trimmed_content)
-
-        # 7. Generate Semantic Chunk Embeddings
-        # Prepend rich metadata (Title, Domain, Source Type, Keywords, Entities, Platform Metadata) to each chunk to retain global context
         keyword_names = [kw for kw, _ in keywords]
         entity_names = [f"{name}:{etype}" for name, etype in entities]
 
-        meta_parts = []
-        if platform_metadata:
-            for k, v in platform_metadata.items():
-                if v:
-                    meta_parts.append(f"{k.capitalize()}: {v}")
-        meta_str = " | ".join(meta_parts)
-        
-        content_to_chunk = extracted_content[:40000]
-        chunk_size = 3000
-        overlap = 500
-        chunks = []
-        if len(content_to_chunk) <= chunk_size:
-            chunks = [content_to_chunk]
-        else:
-            start = 0
-            while start < len(content_to_chunk):
-                end = start + chunk_size
-                chunks.append(content_to_chunk[start:end])
-                if end >= len(content_to_chunk):
-                    break
-                start += chunk_size - overlap
+        quality_score = self.calculate_document_quality_score(
+            word_count=word_count,
+            source_type=source_type,
+            dwell_time=dwell_time,
+            platform_metadata=platform_metadata,
+            revisit_count=1,
+        )
 
-        chunk_texts = []
-        for i, chunk in enumerate(chunks):
-            chunk_text = (
-                f"Title: {title or ''}\n\n"
-                f"Domain: {domain}\n\n"
-                f"Source Type: {source_type}\n\n"
-                f"Keywords: {', '.join(keyword_names)}\n\n"
-                f"Entities: {', '.join(entity_names)}\n\n"
-                f"Metadata: {meta_str}\n\n"
-                f"Content (Chunk {i+1}/{len(chunks)}):\n{chunk}"
-            )
-            chunk_texts.append(chunk_text)
-
-        embeddings = embedding_service.generate_embeddings(chunk_texts)
-
-        # 8. SQLite Save (Document, Keywords, and Entities)
         doc = await document_repository.create(
             db=db,
             url=final_url,
@@ -311,35 +587,19 @@ class DocumentProcessor:
             extracted_content=extracted_content,
             source_type=source_type,
             platform_metadata=platform_metadata,
+            quality_score=quality_score,
         )
 
-        # Add Keywords, Entities, And First Visit Record
         await document_repository.add_keywords(db, doc.id, keywords)
         await document_repository.add_entities(db, doc.id, entities)
         await document_repository.add_visit(db, doc.id, visited_at)
-
-        # Commit To Retrieve Generated Database ID And Finalize Relations
         await db.commit()
-
-        # Refresh To Load Relationships
         await db.refresh(doc)
 
-        # 9. Index Into FAISS And BM25
-        vector_service.add_document_chunks(doc.id, embeddings)
-        bm25_service.add_document(doc.id, title or "", extracted_content, keyword_names, platform_metadata)
-
-        # 10. Generate Ollama Summary (Optional Background/Graceful Summary Addition)
-        if await ollama_service.check_health():
-            logger.info(f"Ollama Is Online. Generating AI Summary For Document ID {doc.id}...")
-            summary = await ollama_service.generate_summary(trimmed_content)
-
-            if summary:
-                await document_repository.update_summary(db, doc.id, summary)
-                await db.commit()
-
-                # Refresh To Fetch Updated Summary
-                await db.refresh(doc)
-                logger.info(f"Ollama Summary Saved For Document ID {doc.id}.")
+        await self._generate_and_store_index(
+            db, doc, extracted_content, title or "", domain, source_type,
+            keyword_names, entity_names, platform_metadata, visited_at,
+        )
 
         return "success", doc
 
@@ -375,39 +635,16 @@ class DocumentProcessor:
                         meta_parts.append(f"{k.capitalize()}: {v}")
             meta_str = " | ".join(meta_parts)
 
-            content_to_chunk = doc.extracted_content[:40000]
-            chunk_size = 3000
-            overlap = 500
-            chunks = []
-            if len(content_to_chunk) <= chunk_size:
-                chunks = [content_to_chunk]
-            else:
-                start = 0
-                while start < len(content_to_chunk):
-                    end = start + chunk_size
-                    chunks.append(content_to_chunk[start:end])
-                    if end >= len(content_to_chunk):
-                        break
-                    start += chunk_size - overlap
-
-            chunk_texts = []
-            for i, chunk in enumerate(chunks):
-                chunk_text = (
-                    f"Title: {doc.title or ''}\n\n"
-                    f"Domain: {doc.domain}\n\n"
-                    f"Source Type: {doc.source_type}\n\n"
-                    f"Keywords: {', '.join(keyword_names)}\n\n"
-                    f"Entities: {', '.join(entity_names)}\n\n"
-                    f"Metadata: {meta_str}\n\n"
-                    f"Content (Chunk {i+1}/{len(chunks)}):\n{chunk}"
-                )
-                chunk_texts.append(chunk_text)
+            chunks = self._chunk_content(doc.extracted_content)
+            chunk_texts = self._build_chunk_texts(
+                chunks, doc.title or "", doc.domain, doc.source_type,
+                keyword_names, entity_names, meta_str,
+            )
 
             try:
                 import asyncio
                 embeddings = await asyncio.to_thread(embedding_service.generate_embeddings, chunk_texts)
                 await asyncio.to_thread(vector_service.add_document_chunks, doc.id, embeddings)
-                # Rebuild BM25 with enriched platform metadata
                 bm25_service.add_document(doc.id, doc.title or "", doc.extracted_content, keyword_names, doc.platform_metadata)
             except Exception as e:
                 logger.error(f"Failed to re-index document {doc.id}: {e}", exc_info=True)

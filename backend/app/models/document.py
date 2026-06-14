@@ -26,6 +26,7 @@ class Document(Base):
     summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # noqa: UP045
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    quality_score: Mapped[float] = mapped_column(Float, default=0.0, server_default="0.0", nullable=False)
 
     # Relationships
     keywords: Mapped[list["Keyword"]] = relationship(

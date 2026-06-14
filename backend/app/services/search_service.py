@@ -362,6 +362,10 @@ class SearchService:
                 0.02 * r_score +
                 0.03 * s_score
             )
+
+            # Apply dynamic Document Quality Score multiplier boost (Range: 0.0 - 8.0)
+            quality_boost = getattr(doc, "quality_score", 0.0)
+            final_score = final_score * (1.0 + quality_boost * 0.05)
             
             # Click analytics boost (capped at +0.30 max boost)
             click_boost = min(click_counts.get(doc.id, 0) * 0.10, 0.30)

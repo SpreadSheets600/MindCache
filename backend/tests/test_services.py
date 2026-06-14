@@ -111,3 +111,40 @@ def test_bm25_service_tokenization_and_search():
     results = local_bm25.search("stop-slop", limit=1)
     assert len(results) >= 1
     assert results[0][0] == 123
+
+
+def test_calculate_document_quality_score():
+    """Ensures document quality score is calculated correctly based on attributes."""
+    from app.services.document_processor import document_processor
+    
+    # 1. Base score (Generic type, low word count, low dwell time, no revisits)
+    score1 = document_processor.calculate_document_quality_score(
+        word_count=50,
+        source_type="Generic",
+        dwell_time=5.0,
+        platform_metadata=None,
+        revisit_count=1
+    )
+    assert score1 == 0.0
+
+    # 2. Revisit and high word count boost
+    score2 = document_processor.calculate_document_quality_score(
+        word_count=600,
+        source_type="Generic",
+        dwell_time=12.0,
+        platform_metadata=None,
+        revisit_count=2
+    )
+    # word_count > 500 (+2), revisit_count > 1 (+1) => 3.0
+    assert score2 == 3.0
+
+    # 3. High value type, high dwell time, and transcript
+    score3 = document_processor.calculate_document_quality_score(
+        word_count=100,
+        source_type="Documentation",
+        dwell_time=75.0,
+        platform_metadata={"transcript_available": True},
+        revisit_count=1
+    )
+    # dwell_time > 60 (+2), source_type is docs (+2), transcript_available (+1) => 5.0
+    assert score3 == 5.0

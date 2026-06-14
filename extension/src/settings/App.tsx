@@ -259,9 +259,7 @@ const App: React.FC = () => {
 
     const handleDeleteDoc = (id: number, e: React.MouseEvent) => {
         e.stopPropagation();
-        if (confirm("Delete this document from MindCache?")) {
-            deleteMutation.mutate(id);
-        }
+        deleteMutation.mutate(id);
     };
 
     const filteredDocuments = documents.filter((doc) => {

@@ -1,4 +1,13 @@
 import Defuddle from 'defuddle';
+import TurndownService from 'turndown';
+
+const turndownService = new TurndownService({
+  headingStyle: 'atx',
+  codeBlockStyle: 'fenced',
+  emDelimiter: '*',
+  bulletListMarker: '-',
+  linkStyle: 'inlined',
+});
 
 export interface PageExtraction {
   title: string;
@@ -146,7 +155,8 @@ export async function extractCurrentPage(): Promise<PageExtraction> {
   }
 
   const contentHtml = result.content || '';
-  const content = htmlToPlainText(contentHtml);
+
+  const content = contentHtml ? turndownService.turndown(contentHtml) : '';
 
   const metaTags = (result.metaTags || [])
     .filter((tag: any) => tag.content != null)

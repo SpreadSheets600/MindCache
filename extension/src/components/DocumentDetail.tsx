@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { backendClient } from "../services/BackendClient";
 import { ArrowLeft, Globe, Loader2, Sparkles, ExternalLink } from "lucide-react";
 import { getErrorMessage } from "../utils/error";
+import { marked } from 'marked';
 
 interface DocumentDetailProps {
   documentId: number;
@@ -19,6 +20,15 @@ export const DocumentDetail: React.FC<DocumentDetailProps> = ({
     queryKey: ["document", documentId],
     queryFn: () => backendClient.getDocument(documentId),
   });
+
+  const renderedContent = useMemo(() => {
+    if (!doc?.extracted_content) return '';
+    try {
+      return marked.parse(doc.extracted_content, { async: false }) as string;
+    } catch {
+      return doc.extracted_content;
+    }
+  }, [doc?.extracted_content]);
 
   const handleGenerateSummary = async () => {
     setIsGenerating(true);
@@ -146,9 +156,10 @@ export const DocumentDetail: React.FC<DocumentDetailProps> = ({
 
           <div className="space-y-2">
             <h4 className="text-xs text-muted-foreground">Extracted content</h4>
-            <div className="p-3 rounded-lg bg-secondary/50 max-h-72 overflow-y-auto text-xs text-muted-foreground/80 leading-relaxed whitespace-pre-wrap">
-              {doc.extracted_content || "No content extracted."}
-            </div>
+            <div
+              className="p-3 rounded-lg bg-secondary/50 max-h-72 overflow-y-auto leading-relaxed prose prose-invert prose-sm max-w-none"
+              dangerouslySetInnerHTML={{ __html: renderedContent }}
+            />
           </div>
 
           {doc.visit_history && doc.visit_history.length > 0 && (

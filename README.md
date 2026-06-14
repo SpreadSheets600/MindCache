@@ -22,9 +22,10 @@ npm install
 npm run build
 ```
 
-3. Load `extension/dist/` as an unpacked extension in Chrome/Brave (`chrome://extensions` → Developer mode → Load unpacked).
+1. Load `extension/dist/` as an unpacked extension in Chrome/Brave (`chrome://extensions` → Developer mode → Load unpacked).
 
 > **Ollama required** for AI features:
+>
 > ```bash
 > ollama pull qwen3.5:2b
 > ollama pull embeddinggemma:300m

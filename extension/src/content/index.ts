@@ -14,6 +14,19 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
     extractCurrentPage().then(sendResponse);
     return true;
   }
+  if (request.action === "extract-selection") {
+    const sel = window.getSelection();
+    const text = sel && !sel.isCollapsed ? sel.toString() : "";
+    const html = text ? (() => {
+      const range = sel!.getRangeAt(0);
+      const fragment = range.cloneContents();
+      const temp = document.createElement("div");
+      temp.appendChild(fragment);
+      return temp.innerHTML;
+    })() : "";
+    sendResponse({ text, html });
+    return true;
+  }
   return true;
 });
 

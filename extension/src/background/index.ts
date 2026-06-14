@@ -6,6 +6,44 @@ const recentVisits = new Map<string, number>();
 // Rehydrate settings store on background startup
 useSettingsStore.persist.rehydrate();
 
+// Create context menus on install
+function createContextMenus() {
+  chrome.contextMenus.create({
+    id: "save-page",
+    title: "Save this page to MindCache",
+    contexts: ["page"],
+  });
+  chrome.contextMenus.create({
+    id: "save-link",
+    title: "Save this link to MindCache",
+    contexts: ["link"],
+  });
+  chrome.contextMenus.create({
+    id: "save-selection",
+    title: "Save selection to MindCache",
+    contexts: ["selection"],
+  });
+}
+
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.contextMenus.removeAll(() => {
+    createContextMenus();
+  });
+});
+
+// Handle context menu clicks
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId === "save-page" && tab?.id && tab?.url) {
+    captureCurrentPage(tab.id, tab.url, tab.title || "");
+  }
+  if (info.menuItemId === "save-link" && info.linkUrl) {
+    captureUrl(info.linkUrl);
+  }
+  if (info.menuItemId === "save-selection" && tab?.id) {
+    captureSelection(tab.id, tab.url || "", tab.title || "");
+  }
+});
+
 // Workaround: Sync settings changes from the popup/options UI to the background context
 if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.onChanged) {
   chrome.storage.onChanged.addListener((changes, areaName) => {
@@ -16,41 +54,67 @@ if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.onChanged)
   });
 }
 
-/**
- * Validates whether a URL should be indexed based on scheme, localhost, and custom excluded domains.
- */
+const BLACKLISTED_EXTENSIONS = [
+  '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.ico',
+  '.mp3', '.mp4', '.avi', '.mov', '.wmv', '.flv',
+  '.zip', '.tar', '.gz', '.rar', '.7z',
+  '.exe', '.dmg', '.pkg', '.msi',
+  '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+];
+
+function isBlacklistedExtension(urlStr: string): boolean {
+  try {
+    const u = new URL(urlStr);
+    const pathname = u.pathname.toLowerCase();
+    return BLACKLISTED_EXTENSIONS.some(ext => pathname.endsWith(ext));
+  } catch {
+    return false;
+  }
+}
+
+const BLACKLISTED_PATHS = [
+  '/login', '/signup', '/register', '/logout', '/reset-password',
+  '/forgot-password', '/subscribe', '/pricing', '/checkout', '/cart',
+  '/wp-admin', '/admin', '/login/', '/signup/', '/register/',
+];
+
+function isBlacklistedPath(urlStr: string): boolean {
+  try {
+    const u = new URL(urlStr);
+    const path = u.pathname.toLowerCase();
+    return BLACKLISTED_PATHS.some(p => path === p || path.startsWith(p + '/'));
+  } catch {
+    return false;
+  }
+}
+
+function isExcludedDomain(urlStr: string): boolean {
+  try {
+    const url = new URL(urlStr);
+    const hostname = url.hostname.toLowerCase();
+    const settings = useSettingsStore.getState();
+    for (const rule of settings.excludedDomains) {
+      const cleanRule = rule.trim().toLowerCase();
+      if (cleanRule && hostname.includes(cleanRule)) return true;
+    }
+  } catch {}
+  return false;
+}
+
 function shouldTrack(urlStr: string): boolean {
   if (!urlStr) return false;
 
   try {
     const url = new URL(urlStr);
 
-    // Only track standard web protocols
-    if (url.protocol !== "http:" && url.protocol !== "https:") {
-      return false;
-    }
-
-    const hostname = url.hostname.toLowerCase();
-
-    // Ignore browser internal extensions
-    if (urlStr.startsWith("chrome-extension://")) {
-      return false;
-    }
+    if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+    if (urlStr.startsWith("chrome-extension://")) return false;
 
     const settings = useSettingsStore.getState();
-
-    // Verify auto-tracking configuration is active
-    if (!settings.autoTracking) {
-      return false;
-    }
-
-    // Evaluate custom domain exclusion rules
-    for (const rule of settings.excludedDomains) {
-      const cleanRule = rule.trim().toLowerCase();
-      if (cleanRule && hostname.includes(cleanRule)) {
-        return false;
-      }
-    }
+    if (!settings.autoTracking) return false;
+    if (isExcludedDomain(urlStr)) return false;
+    if (isBlacklistedPath(urlStr)) return false;
+    if (isBlacklistedExtension(urlStr)) return false;
 
     return true;
   } catch {
@@ -77,12 +141,10 @@ async function handleTabActivated(tabId: number, url: string, title: string) {
     return;
   }
 
-  // Ignore if already tracking same tab/URL
   if (activeTab && activeTab.tabId === tabId && activeTab.url === url) {
     return;
   }
 
-  // Deactivate previous active tab first
   await handleTabDeactivated(null);
 
   console.log(`[MindCache Background] Tracking started for active URL: ${url}`);
@@ -95,7 +157,6 @@ async function handleTabActivated(tabId: number, url: string, title: string) {
     indexed: false,
   };
 
-  // Stage a timer to auto-index after 10s of continuous viewing
   state.timerId = setTimeout(async () => {
     if (activeTab && activeTab.tabId === tabId && activeTab.url === url && !activeTab.indexed) {
       activeTab.indexed = true;
@@ -121,16 +182,11 @@ async function handleTabDeactivated(tabId: number | null) {
   const durationSeconds = (Date.now() - state.activatedAt) / 1000;
   console.log(`[MindCache Background] Active session ended for ${state.url} after ${durationSeconds.toFixed(1)}s`);
 
-  // If it was not indexed yet, check if it should be (met rules)
   if (!state.indexed) {
     await processVisit(state.url, state.title, durationSeconds, state.tabId);
   }
 }
 
-/**
- * Tries to get page extraction data from the content script.
- * Returns null if the content script is unavailable or times out.
- */
 const EXTRACTION_TIMEOUT_MS = 2000;
 
 async function getPageExtraction(tabId: number): Promise<any | null> {
@@ -143,12 +199,11 @@ async function getPageExtraction(tabId: number): Promise<any | null> {
     ]);
     if (result && result.content) return result;
   } catch {
-    // Content script not available (chrome:// pages, PDF viewer, etc.) or timeout
+    // Content script not available
   }
   return null;
 }
 
-/** Sanitize extraction payload to match backend Pydantic schema expectations. */
 function sanitizeExtraction(payload: any): any {
   if (payload.meta_tags && Array.isArray(payload.meta_tags)) {
     payload.meta_tags = payload.meta_tags
@@ -171,34 +226,31 @@ function sanitizeExtraction(payload: any): any {
   return payload;
 }
 
-/**
- * Queues and sends page visit events to the FastAPI backend.
- */
 async function processVisit(url: string, title: string, dwellTime: number, tabId?: number) {
   if (!shouldTrack(url)) return;
 
   const now = Date.now();
   const lastProcessed = recentVisits.get(url);
 
-  // Prevent duplicate operations during navigation transitions or reload spams
-  if (lastProcessed && now - lastProcessed < 10000) {
-    return;
-  }
+  if (lastProcessed && now - lastProcessed < 10000) return;
 
   recentVisits.set(url, now);
-
-  // Maintain cache size boundaries
   if (recentVisits.size > 200) {
     const oldestKey = recentVisits.keys().next().value;
-    if (oldestKey) {
-      recentVisits.delete(oldestKey);
-    }
+    if (oldestKey) recentVisits.delete(oldestKey);
   }
 
+  const settings = useSettingsStore.getState();
+
   try {
+    // When auto-extract is off, skip extraction entirely — user must trigger manually
+    if (!settings.autoExtract) {
+      console.log(`[MindCache Background] Auto-extract disabled. Skipping extraction for ${url}`);
+      return;
+    }
+
     console.log(`[MindCache Background] Logging visit (dwell_time=${dwellTime.toFixed(1)}s): ${url}`);
 
-    // Try client-side extraction for richer content
     const extraction = tabId !== undefined ? await getPageExtraction(tabId) : null;
 
     if (extraction) {
@@ -232,7 +284,6 @@ async function processVisit(url: string, title: string, dwellTime: number, tabId
       });
     }
   } catch (err) {
-    // Fail silently in background without crashing worker; handles offline server state
     console.warn(`[MindCache Background] Backend server unreachable. Skipped: ${url}`, err);
   }
 }
@@ -259,7 +310,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   handleTabDeactivated(tabId);
 });
 
-// 4. Monitor window focus changes (e.g. user switching windows/applications)
+// 4. Monitor window focus changes
 chrome.windows.onFocusChanged.addListener((windowId) => {
   if (windowId === chrome.windows.WINDOW_ID_NONE) {
     handleTabDeactivated(null);
@@ -273,7 +324,7 @@ chrome.windows.onFocusChanged.addListener((windowId) => {
   }
 });
 
-// 3. Monitor extension command hotkeys (e.g. Ctrl+Shift+K)
+// 5. Monitor extension command hotkeys
 chrome.commands.onCommand.addListener((command) => {
   if (command === "toggle-search-overlay") {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -285,9 +336,78 @@ chrome.commands.onCommand.addListener((command) => {
       }
     });
   }
+  if (command === "capture-page") {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const active = tabs[0];
+      if (!active || !active.id || !active.url) return;
+      captureCurrentPage(active.id, active.url, active.title || "");
+    });
+  }
 });
 
-// 4. Handle messages from content script overlays (CORS bypass for searches)
+async function captureCurrentPage(tabId: number, url: string, title: string) {
+  try {
+    const extraction = await getPageExtraction(tabId);
+    if (extraction) {
+      const payload = sanitizeExtraction({
+        url,
+        title: extraction.title || title || null,
+        dwell_time: DWELL_TIME_THRESHOLD_SEC,
+        extracted_content: extraction.content,
+        extracted_content_html: extraction.contentHtml,
+        description: extraction.description || undefined,
+        author: extraction.author || undefined,
+        site_name: extraction.site || undefined,
+        published_date: extraction.published || undefined,
+        language: extraction.language || undefined,
+        schema_org: extraction.schemaOrgData || undefined,
+        meta_tags: extraction.metaTags || undefined,
+        highlights: extraction.highlights || undefined,
+        selection: extraction.selection || undefined,
+        selection_html: extraction.selectionHtml || undefined,
+      });
+      await backendClient.recordVisit(payload);
+      console.log(`[MindCache Background] Page captured via keybind: ${url}`);
+    }
+  } catch (err) {
+    console.warn(`[MindCache Background] Capture failed for ${url}:`, err);
+  }
+}
+
+async function captureUrl(url: string) {
+  if (!shouldTrack(url)) return;
+  try {
+    await backendClient.recordVisit({
+      url,
+      title: url,
+      dwell_time: 0,
+    });
+    console.log(`[MindCache Background] Link saved to MindCache: ${url}`);
+  } catch (err) {
+    console.warn(`[MindCache Background] Failed to save link ${url}:`, err);
+  }
+}
+
+async function captureSelection(tabId: number, url: string, title: string) {
+  try {
+    const res = await chrome.tabs.sendMessage(tabId, { action: "extract-selection" });
+    if (res?.text) {
+      await backendClient.recordVisit({
+        url,
+        title: title || null,
+        dwell_time: 0,
+        extracted_content: res.text,
+        selection: res.text,
+        selection_html: res.html || undefined,
+      });
+      console.log(`[MindCache Background] Selection saved from: ${url}`);
+    }
+  } catch (err) {
+    console.warn(`[MindCache Background] Failed to save selection from ${url}:`, err);
+  }
+}
+
+// 6. Handle messages
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.action === "get-active-tabs") {
     chrome.tabs.query({}, (tabs) => {
@@ -301,7 +421,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       }));
       sendResponse({ status: "ok", tabs: formatted });
     });
-    return true; // Keep message channel open for async response
+    return true;
   }
 
   if (message.action === "search-memory") {
@@ -347,6 +467,45 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       }).catch(() => {
         sendResponse({ status: "error", error: "Extraction failed" });
       });
+    });
+    return true;
+  }
+
+  if (message.action === "capture-page") {
+    chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
+      const active = tabs[0];
+      if (!active || !active.id || !active.url) {
+        sendResponse({ status: "error", error: "No active tab" });
+        return;
+      }
+      try {
+        const extraction = await getPageExtraction(active.id);
+        if (extraction) {
+          const payload = sanitizeExtraction({
+            url: active.url,
+            title: extraction.title || active.title || null,
+            dwell_time: message.dwellTime || DWELL_TIME_THRESHOLD_SEC,
+            extracted_content: extraction.content,
+            extracted_content_html: extraction.contentHtml,
+            description: extraction.description || undefined,
+            author: extraction.author || undefined,
+            site_name: extraction.site || undefined,
+            published_date: extraction.published || undefined,
+            language: extraction.language || undefined,
+            schema_org: extraction.schemaOrgData || undefined,
+            meta_tags: extraction.metaTags || undefined,
+            highlights: extraction.highlights || undefined,
+            selection: extraction.selection || undefined,
+            selection_html: extraction.selectionHtml || undefined,
+          });
+          const result = await backendClient.recordVisit(payload);
+          sendResponse({ status: "ok", result });
+        } else {
+          sendResponse({ status: "error", error: "Could not extract page content. The content script may not be available on this page." });
+        }
+      } catch (err: any) {
+        sendResponse({ status: "error", error: err.message || "Failed to capture page" });
+      }
     });
     return true;
   }

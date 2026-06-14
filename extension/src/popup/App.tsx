@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useConnectionStore } from "../store/connectionStore";
 import { useSettingsStore } from "../store/settingsStore";
 import { backendClient } from "../services/BackendClient";
-import { Brain, Search, LayoutDashboard, Database, Shield, FileText } from "lucide-react";
+import { Brain, Search, LayoutDashboard, Database, Shield, FileText, Sparkles, Cpu, Network } from "lucide-react";
 
 interface PagePreview {
   title: string;
@@ -15,8 +15,10 @@ interface PagePreview {
 export const App: React.FC = () => {
   const [pagePreview, setPagePreview] = useState<PagePreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [capturing, setCapturing] = useState(false);
+  const [captureResult, setCaptureResult] = useState<string | null>(null);
   const { isOnline, components } = useConnectionStore();
-  const { autoTracking, privacyMode } = useSettingsStore();
+  const { autoTracking, autoExtract } = useSettingsStore();
 
   const performHealthCheck = async () => {
     try {
@@ -48,10 +50,27 @@ export const App: React.FC = () => {
         setPagePreview(null);
       }
     } catch {
-      // Content script may not be available on this page
       setPagePreview(null);
     } finally {
       setPreviewLoading(false);
+    }
+  }
+
+  async function handleCapturePage() {
+    setCapturing(true);
+    setCaptureResult(null);
+    try {
+      const response = await chrome.runtime.sendMessage({ action: "capture-page" });
+      if (response && response.status === "ok" && response.result) {
+        setCaptureResult("saved");
+        setPagePreview(null);
+      } else {
+        setCaptureResult(response?.error || "failed");
+      }
+    } catch {
+      setCaptureResult("failed");
+    } finally {
+      setCapturing(false);
     }
   }
 
@@ -78,7 +97,7 @@ export const App: React.FC = () => {
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
           </span>
-          <div className="text-[11px] font-semibold">System Active & Recording</div>
+          <div className="text-[11px] font-semibold">System Active {autoExtract ? "& Recording" : ""}</div>
         </div>
       ) : (
         <div className="mx-4 mt-4 p-3 rounded-lg border border-red-950/60 bg-red-950/20 flex items-center space-x-2.5 text-red-400">
@@ -124,6 +143,41 @@ export const App: React.FC = () => {
         </div>
       )}
 
+      {/* Capture result feedback */}
+      {captureResult === "saved" && (
+        <div className="mx-4 mt-2 p-2 rounded-lg bg-emerald-950/30 border border-emerald-900/50 text-emerald-400 text-[11px] text-center font-medium">
+          Page saved to MindCache
+        </div>
+      )}
+      {captureResult === "failed" && (
+        <div className="mx-4 mt-2 p-2 rounded-lg bg-red-950/30 border border-red-900/50 text-red-400 text-[11px] text-center font-medium">
+          Failed to capture page
+        </div>
+      )}
+
+      {/* Manual capture button (shown when auto-tracking or auto-extract is off) */}
+      {isOnline && pagePreview && (!autoTracking || !autoExtract) && (
+        <div className="mx-4 mt-2">
+          <button
+            onClick={handleCapturePage}
+            disabled={capturing}
+            className="w-full flex items-center justify-center space-x-1.5 py-2 px-3 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 disabled:text-zinc-400 text-white text-xs font-semibold rounded-md transition-all active:scale-[0.98] shadow-md shadow-blue-900/10"
+          >
+            {capturing ? (
+              <>
+                <div className="w-3 h-3 rounded-full border border-white border-t-transparent animate-spin" />
+                <span>Saving...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Save to MindCache</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
       {/* Diagnostics details */}
       <div className="px-4 py-4 space-y-3 flex-grow">
         <div className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Diagnostics</div>
@@ -141,7 +195,7 @@ export const App: React.FC = () => {
 
           <div className="flex justify-between items-center py-1 border-b border-zinc-900/60">
             <span className="text-zinc-400 flex items-center space-x-1.5">
-              <span>🤖</span>
+              <Cpu className="w-3.5 h-3.5 text-zinc-500" />
               <span>AI Model</span>
             </span>
             <span className="font-mono text-[11px] text-zinc-300 truncate max-w-[140px]" title={components?.ollama.model || ""}>
@@ -151,7 +205,7 @@ export const App: React.FC = () => {
 
           <div className="flex justify-between items-center py-1 border-b border-zinc-900/60">
             <span className="text-zinc-400 flex items-center space-x-1.5">
-              <span>🧬</span>
+              <Network className="w-3.5 h-3.5 text-zinc-500" />
               <span>Embedding Model</span>
             </span>
             <span className="font-mono text-[11px] text-zinc-300 truncate max-w-[140px]" title={components?.embedding?.model || ""}>
@@ -171,11 +225,11 @@ export const App: React.FC = () => {
 
           <div className="flex justify-between items-center py-1">
             <span className="text-zinc-400 flex items-center space-x-1.5">
-              <span>🔒</span>
-              <span>Private Logging</span>
+              <Sparkles className="w-3.5 h-3.5 text-zinc-500" />
+              <span>Auto Extraction</span>
             </span>
-            <span className={`font-mono text-[11px] ${privacyMode ? "text-blue-400 font-medium" : "text-zinc-500"}`}>
-              {privacyMode ? "ON" : "OFF"}
+            <span className={`font-mono text-[11px] ${autoExtract ? "text-emerald-500" : "text-amber-500"}`}>
+              {autoExtract ? "ON" : "MANUAL"}
             </span>
           </div>
         </div>

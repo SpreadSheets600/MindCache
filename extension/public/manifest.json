@@ -5,7 +5,8 @@
   "description": "Local, AI-powered browser memory and semantic search assistant.",
   "permissions": [
     "tabs",
-    "storage"
+    "storage",
+    "contextMenus"
   ],
   "host_permissions": [
     "http://localhost/*",
@@ -33,6 +34,13 @@
         "mac": "MacCtrl+Shift+K"
       },
       "description": "Toggle MindCache Search Overlay"
+    },
+    "capture-page": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+S",
+        "mac": "MacCtrl+Shift+S"
+      },
+      "description": "Save current page to MindCache"
     }
   }
 }

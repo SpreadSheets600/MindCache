@@ -23,6 +23,8 @@ class VisitRequest(BaseModel):
     meta_tags: Optional[list[dict[str, Any]]] = Field(None, description="Meta tags extracted client-side.")
     keywords: Optional[list[str]] = Field(None, description="Client-extracted keywords.")
 
+    auto_extract: Optional[bool] = Field(True, description="When false and no extracted_content, skip server-side download and return recorded status.")
+
     highlights: Optional[list[dict[str, Any]]] = Field(None, description="Highlighted text fragments from the page.")
     selection: Optional[str] = Field(None, description="Currently selected text on the page.")
     selection_html: Optional[str] = Field(None, description="HTML of the current selection.")

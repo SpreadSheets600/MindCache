@@ -22,8 +22,23 @@ import {
     FolderOpen,
     Network,
     Sparkles,
+    Trophy,
+    KeyRound,
 } from "lucide-react";
 import { getErrorMessage } from "../utils/error";
+
+const DEFAULT_RESULT_LIMIT = 10;
+const MAX_DOCUMENTS_FETCH = 100;
+const SEARCH_DEBOUNCE_DELAY = 250;
+const SAVE_SUCCESS_DURATION = 1500;
+const RECENT_ACTIVITY_COUNT = 5;
+const MAX_KEYWORDS_DISPLAY = 4;
+const GRAPH_DISPLAY_MAX = 50;
+const SCORE_PERCENTAGE_MULTIPLIER = 100;
+const BEST_MATCH_THRESHOLD = 65;
+const STRONG_MATCH_THRESHOLD = 55;
+const DEFAULT_MIN_SCORE = 0;
+const RESULT_LIMIT_OPTIONS = [5, 10, 20, 30] as const;
 
 type Page = "dashboard" | "search" | "graph" | "memories" | "settings";
 
@@ -55,10 +70,12 @@ const App: React.FC = () => {
     const {
         backendUrl,
         autoTracking,
+        autoExtract,
         privacyMode,
         excludedDomains,
         setBackendUrl,
         setAutoTracking,
+        setAutoExtract,
         setPrivacyMode,
         addExcludedDomain,
         removeExcludedDomain,
@@ -74,16 +91,16 @@ const App: React.FC = () => {
     // Dashboard Search States
     const [dashSearch, setDashSearch] = useState("");
     const [debouncedDashSearch, setDebouncedDashSearch] = useState("");
-    const [dashLimit, setDashLimit] = useState(10);
+    const [dashLimit, setDashLimit] = useState(DEFAULT_RESULT_LIMIT);
     const [dashAI, setDashAI] = useState(false);
     const [searchStartTime, setSearchStartTime] = useState("");
     const [searchEndTime, setSearchEndTime] = useState("");
     const [searchSourceType, setSearchSourceType] = useState("all");
     const [searchSortOrder, setSearchSortOrder] = useState("relevance");
-    const [searchMinScore, setSearchMinScore] = useState(0);
+    const [searchMinScore, setSearchMinScore] = useState(DEFAULT_MIN_SCORE);
 
     useEffect(() => {
-        const timer = setTimeout(() => setDebouncedDashSearch(dashSearch), 250);
+        const timer = setTimeout(() => setDebouncedDashSearch(dashSearch), SEARCH_DEBOUNCE_DELAY);
         return () => clearTimeout(timer);
     }, [dashSearch]);
 
@@ -109,7 +126,7 @@ const App: React.FC = () => {
         refetch: refetchDocs,
     } = useQuery({
         queryKey: ["documents"],
-        queryFn: () => backendClient.listDocuments(0, 100),
+        queryFn: () => backendClient.listDocuments(0, MAX_DOCUMENTS_FETCH),
         enabled: isOnline,
     });
 
@@ -151,8 +168,8 @@ const App: React.FC = () => {
         }
 
         // 2. Filter by Minimum Score (0-100)
-        if (searchMinScore > 0) {
-            items = items.filter((item) => Math.round(item.score * 100) >= searchMinScore);
+        if (searchMinScore > DEFAULT_MIN_SCORE) {
+            items = items.filter((item) => Math.round(item.score * SCORE_PERCENTAGE_MULTIPLIER) >= searchMinScore);
         }
 
         // 3. Sort Results
@@ -187,7 +204,7 @@ const App: React.FC = () => {
         setTimeout(() => {
             setSaveSuccess(false);
             runDiagnostics();
-        }, 1500);
+        }, SAVE_SUCCESS_DURATION);
     };
 
     const handleAddDomain = (e: React.FormEvent) => {
@@ -319,7 +336,7 @@ const App: React.FC = () => {
                                     </p>
                                 ) : (
                                     <div className="space-y-2.5 max-h-[360px] overflow-y-auto pr-1">
-                                        {documents.slice(0, 5).map((doc) => (
+                                        {documents.slice(0, RECENT_ACTIVITY_COUNT).map((doc) => (
                                             <div
                                                 key={doc.id}
                                                 onClick={() =>
@@ -540,7 +557,7 @@ const App: React.FC = () => {
                                                 doc.keywords.length > 0 && (
                                                     <div className="flex flex-wrap gap-1 mt-1">
                                                         {doc.keywords
-                                                            .slice(0, 4)
+                                                            .slice(0, MAX_KEYWORDS_DISPLAY)
                                                             .map((kw, idx) => (
                                                                 <span
                                                                     key={idx}
@@ -552,7 +569,7 @@ const App: React.FC = () => {
                                                                         doc
                                                                             .keywords
                                                                             .length,
-                                                                        4,
+                                                                        MAX_KEYWORDS_DISPLAY,
                                                                     ) -
                                                                         1
                                                                         ? ","
@@ -703,6 +720,79 @@ const App: React.FC = () => {
                                             />
                                         </button>
                                     </div>
+
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <label className="text-sm">
+                                                Auto extraction
+                                            </label>
+                                            <p className="text-xs text-muted-foreground mt-0.5">
+                                                Automatically extract and index page content while browsing. When off, use the popup or keybind to save pages manually.
+                                            </p>
+                                        </div>
+                                        <button
+                                            onClick={() =>
+                                                setAutoExtract(!autoExtract)
+                                            }
+                                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                                                autoExtract
+                                                    ? "bg-primary"
+                                                    : "bg-secondary"
+                                            }`}
+                                        >
+                                            <span
+                                                className={`inline-block h-3.5 w-3.5 rounded-full bg-foreground transition-transform ${
+                                                    autoExtract
+                                                        ? "translate-x-4"
+                                                        : "translate-x-0.5"
+                                                }`}
+                                            />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="border-t border-border" />
+
+                            <div className="space-y-4">
+                                <div className="flex items-center space-x-2 text-sm font-medium">
+                                    <KeyRound className="w-4 h-4 text-muted-foreground" />
+                                    <span>Shortcuts</span>
+                                </div>
+                                <div className="space-y-2">
+                                    <p className="text-xs text-muted-foreground">
+                                        Configure keyboard shortcuts for MindCache in your browser's extension shortcuts page.
+                                    </p>
+                                    <div className="rounded-md border border-border bg-secondary/20 p-3 space-y-2">
+                                        <div className="flex items-center justify-between text-xs">
+                                            <span className="text-muted-foreground">Toggle Search Overlay</span>
+                                            <kbd className="px-2 py-0.5 bg-zinc-800 border border-zinc-700 rounded text-[10px] font-mono text-zinc-300">Ctrl+Shift+K</kbd>
+                                        </div>
+                                        <div className="flex items-center justify-between text-xs">
+                                            <span className="text-muted-foreground">Capture Current Page</span>
+                                            <kbd className="px-2 py-0.5 bg-zinc-800 border border-zinc-700 rounded text-[10px] font-mono text-zinc-300">Ctrl+Shift+S</kbd>
+                                        </div>
+                                        <div className="border-t border-border/40 my-1" />
+                                        <div className="flex items-center justify-between text-xs">
+                                            <span className="text-muted-foreground">Right-click page</span>
+                                            <span className="text-[10px] text-muted-foreground/60">Save this page to MindCache</span>
+                                        </div>
+                                        <div className="flex items-center justify-between text-xs">
+                                            <span className="text-muted-foreground">Right-click link</span>
+                                            <span className="text-[10px] text-muted-foreground/60">Save this link to MindCache</span>
+                                        </div>
+                                        <div className="flex items-center justify-between text-xs">
+                                            <span className="text-muted-foreground">Right-click selection</span>
+                                            <span className="text-[10px] text-muted-foreground/60">Save selection to MindCache</span>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => chrome.tabs.create({ url: "chrome://extensions/shortcuts" })}
+                                        className="flex items-center space-x-1 text-xs text-primary hover:underline"
+                                    >
+                                        <ExternalLink className="w-3 h-3" />
+                                        <span>Customize shortcuts</span>
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -862,18 +952,11 @@ const App: React.FC = () => {
                                             }
                                             className="w-full bg-zinc-900 border border-border rounded-md px-2.5 py-1.5 text-xs text-foreground outline-none"
                                         >
-                                            <option value="5">
-                                                Top 5 matches
-                                            </option>
-                                            <option value="10">
-                                                Top 10 matches
-                                            </option>
-                                            <option value="20">
-                                                Top 20 matches
-                                            </option>
-                                            <option value="30">
-                                                Top 30 matches
-                                            </option>
+                                            {RESULT_LIMIT_OPTIONS.map((n) => (
+                                                <option key={n} value={n}>
+                                                    Top {n} matches
+                                                </option>
+                                            ))}
                                         </select>
                                     </div>
 
@@ -1062,10 +1145,10 @@ const App: React.FC = () => {
                                                     {processedResults.map(
                                                         (result, idx) => {
                                                             const matchPercentage =
-                                                                Math.round(
-                                                                    result.score *
-                                                                        100,
-                                                                );
+                                                                            Math.round(
+                                                                                result.score *
+                                                                                    SCORE_PERCENTAGE_MULTIPLIER,
+                                                                            );
                                                             const isTopResult = idx === 0 && searchSortOrder === "relevance";
                                                             const borderClass = isTopResult
                                                                 ? "border-blue-500/60 bg-blue-500/5 ring-1 ring-blue-500/20"
@@ -1089,13 +1172,13 @@ const App: React.FC = () => {
                                                                         </h3>
                                                                         <div className="flex items-center space-x-1.5 shrink-0">
                                                                             {(() => {
-                                                                                if (matchPercentage >= 65) {
+                                                                                if (matchPercentage >= BEST_MATCH_THRESHOLD) {
                                                                                     return (
                                                                                         <span className="text-[10.5px] font-semibold bg-amber-500/15 text-amber-400 px-2 py-0.5 rounded border border-amber-500/30 flex items-center gap-1 whitespace-nowrap">
-                                                                                            🏆 Best Match
+                                                                                            <Trophy className="w-3 h-3" /> Best Match
                                                                                         </span>
                                                                                     );
-                                                                                } else if (matchPercentage >= 55) {
+                                                                                } else if (matchPercentage >= STRONG_MATCH_THRESHOLD) {
                                                                                     return (
                                                                                         <span className="text-[10.5px] font-semibold bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/30 flex items-center gap-1 whitespace-nowrap">
                                                                                             Strong Match
@@ -1145,7 +1228,7 @@ const App: React.FC = () => {
                                                                                 {result.keywords
                                                                                     .slice(
                                                                                         0,
-                                                                                        4,
+                                                                                        MAX_KEYWORDS_DISPLAY,
                                                                                     )
                                                                                     .map(
                                                                                         (
@@ -1272,8 +1355,8 @@ const App: React.FC = () => {
                         )}
                         {activePage === "graph" && !detailDocId && (
                             <span className="text-xs text-muted-foreground font-mono">
-                                {documents.length > 50
-                                    ? "50"
+                                {documents.length > GRAPH_DISPLAY_MAX
+                                    ? String(GRAPH_DISPLAY_MAX)
                                     : documents.length}{" "}
                                 of {documents.length} docs mapped
                             </span>

@@ -113,6 +113,7 @@ export interface GraphResponse {
 export interface ExtensionSettings {
   backendUrl: string;
   autoTracking: boolean;
+  autoExtract: boolean;
   excludedDomains: string[];
   privacyMode: boolean;
 }

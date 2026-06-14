@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+from urllib.parse import urlparse
 
 from app.core.exceptions import MindCacheException
 from app.core.logging import get_logger
@@ -26,6 +27,17 @@ async def record_visit(
     logger.info(f"Accepting Visit URL : {request.url}")
 
     try:
+        # When auto_extract is false and no content provided, skip processing entirely
+        if not request.auto_extract and not request.extracted_content:
+            parsed = urlparse(request.url)
+            return VisitResponse(
+                status="recorded",
+                message="Visit recorded. Content will be extracted on demand.",
+                document_id=None,
+                title=request.title or parsed.netloc,
+                domain=parsed.netloc,
+            )
+
         if request.extracted_content:
             status, doc = await document_processor.process_pre_extracted(
                 db,
@@ -49,16 +61,6 @@ async def record_visit(
         else:
             status, doc = await document_processor.process_url(
                 db, request.url, request.title, dwell_time=request.dwell_time
-            )
-
-        if status == "skipped":
-            parsed = urlparse(request.url)
-            return VisitResponse(
-                status="skipped",
-                message="Web Page Skipped from indexing because it was identified as noise (e.g. insufficient information content).",
-                document_id=None,
-                title=request.title or parsed.netloc,
-                domain=parsed.netloc,
             )
 
         if status == "duplicate":

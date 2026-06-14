@@ -6,6 +6,7 @@ import { extensionStorage } from "../utils/storage";
 interface SettingsState extends ExtensionSettings {
   setBackendUrl: (url: string) => void;
   setAutoTracking: (enabled: boolean) => void;
+  setAutoExtract: (enabled: boolean) => void;
   setPrivacyMode: (enabled: boolean) => void;
   setExcludedDomains: (domains: string[]) => void;
   addExcludedDomain: (domain: string) => void;
@@ -16,6 +17,7 @@ interface SettingsState extends ExtensionSettings {
 const defaultSettings: ExtensionSettings = {
   backendUrl: "http://localhost:8000",
   autoTracking: true,
+  autoExtract: true,
   excludedDomains: [
     "localhost",
     "127.0.0.1",
@@ -34,6 +36,7 @@ export const useSettingsStore = create<SettingsState>()(
       ...defaultSettings,
       setBackendUrl: (backendUrl) => set({ backendUrl }),
       setAutoTracking: (autoTracking) => set({ autoTracking }),
+      setAutoExtract: (autoExtract) => set({ autoExtract }),
       setPrivacyMode: (privacyMode) => set({ privacyMode }),
       setExcludedDomains: (excludedDomains) => set({ excludedDomains }),
       addExcludedDomain: (domain) =>

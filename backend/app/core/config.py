@@ -1,4 +1,5 @@
 import os
+import stat as stat_module
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -18,7 +19,7 @@ class Settings(BaseSettings):
     DATA_DIR: Path = BASE_DIR / "data"
 
     # Database
-    DATABASE_URL: str = "sqlite:///data/mindcache.db"
+    DATABASE_URL: str = "sqlite:///" + str(BASE_DIR / "data" / "mindcache.db")
 
     # FAISS Vector Store
     FAISS_INDEX_PATH: str = "data/faiss_index.bin"
@@ -36,23 +37,32 @@ class Settings(BaseSettings):
     APP_NAME: str = "MindCache Backend"
 
     def model_post_init(self, __context) -> None:
-        """Ensure Data Directories Exist"""
+        """Ensure Data Directories Exist and Validate Permissions"""
 
-        # Extract DB Directory If SQLite
-        if self.DATABASE_URL.startswith("sqlite:///"):
-            db_path = self.DATABASE_URL.replace("sqlite:///", "")
-            db_dir = Path(db_path).parent
-
-            if db_dir:
-                os.makedirs(db_dir, exist_ok=True)
+        os.makedirs(self.DATA_DIR, mode=0o755, exist_ok=True)
 
         # Create FAISS Parent Directory
         faiss_dir = Path(self.FAISS_INDEX_PATH).parent
-
         if faiss_dir:
-            os.makedirs(faiss_dir, exist_ok=True)
+            os.makedirs(faiss_dir, mode=0o755, exist_ok=True)
 
-        os.makedirs(self.DATA_DIR, exist_ok=True)
+        # Ensure the database directory and file are writable
+        if self.DATABASE_URL.startswith("sqlite:///"):
+            db_path_str = self.DATABASE_URL.replace("sqlite:///", "")
+            db_path = Path(db_path_str)
+            db_dir = db_path.parent
+
+            os.makedirs(db_dir, mode=0o755, exist_ok=True)
+
+            # If the database file already exists, ensure it's writable
+            if db_path.exists():
+                file_mode = db_path.stat().st_mode
+                if not (file_mode & stat_module.S_IWUSR):
+                    db_path.chmod(stat_module.S_IWUSR | stat_module.S_IRUSR | stat_module.S_IRGRP | stat_module.S_IROTH)
+                    import logging
+                    logging.getLogger("app.core.config").warning(
+                        f"Fixed read-only permissions on database file: {db_path}"
+                    )
 
 
 settings = Settings()

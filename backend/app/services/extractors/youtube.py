@@ -10,6 +10,7 @@ from youtube_transcript_api import YouTubeTranscriptApi
 from app.core.exceptions import YouTubeTranscriptUnavailableError
 from app.core.logging import get_logger
 from app.services.extractors.base import ContentExtractor, ExtractionResult
+from app.services.extractors.generic import GenericExtractor
 
 logger = get_logger(__name__)
 
@@ -57,14 +58,9 @@ class YouTubeExtractor(ContentExtractor):
 
         video_id = extract_youtube_id(url)
         if not video_id:
-            logger.error(f"YouTubeExtractor: Extraction Failure - Could not extract video ID from '{url}'")
-            # We don't fail hard, we can create a generic video record
-            return ExtractionResult(
-                content=f"YouTube Video Link: {url}\n\nCould not extract video details.",
-                title="Unknown YouTube Video",
-                source_type="YouTube",
-                platform_metadata={"video_id": None, "url": url},
-            )
+            logger.info(f"YouTubeExtractor: No video ID found in '{url}' — delegating to GenericExtractor")
+            generic = GenericExtractor()
+            return await generic.extract(url)
 
         # 1. Fetch metadata via yt-dlp
         title = None

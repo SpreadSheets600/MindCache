@@ -51,15 +51,23 @@ Everything is in the [`docs/`](docs/index.md) directory:
 
 ## Core Features
 
-- **Absolute Local Privacy**: Zero cloud API calls. All indexing, vector computation, and AI synthesis runs on localhost.
-- **Background Ingestion**: Extension tracks active tabs, computes dwell time, auto-indexes after 10 seconds. Path/extension blacklists filter noise.
-- **Client-Side Extraction**: Defuddle extracts content directly from the DOM — works behind auth, paywalls, and JS SPAs.
-- **Three Capture Methods**: Keyboard shortcut (`Ctrl+Shift+S`), popup button, or right-click context menu (page/link/selection).
-- **Auto-Extraction Toggle**: When off, pages are tracked but not extracted until manually captured.
-- **Hybrid Search**: FAISS vector similarity + BM25 lexical matching + title/keyword overlap + recency decay.
-- **Local RAG**: Ollama-powered summaries and collective search synthesis with inline citations.
-- **Spotlight Search UI**: Keyboard-first popup with relevance scores, domain badges, and match classification.
-- **Interactive Knowledge Graph**: Visualize documents, entities, and keywords with co-occurrence edges.
+- **Absolute Local Privacy** — Zero cloud API calls. All indexing, vector computation, and AI synthesis runs on localhost with no external dependencies.
+- **Background Tab Tracking** — Extension monitors tab activations, navigation, closures, and window focus. Computes exact dwell time per tab. Auto-indexes after a 10-second threshold. Deduplicates rapid revisits.
+- **Path & Extension Blacklists** — Automatically filters out login pages (`/login`, `/signup`, `/admin`), binary files (`.exe`, `.dmg`, `.zip`), images (`.png`, `.jpg`), and documents (`.pdf`, `.docx`) to keep the index clean.
+- **Client-Side Extraction** — Uses the Defuddle library (from Obsidian Web Clipper) to extract page content directly from the DOM. Includes shadow DOM flattening, noise removal (`<nav>`, `<footer>`, `.sidebar`), URL absolutification, and an 8-second Defuddle timeout with sync fallback. Works behind auth/paywalls and on JS-rendered SPAs.
+- **Four Capture Methods**:
+  - **Automatic**: Dwell-time-based auto-indexing (configurable via auto-extract toggle).
+  - **Keyboard**: `Ctrl+Shift+S` to save the current page instantly.
+  - **Popup**: "Save to MindCache" button appears when auto-tracking or auto-extraction is off.
+  - **Context Menu**: Right-click on a page, link, or text selection to save to MindCache.
+- **Auto-Extraction Toggle** — When disabled, pages are tracked (URL + dwell time) but not extracted or sent to the backend until the user explicitly captures them. Useful for selective indexing and reducing backend load.
+- **Flexible Extraction Pipeline** — If client-side extraction is unavailable (chrome:// pages, PDF viewer), the backend falls back to server-side download via Trafilatura/BeautifulSoup. Platform-specific extractors handle YouTube (yt-dlp + transcripts) and X/Twitter (syndication API).
+- **Hybrid Search** — Combines FAISS vector similarity (cosine, 768d), BM25 lexical matching, title/keyword overlap, platform metadata scoring, and recency decay into a weighted fusion formula. Results below a 0.15 score floor are filtered out.
+- **Dynamic Quality Boosts** — Documents are ranked higher based on dwell time (>60s), word count (>500), source type (GitHub/PDF/docs), transcript availability, and revisit count. Click signals add up to +0.30 boost per query.
+- **Local RAG Summarization** — Ollama (`qwen3.5:2b`) generates page summaries on ingestion and collective AI synthesis with inline citations on search.
+- **Spotlight Search UI** — Keyboard-first popup (`Ctrl+Shift+K`) with debounced query updates, relevance percentage scores, domain badges, keyword tags, and match classification (Best Match ≥65%, Strong Match ≥55%).
+- **Interactive Knowledge Graph** — Visualize documents, entities (Persons, Companies, Technologies, Projects), and keywords with co-occurrence edges. Supports entity color-coding, keyword frequency filtering, and multiple color modes.
+- **Privacy Controls** — Auto-tracking toggle, auto-extraction toggle, private search logging mode, per-domain exclusion list, and path/extension blacklists.
 
 ---
 
@@ -69,12 +77,12 @@ Everything is in the [`docs/`](docs/index.md) directory:
 MindCache/
 ├── backend/          # FastAPI server (Python)
 │   ├── app/          # API routes, services, models
-│   ├── tests/        # Pytest suite
-│   └── data/         # SQLite + FAISS storage
+│   ├── tests/        # Pytest suite (32 tests)
+│   └── data/         # SQLite + FAISS + BM25 storage
 ├── extension/        # Browser extension (TypeScript/React)
 │   ├── src/          # Background, content, popup, settings
-│   ├── tests/        # Vitest suite
-│   ├── dist/         # Build output
-│   └── public/       # Manifest
-└── docs/             # Unified documentation
+│   ├── tests/        # Vitest suite (10 tests)
+│   ├── dist/         # Build output (content.js 459KB, background.js 28KB)
+│   └── public/       # Manifest V3
+└── docs/             # Unified documentation (8 files)
 ```

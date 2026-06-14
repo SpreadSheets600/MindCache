@@ -179,6 +179,7 @@ class SearchService:
             await db.commit()
         except Exception as e:
             logger.warning(f"Failed to record search query analytics: {e}")
+            await db.rollback()
 
         # 1. Query Expansion — Extract Keywords From The Query
         query_keywords: list[str] = []

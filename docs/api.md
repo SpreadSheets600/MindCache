@@ -1,6 +1,6 @@
 # API Reference
 
-The MindCache backend runs on `http://localhost:8000` by default. The extension communicates with it exclusively through `src/services/BackendClient.ts`.
+The MindCache backend runs on `http://localhost:8000` by default. All endpoints return JSON. The extension communicates with the backend exclusively through `src/services/BackendClient.ts`.
 
 ---
 
@@ -8,7 +8,7 @@ The MindCache backend runs on `http://localhost:8000` by default. The extension 
 
 ### `POST /visit`
 
-Ingests and indexes a visited web page.
+Ingests and indexes a visited web page. Accepts client-side extracted content or triggers server-side download.
 
 #### Basic Payload
 
@@ -44,11 +44,32 @@ When the extension's content script extracts content via Defuddle, the backend s
 }
 ```
 
-The `auto_extract` field (`Optional[bool]`, default `true`) tells the backend whether this visit was automatically extracted. When `false` and no `extracted_content` is provided, the backend returns `"recorded"` and skips all processing.
+#### Request Fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `url` | string | required | Full URL (must start with http:// or https://) |
+| `title` | string | null | Page title from browser tab |
+| `dwell_time` | float | null | Time spent on page in seconds |
+| `extracted_content` | string | null | Client-extracted markdown body (skips server download) |
+| `extracted_content_html` | string | null | Client-extracted HTML body |
+| `description` | string | null | Meta description |
+| `author` | string | null | Author name |
+| `site_name` | string | null | Site name from OpenGraph |
+| `published_date` | string | null | ISO date string |
+| `language` | string | null | Page language code |
+| `schema_org` | object | null | JSON-LD schema.org data |
+| `meta_tags` | array | null | Array of `{name, property, content}` objects |
+| `keywords` | array | null | Client-extracted keyword list |
+| `auto_extract` | bool | true | When false and no content, skip processing entirely |
+| `highlights` | array | null | Highlighted text fragments `{text, content, xpath}` |
+| `selection` | string | null | User-selected text (context menu) |
+| `selection_html` | string | null | HTML of selection |
 
 #### Responses
 
 **New document (201)**:
+
 ```json
 {
     "status": "success",
@@ -59,7 +80,8 @@ The `auto_extract` field (`Optional[bool]`, default `true`) tells the backend wh
 }
 ```
 
-**Duplicate URL (201)**:
+**Duplicate URL (201)** — Visit recorded, content already indexed; quality_score and dwell_time updated:
+
 ```json
 {
     "status": "duplicate",
@@ -70,7 +92,8 @@ The `auto_extract` field (`Optional[bool]`, default `true`) tells the backend wh
 }
 ```
 
-**Recorded without content (201)** — returned when `auto_extract` is `false`:
+**Recorded without content (201)** — When `auto_extract` is `false`:
+
 ```json
 {
     "status": "recorded",
@@ -81,7 +104,8 @@ The `auto_extract` field (`Optional[bool]`, default `true`) tells the backend wh
 }
 ```
 
-**Skipped as noise (201)**:
+**Skipped as noise (201)** — Knowledge quality score < 2 or platform search page:
+
 ```json
 {
     "status": "skipped",
@@ -95,10 +119,13 @@ The `auto_extract` field (`Optional[bool]`, default `true`) tells the backend wh
 #### Error Responses
 
 - **400** — Invalid URL (malformed or non-HTTP scheme):
+
   ```json
   { "detail": "URL 'ftp://invalid' is invalid: Only HTTP and HTTPS protocols are supported." }
   ```
+
 - **422** — Extraction failure (page unreachable or no readable text):
+
   ```json
   { "detail": "Failed to extract content from https://example.com/empty: Webpage has no parseable text content." }
   ```
@@ -109,7 +136,7 @@ The `auto_extract` field (`Optional[bool]`, default `true`) tells the backend wh
 
 ### `POST /search`
 
-Searches history using natural language query matching with optional time filtering.
+Searches history using natural language query matching with optional time filtering. Executes hybrid retrieval: FAISS vector search + BM25 lexical search + keyword matching + click boosting.
 
 #### Request
 
@@ -125,9 +152,9 @@ Searches history using natural language query matching with optional time filter
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `query` | string | required | Natural language search query |
+| `query` | string | required | Natural language search query (min 1 char) |
 | `limit` | int | 5 | Max results (1-50) |
-| `generate_summary` | bool | false | Generate AI summary of results |
+| `generate_summary` | bool | false | Generate AI collective summary of results |
 | `start_time` | ISO timestamp | optional | Filter results visited after this time |
 | `end_time` | ISO timestamp | optional | Filter results visited before this time |
 
@@ -146,6 +173,7 @@ Searches history using natural language query matching with optional time filter
             "score": 0.892,
             "published_date": "2026-05-29T00:00:00",
             "last_visited_at": "2026-05-30T11:42:00",
+            "total_dwell_time": 120.5,
             "keywords": [
                 { "keyword": "vector", "score": 0.91 },
                 { "keyword": "database", "score": 0.85 }
@@ -157,9 +185,25 @@ Searches history using natural language query matching with optional time filter
 }
 ```
 
+#### Result Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | int | Document ID |
+| `url` | string | Page URL |
+| `domain` | string | Extracted domain |
+| `title` | string | Page title |
+| `summary` | string | AI-generated summary |
+| `score` | float | Combined relevance score (0-1) |
+| `published_date` | ISO datetime | Article publish date |
+| `last_visited_at` | ISO datetime | Most recent visit |
+| `total_dwell_time` | float | Accumulated dwell time |
+| `keywords` | array | Extracted keywords with scores |
+| `source_type` | string | Generic, GitHub, YouTube, Reddit, X, PDF |
+
 ### `POST /search/click`
 
-Records a click signal for search result ranking optimization.
+Records a click signal for search result ranking optimization. Boosts clicked documents by +0.10 per click (capped at +0.30) for future identical queries.
 
 #### Request
 
@@ -192,26 +236,64 @@ Lists indexed documents ordered by updated timestamp descending.
 | `skip` | 0 | — | Skip N records |
 | `limit` | 20 | 100 | Max records to return |
 
-**Response**: Array of document objects with keywords, entities, and visit history.
+**Response** (200): Array of document objects with keywords, entities, and visit history:
+
+```json
+[
+    {
+        "id": 4,
+        "url": "https://example.com/ai-memory-article",
+        "domain": "example.com",
+        "title": "Local AI Personal Memory Systems",
+        "author": "John Doe",
+        "published_date": "2026-05-29T00:00:00",
+        "extracted_content": "Full parsed page content...",
+        "source_type": "Generic",
+        "platform_metadata": null,
+        "summary": "This article discusses running browser memory databases locally.",
+        "total_dwell_time": 120.5,
+        "created_at": "2026-05-30T11:40:00",
+        "updated_at": "2026-05-30T11:42:00",
+        "keywords": [
+            { "keyword": "vector", "score": 0.91 }
+        ],
+        "entities": [
+            { "name": "FAISS", "type": "Technology" },
+            { "name": "Meta", "type": "Company" }
+        ],
+        "visit_history": ["2026-05-30T11:40:00", "2026-05-30T11:42:00"]
+    }
+]
+```
 
 ### `GET /documents/{id}`
 
 Retrieves full extracted content, metadata, entities, keywords, and visit history for a specific document.
 
-**Response**: Single document object matching the list format above.
-
-**404 error**:
-```json
-{ "detail": "Document with ID 99 was not found" }
-```
+- **200**: Single document object matching the list format above
+- **404**: `{ "detail": "Document with ID 99 was not found" }`
 
 ### `DELETE /documents/{id}`
 
-Removes a webpage from SQLite and FAISS index.
+Removes a webpage from SQLite (cascade deletes keywords, entities, visits, clicks) and removes its vectors from FAISS index and BM25 index.
 
-**Response**:
+**Response** (200):
+
 ```json
 { "message": "Document ID 4 was successfully deleted from local memory." }
+```
+
+### `POST /documents/{id}/summarize`
+
+Generates an AI summary for a document using Ollama. Checks Ollama health first. Updates the document's `summary` field.
+
+**Response** (200):
+
+```json
+{
+    "message": "Summary generated successfully.",
+    "summary": "This article discusses running browser memory databases locally..."
+}
 ```
 
 ---
@@ -220,12 +302,12 @@ Removes a webpage from SQLite and FAISS index.
 
 ### `GET /graph`
 
-Returns entities, keywords, and relationships for graph visualization.
+Returns entities, keywords, and relationships for knowledge graph visualization. Used by the InteractiveKnowledgeGraph component in the settings dashboard.
 
 | Parameter | Default | Max | Description |
 |---|---|---|---|
 | `limit` | 100 | 500 | Max documents to include |
-| `min_keyword_freq` | 2 | — | Min keyword frequency for node inclusion |
+| `min_keyword_freq` | 2 | 10 | Min keyword frequency for node inclusion |
 
 #### Response
 
@@ -280,9 +362,9 @@ Returns entities, keywords, and relationships for graph visualization.
 
 ### `GET /health`
 
-Checks diagnostic status of all system components.
+Checks diagnostic status of all system components — database, FAISS index, Ollama generative model, and embedding service.
 
-#### Response
+#### Response (200)
 
 ```json
 {
@@ -296,13 +378,32 @@ Checks diagnostic status of all system components.
 }
 ```
 
+Possible `status` values: `"healthy"` (all components online) or `"degraded"` (some components offline).
+
+---
+
+## Root Endpoint
+
+### `GET /`
+
+**Response** (200):
+
+```json
+{
+    "app": "MindCache Backend",
+    "status": "Online",
+    "documentation": "/docs"
+}
+```
+
 ---
 
 ## Client Error Management
 
 `BackendClient` in the extension encapsulates request handling:
 
-- **Configurability**: Reads base URL from `useSettingsStore` dynamically.
-- **Fail-safe**: Background ingestion catches and discards server errors silently. Popup and settings display friendly offline alerts.
-- **Retry**: Up to 2 retries with exponential backoff (300ms, 600ms) on server errors. Bypassed on 4xx responses and health checks.
-- **Validation**: Rejects malformed JSON responses, preventing backend format issues from breaking the UI.
+- **Configurability**: Reads base URL from `useSettingsStore` dynamically
+- **Fail-safe**: Background ingestion catches and discards server errors silently. Popup and settings display friendly offline alerts
+- **Retry**: Up to 2 retries with exponential backoff (300ms, 600ms) on server errors. Bypassed on 4xx responses and health checks
+- **Validation**: Rejects malformed JSON responses, preventing backend format issues from breaking the UI
+- **Error formatting**: `BackendClientError` with `status` and `details` properties for structured error handling

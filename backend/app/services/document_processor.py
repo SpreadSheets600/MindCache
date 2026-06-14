@@ -7,6 +7,7 @@ import httpx
 from bs4 import BeautifulSoup
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.data_sanitizer import sanitize_datetime, sanitize_text
 from app.core.exceptions import ContentExtractionError, InvalidURLError
 from app.core.logging import get_logger
 from app.models.document import Document
@@ -90,7 +91,7 @@ class DocumentProcessor:
     ) -> Document:
         """Records a revisit and updates quality score for an existing document."""
         logger.info(f"URL Already Processed: '{doc.url}'. Recording Visit.")
-        await document_repository.add_visit(db, doc.id, visited_at)
+        await document_repository.add_visit(db, doc.id, sanitize_datetime(visited_at) or visited_at)
         revisit_count = len(doc.visits) + 1
         words = (doc.extracted_content or "").split()
         word_count = len(words)
@@ -103,7 +104,7 @@ class DocumentProcessor:
             platform_metadata=doc.platform_metadata,
             revisit_count=revisit_count,
         )
-        doc.updated_at = visited_at
+        doc.updated_at = sanitize_datetime(visited_at) or visited_at
         await db.commit()
         return doc
 
@@ -379,6 +380,9 @@ class DocumentProcessor:
             logger.warning(f"Pre-extracted content is empty for {url}. Falling back to server-side extraction.")
             return await self.process_url(db, url, title, dwell_time)
 
+        extracted_content = sanitize_text(extracted_content) or ""
+        published_date = sanitize_text(published_date) if published_date else None
+
         title_from_extraction = title or description or info["parsed"].netloc
 
         platform_metadata = {}
@@ -486,6 +490,9 @@ class DocumentProcessor:
 
         if not extracted_content.strip():
             raise ContentExtractionError(url, "Webpage has no parseable text content.")
+
+        extracted_content = sanitize_text(extracted_content) or ""
+        published_date = sanitize_datetime(published_date) if isinstance(published_date, str) else published_date
 
         words = extracted_content.split()
         word_count = len(words)

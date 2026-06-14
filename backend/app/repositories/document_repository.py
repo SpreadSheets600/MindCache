@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.data_sanitizer import sanitize_datetime, sanitize_platform_metadata, sanitize_text
 from app.core.logging import get_logger
 from app.models.document import Document, Entity, Keyword, SearchClick, SearchQuery, VisitHistory
 
@@ -86,15 +87,15 @@ class DocumentRepository:
         """Creates And Persists A New Web Document Record In The Database."""
 
         document = Document(
-            url=url,
-            domain=domain,
-            title=title,
-            author=author,
-            published_date=published_date,
-            extracted_content=extracted_content,
-            summary=summary,
-            source_type=source_type,
-            platform_metadata=platform_metadata,
+            url=sanitize_text(url, 2048) or "",
+            domain=sanitize_text(domain, 253) or "",
+            title=sanitize_text(title, 512),
+            author=sanitize_text(author, 256),
+            published_date=sanitize_datetime(published_date),
+            extracted_content=sanitize_text(extracted_content) or "",
+            summary=sanitize_text(summary),
+            source_type=sanitize_text(source_type, 50) or "Generic",
+            platform_metadata=sanitize_platform_metadata(platform_metadata),
             quality_score=quality_score,
             total_dwell_time=total_dwell_time,
         )
@@ -116,7 +117,7 @@ class DocumentRepository:
     async def add_visit(self, db: AsyncSession, document_id: int, visited_at: datetime.datetime) -> VisitHistory:
         """Records A New Timestamped Visit For A Document."""
 
-        visit = VisitHistory(document_id=document_id, visited_at=visited_at)
+        visit = VisitHistory(document_id=document_id, visited_at=sanitize_datetime(visited_at) or visited_at)
         db.add(visit)
         return visit
 
@@ -127,7 +128,7 @@ class DocumentRepository:
         document = result.scalars().first()
 
         if document:
-            document.summary = summary
+            document.summary = sanitize_text(summary)
             document.updated_at = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
 
     async def search_by_keywords(self, db: AsyncSession, query_keywords: list[str], limit: int = 25) -> list[Document]:

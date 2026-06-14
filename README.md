@@ -8,100 +8,73 @@
 
 ---
 
-## Architecture Overview
+## Quick Start
 
-MindCache operates offline, coordinating a background tab monitor with a local vector and relational database pipeline.
+```bash
+# 1. Start the backend
+cd backend
+uv sync
+uv run uvicorn app.main:app --reload
 
-```mermaid
-graph TD
-    A[Browser Tabs] -->|On Navigation / Tab Switch| B[Background Service Worker]
-    B -->|Ingests URL & Title| C[FastAPI Local Server]
-    C -->|Asynchronous Scraping| D[Trafilatura / BeautifulSoup4]
-    D -->|Trimmed Content| E[Local Ollama: qwen3.5:2b]
-    E -->|Ollama / Stat counter| F[Keyword Extraction]
-    D -->|Doc Text| G[Ollama: embeddinggemma:300m]
-    G -->|Normalized vectors| H["FAISS Vector Store (768d)"]
-    D -->|Full payload| I[SQLite Database]
-    D -->|Optional summary| E
+# 2. Build the extension (in another terminal)
+cd extension
+npm install
+npm run build
 ```
+
+3. Load `extension/dist/` as an unpacked extension in Chrome/Brave (`chrome://extensions` → Developer mode → Load unpacked).
+
+> **Ollama required** for AI features:
+> ```bash
+> ollama pull qwen3.5:2b
+> ollama pull embeddinggemma:300m
+> ```
+
+---
+
+## Documentation
+
+Everything is in the [`docs/`](docs/index.md) directory:
+
+| Doc | What It Covers |
+|---|---|
+| [Index / Quick Start](docs/index.md) | Landing page, prerequisites, backend + extension setup |
+| [Architecture](docs/architecture.md) | System context, ingestion pipeline, extension modules, retrieval |
+| [API Reference](docs/api.md) | All REST endpoints with request/response examples |
+| [AI Pipeline](docs/ai-pipeline.md) | Embeddings, FAISS search, Ollama summarization |
+| [Platform Extraction](docs/platform-extraction.md) | YouTube, X/Twitter extractors, factory pattern |
+| [Setup Guide](docs/setup.md) | Backend config, migrations, testing, linting |
+| [Development Guide](docs/development.md) | Extension build, project structure, constants, context menus |
+| [Study Guide](docs/study.md) | Deep-dive into search, embeddings, vector databases, RAG |
 
 ---
 
 ## Core Features
 
-- **Absolute Local Privacy**: Zero external cloud or API calls. All indexing, vector computations, relational database storage, and AI syntheses occur on your localhost.
-- **Background Ingestion & Tab Tracking**: The Chromium extension automatically registers visited URLs and titles, tracking active dwell time and utilizing a three-stage noise filter (blacklisted paths, 10-second dwell threshold, high-value document exceptions) to prevent search engine and landing page pollution.
-- **Hybrid Content Scraping**: Utilizes specialized extraction pipelines for YouTube, X (Twitter), and Reddit (to capture subreddits, posts, and top discussion comments), falling back gracefully to Trafilatura and BeautifulSoup4 for generic web content.
-- **Hugging Face-Free RAM Optimization**: Operates without heavy Hugging Face/SentenceTransformer dependencies in the python backend process, delegating both keyword extraction and embedding generation tasks to Ollama, reducing local process memory bloat and preventing unauthenticated download gates.
-- **Spotlight Semantic Search**: Executes high-performance Cosine Similarity matches on FAISS inner product indices (768 dimensions) with real-time, debounced query auto-updates.
-- **Local RAG Chat Synthesis**: Connects directly to local Ollama installations (`qwen3.5:2b`) to construct dynamic syntheses and answers from your browsing history with inline citations.
+- **Absolute Local Privacy**: Zero cloud API calls. All indexing, vector computation, and AI synthesis runs on localhost.
+- **Background Ingestion**: Extension tracks active tabs, computes dwell time, auto-indexes after 10 seconds. Path/extension blacklists filter noise.
+- **Client-Side Extraction**: Defuddle extracts content directly from the DOM — works behind auth, paywalls, and JS SPAs.
+- **Three Capture Methods**: Keyboard shortcut (`Ctrl+Shift+S`), popup button, or right-click context menu (page/link/selection).
+- **Auto-Extraction Toggle**: When off, pages are tracked but not extracted until manually captured.
+- **Hybrid Search**: FAISS vector similarity + BM25 lexical matching + title/keyword overlap + recency decay.
+- **Local RAG**: Ollama-powered summaries and collective search synthesis with inline citations.
+- **Spotlight Search UI**: Keyboard-first popup with relevance scores, domain badges, and match classification.
+- **Interactive Knowledge Graph**: Visualize documents, entities, and keywords with co-occurrence edges.
 
 ---
 
 ## Project Structure
 
-MindCache is divided into two distinct components:
-
-- **[`/backend`](backend/README.md)**: High-performance FastAPI server managing scrapers, local models (Ollama embeddings and prompt-based keyword generation), aiosqlite/SQLAlchemy ORM, and FAISS indices.
-- **[`/extension`](extension/README.md)**: Manifest V3 browser extension and a full-featured spotlight dashboard built with React, TypeScript, Radix UI, Zustand, and TailwindCSS.
-
----
-
-## Quick Start
-
-### 1. Launch the Backend Server
-
-Ensure you have Python 3.12+ installed. We recommend using `uv` for fast package management.
-
-```bash
-cd backend
-# Install dependencies and sync virtual environment
-uv sync
-
-# Run the database migrations and start the server
-uv run uvicorn app.main:app --reload
 ```
-
-The server initializes the SQLite database at `backend/data/mindcache.db` and is reachable at `http://localhost:8000`.
-
-### 2. Set Up the Browser Extension
-
-Ensure you have Node.js 18+ installed.
-
-```bash
-cd extension
-# Install dependencies
-npm install
-
-# Build the extension
-npm run build
+MindCache/
+├── backend/          # FastAPI server (Python)
+│   ├── app/          # API routes, services, models
+│   ├── tests/        # Pytest suite
+│   └── data/         # SQLite + FAISS storage
+├── extension/        # Browser extension (TypeScript/React)
+│   ├── src/          # Background, content, popup, settings
+│   ├── tests/        # Vitest suite
+│   ├── dist/         # Build output
+│   └── public/       # Manifest
+└── docs/             # Unified documentation
 ```
-
-This generates compiled assets in `extension/dist`.
-
-### 3. Load the Extension into your Browser
-
-1. Navigate to the extensions page in your Chromium-based browser (e.g., `chrome://extensions` or `brave://extensions`).
-2. Toggle **Developer mode** in the top right.
-3. Click **Load unpacked** in the top left.
-4. Select the `extension/dist` folder.
-
----
-
-> [!IMPORTANT]
-> **Ollama Integration**  
-> To leverage RAG chat synthesis, automated page summarization, and embeddings generation, ensure [Ollama](https://ollama.ai/) is running locally and has both models pulled:
->
-> ```bash
-> # Pull LLM for summary, keywords, and synthesis
-> ollama pull qwen3.5:2b
->
-> # Pull Embedding Model for FAISS semantic indexing
-> ollama pull embeddinggemma:300m
-> ```
->
-> ### Why Ollama and Why Not Hugging Face/SentenceTransformers?
->
-> - **Zero Credentials & Gated Model Friction**: Models like Google Gemma require a Hugging Face account and license acceptance. Loading `google/embeddinggemma-300m` via Python's SentenceTransformers would crash without setting up `HF_TOKEN`. Ollama handles model distribution seamlessly without token credentials.
-> - **Dramatically Lower Memory Footprint**: Rather than loading multi-gigabyte PyTorch/Hugging Face weight models directly in Python's memory (which bloats backend RAM by 1GB+), we offload embedding and generation to local Ollama, which uses optimized C++ (llama.cpp) with dynamic GPU/CPU offloading.
-> - **Unified AI Backend**: Running both embeddings and text generation through a single local server (Ollama) reduces setup complexity and dependency updates.

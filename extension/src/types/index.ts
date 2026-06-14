@@ -30,6 +30,23 @@ export interface SearchResponse {
 export interface VisitRequest {
   url: string;
   title: string | null;
+  dwell_time?: number;
+
+  extracted_content?: string;
+  extracted_content_html?: string;
+  description?: string;
+  author?: string;
+  site_name?: string;
+  published_date?: string;
+  language?: string;
+
+  schema_org?: Record<string, any>;
+  meta_tags?: { name?: string; property?: string; content: string }[];
+  keywords?: string[];
+
+  highlights?: { text: string; content: string; xpath: string }[];
+  selection?: string;
+  selection_html?: string;
 }
 
 export interface VisitResponse {

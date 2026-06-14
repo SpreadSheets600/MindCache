@@ -1,6 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { SearchOverlay } from "./SearchOverlay";
+import { extractCurrentPage } from "./extract-page";
 
 console.log("[MindCache Content Script] Active on page:", window.location.href);
 
@@ -8,6 +9,10 @@ console.log("[MindCache Content Script] Active on page:", window.location.href);
 chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   if (request.action === "ping") {
     sendResponse({ status: "ok", url: window.location.href });
+  }
+  if (request.action === "extract-page") {
+    extractCurrentPage().then(sendResponse);
+    return true;
   }
   return true;
 });

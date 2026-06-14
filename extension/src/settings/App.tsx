@@ -791,35 +791,53 @@ const App: React.FC = () => {
                 return (
                     <div className="space-y-6">
                         {/* Search Input Box */}
-                        <div className="flex items-center bg-secondary/35 border border-border px-4 py-3 rounded-lg space-x-3 focus-within:border-primary/50 transition-colors">
-                            <Search className="w-5 h-5 text-muted-foreground" />
-                            <input
-                                type="text"
-                                value={dashSearch}
-                                onChange={(e) => setDashSearch(e.target.value)}
-                                placeholder="Ask anything about your web history..."
-                                className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/50 text-foreground"
-                            />
-                            {dashSearch && (
+                        <div>
+                            <div className="flex items-center bg-secondary/35 border border-border px-4 py-3 rounded-lg space-x-3 focus-within:border-primary/50 transition-colors">
+                                <Search className="w-5 h-5 text-muted-foreground" />
+                                <input
+                                    type="text"
+                                    value={dashSearch}
+                                    onChange={(e) => setDashSearch(e.target.value)}
+                                    placeholder="Ask anything about your web history..."
+                                    className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/50 text-foreground"
+                                />
+                                {dashSearch && (
+                                    <button
+                                        onClick={() => setDashSearch("")}
+                                        className="text-xs text-muted-foreground hover:text-foreground"
+                                    >
+                                        Clear
+                                    </button>
+                                )}
                                 <button
-                                    onClick={() => setDashSearch("")}
-                                    className="text-xs text-muted-foreground hover:text-foreground"
+                                    onClick={() => setDashAI(!dashAI)}
+                                    className={`flex items-center space-x-1.5 px-3 py-1 rounded text-xs font-semibold transition-colors focus:outline-none ${
+                                        dashAI
+                                            ? "bg-primary/20 text-primary border border-primary/30"
+                                            : "text-muted-foreground hover:text-foreground border border-transparent"
+                                    }`}
+                                    title="Generate AI summary of results"
                                 >
-                                    Clear
+                                    <Sparkles className="w-3.5 h-3.5" />
+                                    <span>AI Summary</span>
                                 </button>
-                            )}
-                            <button
-                                onClick={() => setDashAI(!dashAI)}
-                                className={`flex items-center space-x-1.5 px-3 py-1 rounded text-xs font-semibold transition-colors focus:outline-none ${
-                                    dashAI
-                                        ? "bg-primary/20 text-primary border border-primary/30"
-                                        : "text-muted-foreground hover:text-foreground border border-transparent"
-                                }`}
-                                title="Generate AI summary of results"
-                            >
-                                <Sparkles className="w-3.5 h-3.5" />
-                                <span>AI Summary</span>
-                            </button>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 mt-2.5 text-xs text-muted-foreground/80 pl-1">
+                                <span className="font-medium text-muted-foreground/60">Try:</span>
+                                {[
+                                    "that rust pdf parser",
+                                    "the paper about transformers",
+                                    "youtube video about rag pipelines"
+                                ].map((query, i) => (
+                                    <button
+                                        key={i}
+                                        onClick={() => setDashSearch(query)}
+                                        className="px-2.5 py-1 bg-secondary/30 hover:bg-secondary/70 border border-border/50 hover:border-border rounded-full text-[11.5px] cursor-pointer transition-all hover:scale-[1.02] text-muted-foreground hover:text-foreground inline-flex items-center"
+                                    >
+                                        "{query}"
+                                    </button>
+                                ))}
+                            </div>
                         </div>
 
                         {/* Two-Column Search Grid */}
@@ -1070,18 +1088,27 @@ const App: React.FC = () => {
                                                                                 result.url}
                                                                         </h3>
                                                                         <div className="flex items-center space-x-1.5 shrink-0">
-                                                                            {isTopResult && (
-                                                                                <span className="text-[10px] font-bold bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/30 flex items-center gap-1">
-                                                                                    👑 Best Match
-                                                                                </span>
-                                                                            )}
-                                                                            <span className="text-[10.5px] font-mono bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/20">
-                                                                                {
-                                                                                    matchPercentage
+                                                                            {(() => {
+                                                                                if (matchPercentage >= 65) {
+                                                                                    return (
+                                                                                        <span className="text-[10.5px] font-semibold bg-amber-500/15 text-amber-400 px-2 py-0.5 rounded border border-amber-500/30 flex items-center gap-1 whitespace-nowrap">
+                                                                                            🏆 Best Match
+                                                                                        </span>
+                                                                                    );
+                                                                                } else if (matchPercentage >= 55) {
+                                                                                    return (
+                                                                                        <span className="text-[10.5px] font-semibold bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/30 flex items-center gap-1 whitespace-nowrap">
+                                                                                            Strong Match
+                                                                                        </span>
+                                                                                    );
+                                                                                } else {
+                                                                                    return (
+                                                                                        <span className="text-[10.5px] font-semibold bg-zinc-500/15 text-zinc-400 px-2 py-0.5 rounded border border-zinc-500/30 flex items-center gap-1 whitespace-nowrap">
+                                                                                            Related Result
+                                                                                        </span>
+                                                                                    );
                                                                                 }
-                                                                                %
-                                                                                match
-                                                                            </span>
+                                                                            })()}
                                                                         </div>
                                                                     </div>
 

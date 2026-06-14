@@ -1,10 +1,20 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useConnectionStore } from "../store/connectionStore";
 import { useSettingsStore } from "../store/settingsStore";
 import { backendClient } from "../services/BackendClient";
-import { Brain, Search, LayoutDashboard, Database, Shield } from "lucide-react";
+import { Brain, Search, LayoutDashboard, Database, Shield, FileText } from "lucide-react";
+
+interface PagePreview {
+  title: string;
+  description: string;
+  content: string;
+  site: string;
+  wordCount: number;
+}
 
 export const App: React.FC = () => {
+  const [pagePreview, setPagePreview] = useState<PagePreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const { isOnline, components } = useConnectionStore();
   const { autoTracking, privacyMode } = useSettingsStore();
 
@@ -17,10 +27,33 @@ export const App: React.FC = () => {
   };
 
   useEffect(() => {
-    // Sync settings on popup launch
     useSettingsStore.persist.rehydrate();
     performHealthCheck();
+    fetchPagePreview();
   }, []);
+
+  async function fetchPagePreview() {
+    setPreviewLoading(true);
+    try {
+      const response = await chrome.runtime.sendMessage({ action: "get-current-extraction" });
+      if (response && response.status === "ok" && response.extraction) {
+        setPagePreview({
+          title: response.extraction.title || "Untitled",
+          description: response.extraction.description || "",
+          content: (response.extraction.content || "").slice(0, 300),
+          site: response.extraction.site || "",
+          wordCount: response.extraction.wordCount || 0,
+        });
+      } else {
+        setPagePreview(null);
+      }
+    } catch {
+      // Content script may not be available on this page
+      setPagePreview(null);
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
 
   const handleOpenDashboard = (pageName: string) => {
     if (typeof chrome !== "undefined" && chrome.tabs) {
@@ -53,6 +86,41 @@ export const App: React.FC = () => {
             <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
           </span>
           <div className="text-[11px] font-semibold">Backend Disconnected</div>
+        </div>
+      )}
+
+      {/* Page Preview */}
+      {pagePreview && (
+        <div className="mx-4 mt-3 p-3 rounded-lg border border-zinc-800 bg-zinc-900/30">
+          <div className="flex items-center space-x-1.5 mb-1.5">
+            <FileText className="w-3 h-3 text-zinc-400" />
+            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Current Page</span>
+          </div>
+          <div className="text-xs font-semibold text-zinc-200 truncate">{pagePreview.title}</div>
+          {pagePreview.description && (
+            <div className="text-[11px] text-zinc-400 truncate mt-0.5">{pagePreview.description}</div>
+          )}
+          <div className="text-[11px] text-zinc-500 line-clamp-2 mt-1 leading-relaxed">{pagePreview.content}</div>
+          <div className="flex items-center space-x-2 mt-1.5 text-[10px] text-zinc-500">
+            {pagePreview.site && <span>{pagePreview.site}</span>}
+            <span>{pagePreview.wordCount} words</span>
+          </div>
+        </div>
+      )}
+      {!pagePreview && !previewLoading && isOnline && (
+        <div className="mx-4 mt-3 p-3 rounded-lg border border-zinc-800 bg-zinc-900/30">
+          <div className="flex items-center space-x-1.5">
+            <FileText className="w-3 h-3 text-zinc-500" />
+            <span className="text-[10px] text-zinc-500">No content available for extraction on this page</span>
+          </div>
+        </div>
+      )}
+      {previewLoading && (
+        <div className="mx-4 mt-3 p-3 rounded-lg border border-zinc-800 bg-zinc-900/30">
+          <div className="flex items-center space-x-1.5">
+            <div className="w-3 h-3 rounded-full border border-zinc-500 border-t-transparent animate-spin" />
+            <span className="text-[10px] text-zinc-500">Extracting page content...</span>
+          </div>
         </div>
       )}
 

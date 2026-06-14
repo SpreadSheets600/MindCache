@@ -373,6 +373,49 @@ export const SearchOverlay: React.FC = () => {
                         ? "The semantic search found zero matching documents." 
                         : "Type something above to search your indexed web pages."}
                     </div>
+                    {!searchQuery.trim() && (
+                      <div className="overlay-suggestions" style={{ marginTop: "16px", display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
+                        <span style={{ fontSize: "11px", color: "#71717a", fontWeight: 500 }}>Try:</span>
+                        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "center" }}>
+                          {[
+                            "that rust pdf parser",
+                            "the paper about transformers",
+                            "youtube video about rag pipelines"
+                          ].map((query, i) => (
+                            <button
+                              key={i}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSearchQuery(query);
+                                searchMemory(query);
+                              }}
+                              style={{
+                                background: "rgba(255, 255, 255, 0.04)",
+                                border: "1px solid rgba(255, 255, 255, 0.08)",
+                                color: "#a1a1aa",
+                                fontSize: "11px",
+                                padding: "4px 10.5px",
+                                borderRadius: "12px",
+                                cursor: "pointer",
+                                transition: "all 0.15s ease"
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = "rgba(255, 255, 255, 0.08)";
+                                e.currentTarget.style.color = "#ffffff";
+                                e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.15)";
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = "rgba(255, 255, 255, 0.04)";
+                                e.currentTarget.style.color = "#a1a1aa";
+                                e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.08)";
+                              }}
+                            >
+                              "{query}"
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </>
                 )}
               </div>

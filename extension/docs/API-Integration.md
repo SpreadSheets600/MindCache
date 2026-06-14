@@ -10,7 +10,8 @@ The extension coordinates all network traffic through `src/services/BackendClien
   ```json
   {
     "url": "https://example.com/page",
-    "title": "Page Title"
+    "title": "Page Title",
+    "dwell_time": 12.5
   }
   ```
 - **Response**:

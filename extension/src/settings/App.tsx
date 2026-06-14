@@ -376,7 +376,7 @@ const App: React.FC = () => {
                                         populate your database.
                                     </p>
                                 ) : (
-                                    <div className="space-y-2.5 max-h-[360px] overflow-y-auto pr-1">
+                                    <div className="space-y-2.5">
                                         {documents.slice(0, RECENT_ACTIVITY_COUNT).map((doc) => (
                                             <div
                                                 key={doc.id}

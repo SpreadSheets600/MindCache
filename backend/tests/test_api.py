@@ -232,61 +232,36 @@ async def test_visit_noise_skipping(client_override: AsyncSession) -> None:
 
 @pytest.mark.asyncio
 async def test_visit_platform_search_skipping(client_override: AsyncSession) -> None:
-    """Verifies that Google Search and YouTube Search result pages are skipped as noise."""
+    """Verifies that all pages including search results are indexed (no search page skipping)."""
     transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
-        # 1. Without dwell time context: Google search skipped unconditionally
-        response1 = await ac.post("/visit", json={"url": "https://www.google.com/search?q=rust+pdf+parser"})
-        assert response1.status_code == 201
-        assert response1.json()["status"] == "skipped"
+    mock_html = "<html><head><title>Google Search</title></head><body>Search Results for rust pdf parser. Rust is great.</body></html>"
 
-        # 2. With low dwell time: Google search page skipped
-        response2 = await ac.post("/visit", json={"url": "https://www.google.com/search?q=rust+pdf+parser", "dwell_time": 5.0})
-        assert response2.status_code == 201
-        assert response2.json()["status"] == "skipped"
-
-        # 3. With high dwell time (>=10s): Google search page is indexed successfully!
-        mock_html = "<html><head><title>Google Search</title></head><body>Search Results for rust pdf parser. Rust is great.</body></html>"
-        with patch.object(document_processor, "_download_page", AsyncMock(return_value=(mock_html, "https://www.google.com/search?q=rust+pdf+parser"))):
-            response3 = await ac.post("/visit", json={"url": "https://www.google.com/search?q=rust+pdf+parser", "dwell_time": 12.5})
-            assert response3.status_code == 201
-            assert response3.json()["status"] == "success"
-
-
-@pytest.mark.asyncio
-async def test_visit_blacklist_skipping(client_override: AsyncSession) -> None:
-    """Verifies that blacklisted URL paths like /login or /signup are skipped immediately."""
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
-        response = await ac.post("/visit", json={"url": "https://example.com/login"})
+    # All pages should be indexed regardless of being a search page
+    with patch.object(document_processor, "_download_page", AsyncMock(return_value=(mock_html, "https://www.google.com/search?q=rust+pdf+parser"))):
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+            response = await ac.post("/visit", json={"url": "https://www.google.com/search?q=rust+pdf+parser", "dwell_time": 5.0})
         assert response.status_code == 201
-        assert response.json()["status"] == "skipped"
+        assert response.json()["status"] == "success"
 
 
 @pytest.mark.asyncio
-async def test_visit_dwell_time_rules(client_override: AsyncSession) -> None:
-    """Verifies that dwell time filters normal pages and exempts high-value documents."""
+async def test_visit_all_urls_indexed(client_override: AsyncSession) -> None:
+    """Verifies that all URL paths are indexed regardless of path or dwell time (no skip logic)."""
     transport = httpx.ASGITransport(app=app)
-    mock_html = "<html><head><title>Sample Document</title></head><body>This is a sample document content that is longer than usual.</body></html>"
-    
+    mock_html = "<html><head><title>Sample Document</title></head><body>This is a sample document content.</body></html>"
+
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
-        # 1. Normal page with low dwell time -> skipped
-        with patch.object(document_processor, "_download_page", AsyncMock(return_value=(mock_html, "https://example.com/normal-page"))):
-            response1 = await ac.post("/visit", json={"url": "https://example.com/normal-page", "dwell_time": 4.0})
-            assert response1.status_code == 201
-            assert response1.json()["status"] == "skipped"
+        # Previously blacklisted paths like /login are now indexed
+        with patch.object(document_processor, "_download_page", AsyncMock(return_value=(mock_html, "https://example.com/login"))):
+            response = await ac.post("/visit", json={"url": "https://example.com/login"})
+            assert response.status_code == 201
+            assert response.json()["status"] == "success"
 
-        # 2. Normal page with high dwell time -> success
-        with patch.object(document_processor, "_download_page", AsyncMock(return_value=(mock_html, "https://example.com/normal-page"))):
-            response2 = await ac.post("/visit", json={"url": "https://example.com/normal-page", "dwell_time": 10.0})
-            assert response2.status_code == 201
-            assert response2.json()["status"] == "success"
-
-        # 3. High value page (e.g. documentation URL) with low dwell time -> success (exempted)
-        with patch.object(document_processor, "_download_page", AsyncMock(return_value=(mock_html, "https://docs.example.com/api-reference"))):
-            response3 = await ac.post("/visit", json={"url": "https://docs.example.com/api-reference", "dwell_time": 2.0})
-            assert response3.status_code == 201
-            assert response3.json()["status"] == "success"
+        # Pages with any dwell time are indexed
+        with patch.object(document_processor, "_download_page", AsyncMock(return_value=(mock_html, "https://example.com/low-dwell"))):
+            response = await ac.post("/visit", json={"url": "https://example.com/low-dwell", "dwell_time": 2.0})
+            assert response.status_code == 201
+            assert response.json()["status"] == "success"
 
 
 @pytest.mark.asyncio

@@ -32,18 +32,6 @@ function shouldTrack(urlStr: string): boolean {
 
     const hostname = url.hostname.toLowerCase();
 
-    // Ignore localhost, local loopbacks, and internal IP address spaces
-    if (
-      hostname === "localhost" ||
-      hostname === "127.0.0.1" ||
-      hostname === "::1" ||
-      hostname.startsWith("192.168.") ||
-      hostname.startsWith("10.") ||
-      hostname.endsWith(".local")
-    ) {
-      return false;
-    }
-
     // Ignore browser internal extensions
     if (urlStr.startsWith("chrome-extension://")) {
       return false;

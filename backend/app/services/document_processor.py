@@ -72,85 +72,18 @@ class DocumentProcessor:
 
     @staticmethod
     def _classify_url(url: str) -> dict:
-        """Analyzes a URL and returns classification info: hostname, path flags, etc."""
+        """Returns basic URL info: hostname, path, parsed."""
         parsed = urlparse(url)
         hostname = (parsed.hostname or "").lower()
         if hostname.startswith("www."):
             hostname = hostname[4:]
         path = parsed.path or ""
-        path_lower = path.lower()
-
-        path_parts = [p for p in path.split("/") if p]
-
-        search_domains = [
-            "google.com", "youtube.com", "reddit.com", "github.com",
-            "stackoverflow.com", "dev.to", "medium.com",
-        ]
-        is_matching_domain = (
-            any(hostname == d or hostname.endswith("." + d) for d in search_domains)
-            or ".google." in hostname
-        )
-
-        is_search_page = False
-        if is_matching_domain:
-            query_lower = (parsed.query or "").lower()
-            has_search_path = path_lower.startswith("/search") or path_lower.startswith("/results")
-            has_search_query = "q=" in query_lower or "query=" in query_lower or "search_query=" in query_lower
-            if has_search_path or has_search_query:
-                is_search_page = True
-
-        is_pdf = (
-            path_lower.endswith(".pdf")
-            or (hostname == "arxiv.org" and "/pdf/" in path_lower)
-            or ("/pdf/" in path_lower and not path_lower.endswith((".html", ".htm", ".js", ".css", ".php", ".aspx")))
-        )
-        is_github_repo = (
-            hostname == "github.com"
-            and len(path_parts) >= 2
-            and path_parts[0] not in ["search", "settings", "notifications", "explore", "trending"]
-        )
-        is_docs = (
-            hostname.startswith("docs.")
-            or hostname.startswith("developer.")
-            or "/docs/" in path_lower
-            or "/documentation/" in path_lower
-            or "/guide/" in path_lower
-        )
 
         return {
             "hostname": hostname,
             "path": path,
-            "path_lower": path_lower,
-            "path_parts": path_parts,
-            "is_search_page": is_search_page,
-            "is_high_value": is_pdf or is_github_repo or is_docs,
             "parsed": parsed,
         }
-
-    @staticmethod
-    def _check_skip_page(url: str, info: dict, dwell_time: Optional[float]) -> Optional[str]:
-        """Returns 'skip' if the page should not be indexed, None otherwise."""
-        path_lower = info["path_lower"]
-        if any(p in path_lower for p in ["/login", "/signin", "/signup", "/auth", "/cart", "/checkout", "/logout"]):
-            logger.info(f"Skipping generic noise page visit (path blacklist): {url}")
-            return "skipped"
-
-        if dwell_time is not None:
-            if info["is_search_page"]:
-                if dwell_time < 10.0:
-                    logger.info(f"Skipping platform search URL due to low dwell time ({dwell_time}s): {url}")
-                    return "skipped"
-                logger.info(f"Indexing platform search URL (dwell time threshold met {dwell_time}s): {url}")
-            elif not info["is_high_value"]:
-                if dwell_time < 10.0:
-                    logger.info(f"Skipping page visit due to low dwell time ({dwell_time}s): {url}")
-                    return "skipped"
-        else:
-            if info["is_search_page"]:
-                logger.info(f"Skipping platform search page (no dwell time context provided): {url}")
-                return "skipped"
-
-        return None
 
     async def _handle_duplicate(
         self, db: AsyncSession, doc: Document, visited_at: datetime, dwell_time: Optional[float]
@@ -434,9 +367,6 @@ class DocumentProcessor:
         visited_at = datetime.now(UTC).replace(tzinfo=None)
 
         info = self._classify_url(url)
-        skip_reason = self._check_skip_page(url, info, dwell_time)
-        if skip_reason:
-            return "skipped", None
 
         existing_doc = await document_repository.get_by_url(db, url)
         if existing_doc:
@@ -526,9 +456,6 @@ class DocumentProcessor:
         visited_at = datetime.now(UTC).replace(tzinfo=None)
 
         info = self._classify_url(url)
-        skip_reason = self._check_skip_page(url, info, dwell_time)
-        if skip_reason:
-            return "skipped", None
 
         existing_doc = await document_repository.get_by_url(db, url)
         if existing_doc:

@@ -19,6 +19,8 @@ connect_args = {}
 if "sqlite" in db_url:
     # Allow Multiple Threads For Simple SQLite Reads
     connect_args["check_same_thread"] = False
+    # Prevent "database is locked" errors under concurrent async access
+    connect_args["timeout"] = 15
 
 engine = create_async_engine(
     db_url,

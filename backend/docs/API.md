@@ -27,6 +27,7 @@ When the extension performs client-side extraction (via Defuddle), it sends enri
     "url": "https://example.com/ai-memory-article",
     "title": "Local AI Personal Memory Systems",
     "dwell_time": 42.5,
+    "auto_extract": true,
     "extracted_content": "## AI Memory Systems\n\nThis article discusses...",
     "extracted_content_html": "<h2>AI Memory Systems</h2><p>This article discusses...</p>",
     "description": "A deep dive into local AI memory systems",
@@ -41,6 +42,9 @@ When the extension performs client-side extraction (via Defuddle), it sends enri
     "selection": "selected text in markdown",
     "selection_html": "<p>selected text in HTML</p>"
 }
+```
+
+The `auto_extract` field (`Optional[bool]`, default `true`) tells the backend whether this visit was automatically extracted. When `false` and no `extracted_content` is provided (i.e. the user has auto-extraction disabled and hasn't explicitly captured the page), the backend returns a `"recorded"` status and skips content processing entirely — no server-side download, extraction, or indexing occurs.
 ```
 
 #### Response (New Document Success - Status 201)
@@ -63,6 +67,20 @@ When the extension performs client-side extraction (via Defuddle), it sends enri
     "message": "URL visit recorded. Page content was already indexed.",
     "document_id": 4,
     "title": "Local AI Personal Memory Systems",
+    "domain": "example.com"
+}
+```
+
+#### Response (Recorded without Content - Status 201)
+
+Returned when `auto_extract` is `false` and no `extracted_content` is provided. The visit URL is recorded but no content processing occurs — the backend skips download, extraction, chunking, embedding, and indexing.
+
+```json
+{
+    "status": "recorded",
+    "message": "Visit recorded without content extraction (auto_extract is off).",
+    "document_id": null,
+    "title": null,
     "domain": "example.com"
 }
 ```

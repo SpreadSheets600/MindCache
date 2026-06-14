@@ -24,6 +24,7 @@ import {
     Sparkles,
     Trophy,
     KeyRound,
+    Clock,
 } from "lucide-react";
 import { getErrorMessage } from "../utils/error";
 
@@ -107,6 +108,7 @@ const App: React.FC = () => {
     const [searchSourceType, setSearchSourceType] = useState("all");
     const [searchSortOrder, setSearchSortOrder] = useState("relevance");
     const [searchMinScore, setSearchMinScore] = useState(DEFAULT_MIN_SCORE);
+    const [searchMinDwell, setSearchMinDwell] = useState(0);
 
     useEffect(() => {
         const timer = setTimeout(() => setDebouncedDashSearch(dashSearch), SEARCH_DEBOUNCE_DELAY);
@@ -138,6 +140,21 @@ const App: React.FC = () => {
         queryFn: () => backendClient.listDocuments(0, MAX_DOCUMENTS_FETCH),
         enabled: isOnline,
     });
+
+    const domainTimeData = useMemo(() => {
+        const map = new Map<string, { total: number; count: number }>();
+        for (const doc of documents) {
+            const dt = (doc as any).total_dwell_time || 0;
+            const cur = map.get(doc.domain) || { total: 0, count: 0 };
+            cur.total += dt;
+            cur.count += 1;
+            map.set(doc.domain, cur);
+        }
+        return Array.from(map.entries())
+            .map(([domain, data]) => ({ domain, ...data }))
+            .sort((a, b) => b.total - a.total)
+            .slice(0, 6);
+    }, [documents]);
 
     const {
         data: dashSearchResults,
@@ -181,6 +198,11 @@ const App: React.FC = () => {
             items = items.filter((item) => Math.round(item.score * SCORE_PERCENTAGE_MULTIPLIER) >= searchMinScore);
         }
 
+        // 2b. Filter by Minimum Dwell Time
+        if (searchMinDwell > 0) {
+            items = items.filter((item) => (item.total_dwell_time || 0) >= searchMinDwell);
+        }
+
         // 3. Sort Results
         if (searchSortOrder === "date_desc") {
             items.sort((a, b) => new Date(b.last_visited_at).getTime() - new Date(a.last_visited_at).getTime());
@@ -195,7 +217,7 @@ const App: React.FC = () => {
         }
 
         return items;
-    }, [dashSearchResults, searchSourceType, searchMinScore, searchSortOrder]);
+    }, [dashSearchResults, searchSourceType, searchMinScore, searchSortOrder, searchMinDwell]);
 
     useEffect(() => {
         if (isOnline && activePage === "memories") {
@@ -363,7 +385,7 @@ const App: React.FC = () => {
                                                 }
                                                 className="flex items-center justify-between p-3 rounded-md border border-border bg-secondary/5 hover:bg-secondary/20 hover:border-border/80 cursor-pointer transition-all"
                                             >
-                                                <div className="space-y-0.5 truncate max-w-[75%]">
+                                                <div className="space-y-0.5 truncate max-w-[65%]">
                                                     <h4 className="text-xs font-medium text-zinc-100 truncate leading-snug hover:text-blue-400 transition-colors">
                                                         {doc.title || doc.url}
                                                     </h4>
@@ -371,11 +393,18 @@ const App: React.FC = () => {
                                                         {doc.domain}
                                                     </p>
                                                 </div>
-                                                <span className="text-[10px] text-muted-foreground/75 font-mono">
-                                                    {new Date(
-                                                        doc.updated_at,
-                                                    ).toLocaleDateString()}
-                                                </span>
+                                                <div className="flex items-center space-x-2 shrink-0">
+                                                    {(doc as any).total_dwell_time > 0 && (
+                                                        <span className="text-[9px] font-mono text-amber-400/60">
+                                                            {formatDuration((doc as any).total_dwell_time)}
+                                                        </span>
+                                                    )}
+                                                    <span className="text-[10px] text-muted-foreground/75 font-mono">
+                                                        {new Date(
+                                                            doc.updated_at,
+                                                        ).toLocaleDateString()}
+                                                    </span>
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
@@ -489,13 +518,24 @@ const App: React.FC = () => {
                                     </div>
                                 </div>
 
-                                <div className="p-4 rounded-lg border border-border">
-                                    <div className="text-xs text-muted-foreground">
-                                        Domains Indexed
+                                <div className="p-4 rounded-lg border border-border space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs text-muted-foreground">Domains Indexed</span>
+                                        <span className="text-lg font-semibold">{new Set(documents.map(d => d.domain)).size}</span>
                                     </div>
-                                    <div className="text-lg font-semibold mt-1">
-                                        {new Set(documents.map(d => d.domain)).size} domains
-                                    </div>
+                                    {domainTimeData.length > 0 && (
+                                        <>
+                                            <div className="border-t border-border/50 pt-2 space-y-1.5 max-h-[180px] overflow-y-auto">
+                                                <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider font-semibold">Top Sites by Time</div>
+                                                {domainTimeData.map((d) => (
+                                                    <div key={d.domain} className="flex items-center justify-between text-[11px]">
+                                                        <span className="truncate max-w-[60%] text-muted-foreground font-mono">{d.domain}</span>
+                                                        <span className="text-amber-400/80 font-mono text-[10px] shrink-0">{formatDuration(d.total)}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -1137,6 +1177,27 @@ const App: React.FC = () => {
                                             className="w-full h-1.5 bg-zinc-900 rounded-lg appearance-none cursor-pointer accent-primary"
                                         />
                                     </div>
+
+                                    {/* Min Time Spent Filter */}
+                                    <div className="border-t border-zinc-800/60 pt-3.5 space-y-1.5">
+                                        <div className="flex justify-between text-[11px]">
+                                            <span className="text-muted-foreground">Min Time Spent</span>
+                                            <span className="text-amber-400/80 font-mono font-semibold">{searchMinDwell > 0 ? formatDuration(searchMinDwell) : "Any"}</span>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="3600"
+                                            step="30"
+                                            value={searchMinDwell}
+                                            onChange={(e) => setSearchMinDwell(parseInt(e.target.value))}
+                                            className="w-full h-1.5 bg-zinc-900 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                                        />
+                                        <div className="flex justify-between text-[9px] text-muted-foreground/50">
+                                            <span>Any</span>
+                                            <span>1h</span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
@@ -1277,7 +1338,8 @@ const App: React.FC = () => {
                                                                         {result.total_dwell_time > 0 && (
                                                                             <>
                                                                                 <span>&bull;</span>
-                                                                                <span className="font-mono text-[10px] text-amber-400/70">
+                                                                                <span className="flex items-center gap-1 font-mono text-[10px] text-amber-400/70">
+                                                                                    <Clock className="w-3 h-3" />
                                                                                     {formatDuration(result.total_dwell_time)}
                                                                                 </span>
                                                                             </>

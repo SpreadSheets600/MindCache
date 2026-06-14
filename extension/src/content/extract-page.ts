@@ -25,6 +25,11 @@ const BLACKLISTED_PATHS = [
   '/login', '/signup', '/register', '/logout', '/reset-password',
   '/forgot-password', '/subscribe', '/pricing', '/checkout', '/cart',
   '/wp-admin', '/admin', '/login/', '/signup/', '/register/',
+  '/auth', '/auth/', '/signin', '/sign-in', '/log-in', '/oauth',
+  '/oauth/', '/authorize', '/authenticate', '/sessions',
+  '/accounts/login', '/account/login', '/accounts/signup',
+  '/password-reset', '/email-verify', '/verify-email',
+  '/2fa', '/mfa', '/otp', '/consent',
 ];
 
 function isBlacklistedUrl(url: string): boolean {

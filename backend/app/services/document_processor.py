@@ -94,6 +94,8 @@ class DocumentProcessor:
         revisit_count = len(doc.visits) + 1
         words = (doc.extracted_content or "").split()
         word_count = len(words)
+        if dwell_time is not None and dwell_time > 0:
+            doc.total_dwell_time = (doc.total_dwell_time or 0.0) + dwell_time
         doc.quality_score = self.calculate_document_quality_score(
             word_count=word_count,
             source_type=doc.source_type,
@@ -428,6 +430,7 @@ class DocumentProcessor:
             source_type="Generic",
             platform_metadata=platform_metadata if platform_metadata else None,
             quality_score=quality_score,
+            total_dwell_time=dwell_time or 0.0,
         )
 
         await document_repository.add_keywords(db, doc.id, extracted_keywords)
@@ -515,6 +518,7 @@ class DocumentProcessor:
             source_type=source_type,
             platform_metadata=platform_metadata,
             quality_score=quality_score,
+            total_dwell_time=dwell_time or 0.0,
         )
 
         await document_repository.add_keywords(db, doc.id, keywords)

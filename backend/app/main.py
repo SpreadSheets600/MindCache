@@ -47,6 +47,9 @@ async def lifespan(app: FastAPI):
             if "quality_score" not in columns:
                 logger.info("Upgrading Database: Adding quality_score column to documents...")
                 await conn.execute(text("ALTER TABLE documents ADD COLUMN quality_score FLOAT DEFAULT 0.0"))
+            if "total_dwell_time" not in columns:
+                logger.info("Upgrading Database: Adding total_dwell_time column to documents...")
+                await conn.execute(text("ALTER TABLE documents ADD COLUMN total_dwell_time FLOAT DEFAULT 0.0"))
 
         logger.info("Database Schemas Synchronized Successfully.")
 

@@ -427,6 +427,7 @@ class SearchService:
                 score=score,
                 published_date=doc.published_date,
                 last_visited_at=last_visit,
+                total_dwell_time=doc.total_dwell_time,
                 keywords=keywords_response,
                 source_type=doc.source_type,
             )

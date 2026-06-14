@@ -91,6 +91,7 @@ class SearchResultItem(BaseModel):
     published_date: Optional[datetime] = None  # noqa: UP045
     last_visited_at: datetime = Field(..., description="The Timestamp Of The Most Recent Visit.")
     keywords: list[KeywordResponse] = []  # noqa: UP045
+    total_dwell_time: float = 0.0
     source_type: str = "Generic"
 
 
@@ -115,6 +116,7 @@ class DocumentResponse(BaseModel):
     source_type: str = "Generic"
     platform_metadata: Optional[dict] = None  # noqa: UP045
     summary: Optional[str] = None  # noqa: UP045
+    total_dwell_time: float = 0.0
     created_at: datetime
     updated_at: datetime
     keywords: list[KeywordResponse] = []  # noqa: UP045

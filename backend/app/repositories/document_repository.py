@@ -81,6 +81,7 @@ class DocumentRepository:
         source_type: str = "Generic",
         platform_metadata: Optional[dict] = None,  # noqa: UP045
         quality_score: float = 0.0,
+        total_dwell_time: float = 0.0,
     ) -> Document:
         """Creates And Persists A New Web Document Record In The Database."""
 
@@ -95,6 +96,7 @@ class DocumentRepository:
             source_type=source_type,
             platform_metadata=platform_metadata,
             quality_score=quality_score,
+            total_dwell_time=total_dwell_time,
         )
         db.add(document)
         await db.flush()  # Generates The document.id

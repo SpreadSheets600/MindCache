@@ -76,6 +76,11 @@ const BLACKLISTED_PATHS = [
   '/login', '/signup', '/register', '/logout', '/reset-password',
   '/forgot-password', '/subscribe', '/pricing', '/checkout', '/cart',
   '/wp-admin', '/admin', '/login/', '/signup/', '/register/',
+  '/auth', '/auth/', '/signin', '/sign-in', '/log-in', '/oauth',
+  '/oauth/', '/authorize', '/authenticate', '/sessions',
+  '/accounts/login', '/account/login', '/accounts/signup',
+  '/password-reset', '/email-verify', '/verify-email',
+  '/2fa', '/mfa', '/otp', '/consent',
 ];
 
 function isBlacklistedPath(urlStr: string): boolean {
@@ -123,6 +128,7 @@ function shouldTrack(urlStr: string): boolean {
 }
 
 const DWELL_TIME_THRESHOLD_SEC = 10;
+const MIN_DWELL_TIME_SEC = 5;
 
 interface ActiveTabState {
   tabId: number;
@@ -182,8 +188,10 @@ async function handleTabDeactivated(tabId: number | null) {
   const durationSeconds = (Date.now() - state.activatedAt) / 1000;
   console.log(`[MindCache Background] Active session ended for ${state.url} after ${durationSeconds.toFixed(1)}s`);
 
-  if (!state.indexed) {
+  if (!state.indexed && durationSeconds >= MIN_DWELL_TIME_SEC) {
     await processVisit(state.url, state.title, durationSeconds, state.tabId);
+  } else if (!state.indexed) {
+    console.log(`[MindCache Background] Skipping ${state.url} — dwell time ${durationSeconds.toFixed(1)}s below minimum ${MIN_DWELL_TIME_SEC}s`);
   }
 }
 

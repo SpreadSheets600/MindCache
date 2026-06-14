@@ -40,6 +40,15 @@ const STRONG_MATCH_THRESHOLD = 55;
 const DEFAULT_MIN_SCORE = 0;
 const RESULT_LIMIT_OPTIONS = [5, 10, 20, 30] as const;
 
+function formatDuration(seconds: number): string {
+    if (!seconds || seconds < 1) return "";
+    if (seconds < 60) return `${Math.round(seconds)}s`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    return `${h}h ${m}m`;
+}
+
 type Page = "dashboard" | "search" | "graph" | "memories" | "settings";
 
 const App: React.FC = () => {
@@ -179,6 +188,10 @@ const App: React.FC = () => {
             items.sort((a, b) => new Date(a.last_visited_at).getTime() - new Date(b.last_visited_at).getTime());
         } else if (searchSortOrder === "domain") {
             items.sort((a, b) => (a.domain || "").localeCompare(b.domain || ""));
+        } else if (searchSortOrder === "dwell_desc") {
+            items.sort((a, b) => (b.total_dwell_time || 0) - (a.total_dwell_time || 0));
+        } else if (searchSortOrder === "dwell_asc") {
+            items.sort((a, b) => (a.total_dwell_time || 0) - (b.total_dwell_time || 0));
         }
 
         return items;
@@ -190,11 +203,17 @@ const App: React.FC = () => {
         }
     }, [activePage, isOnline]);
 
+    const [deleteError, setDeleteError] = useState<string | null>(null);
+
     const deleteMutation = useMutation({
         mutationFn: (id: number) => backendClient.deleteDocument(id),
         onSuccess: () => {
+            setDeleteError(null);
             queryClient.invalidateQueries({ queryKey: ["documents"] });
             refetchDocs();
+        },
+        onError: (err: any) => {
+            setDeleteError(err?.message || "Failed to delete document. Check backend logs.");
         },
     });
 
@@ -552,6 +571,14 @@ const App: React.FC = () => {
                                                         doc.updated_at,
                                                     ).toLocaleDateString()}
                                                 </span>
+                                                {(doc as any).total_dwell_time > 0 && (
+                                                    <>
+                                                        <span className="text-muted-foreground/30">-</span>
+                                                        <span className="font-mono text-[10px] text-amber-400/70">
+                                                            {formatDuration((doc as any).total_dwell_time)}
+                                                        </span>
+                                                    </>
+                                                )}
                                             </div>
                                             {doc.keywords &&
                                                 doc.keywords.length > 0 && (
@@ -614,6 +641,12 @@ const App: React.FC = () => {
                                         </div>
                                     </div>
                                 ))}
+                            </div>
+                        )}
+                        {deleteError && (
+                            <div className="p-3 rounded-md bg-red-950/20 border border-red-900/30 text-red-400 text-xs">
+                                {deleteError}
+                                <button onClick={() => setDeleteError(null)} className="ml-2 underline">Dismiss</button>
                             </div>
                         )}
                     </div>
@@ -866,6 +899,36 @@ const App: React.FC = () => {
                             </div>
 
                             <div className="border-t border-border" />
+
+                            <div className="space-y-3">
+                                <div className="flex items-center space-x-2 text-sm font-medium">
+                                    <Shield className="w-4 h-4 text-muted-foreground" />
+                                    <span>Auto-Excluded Pages</span>
+                                </div>
+                                <p className="text-[11px] text-muted-foreground/70 leading-relaxed">
+                                    These common auth/shell pages are automatically skipped during tracking.
+                                </p>
+                                <div className="max-h-40 overflow-y-auto rounded-md border border-border bg-secondary/10 p-2">
+                                    {[
+                                        '/login', '/signup', '/register', '/logout', '/auth',
+                                        '/admin', '/checkout', '/cart', '/pricing', '/subscribe',
+                                        '/oauth', '/authorize', '/sign-in', '/log-in', '/2fa',
+                                        '/password-reset', '/verify-email', '/sessions',
+                                    ].map((path, i) => (
+                                        <span
+                                            key={i}
+                                            className="inline-block text-[10px] font-mono text-muted-foreground/60 bg-secondary/30 px-1.5 py-0.5 rounded mr-1 mb-1"
+                                        >
+                                            {path}
+                                        </span>
+                                    ))}
+                                </div>
+                                <p className="text-[10px] text-muted-foreground/50 italic">
+                                    Add domain-level exclusions above for more control.
+                                </p>
+                            </div>
+
+                            <div className="border-t border-border" />
                         </div>
                     </div>
                 );
@@ -1054,6 +1117,8 @@ const App: React.FC = () => {
                                             <option value="date_desc">Visited: Newest First</option>
                                             <option value="date_asc">Visited: Oldest First</option>
                                             <option value="domain">Domain (A-Z)</option>
+                                            <option value="dwell_desc">Time Spent: Most First</option>
+                                            <option value="dwell_asc">Time Spent: Least First</option>
                                         </select>
                                     </div>
 
@@ -1209,6 +1274,14 @@ const App: React.FC = () => {
                                                                                 result.last_visited_at,
                                                                             ).toLocaleDateString()}
                                                                         </span>
+                                                                        {result.total_dwell_time > 0 && (
+                                                                            <>
+                                                                                <span>&bull;</span>
+                                                                                <span className="font-mono text-[10px] text-amber-400/70">
+                                                                                    {formatDuration(result.total_dwell_time)}
+                                                                                </span>
+                                                                            </>
+                                                                        )}
                                                                     </div>
 
                                                                     {result.summary && (

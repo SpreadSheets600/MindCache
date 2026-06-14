@@ -17,6 +17,7 @@ export interface SearchResultItem {
   score: number;
   published_date: string | null;
   last_visited_at: string;
+  total_dwell_time: number;
   keywords: Keyword[];
   source_type: string;
 }
@@ -68,6 +69,7 @@ export interface DocumentResponse {
   source_type: string;
   platform_metadata: Record<string, any> | null;
   summary: string | null;
+  total_dwell_time: number;
   created_at: string;
   updated_at: string;
   keywords: Keyword[];

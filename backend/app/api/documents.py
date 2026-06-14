@@ -60,6 +60,7 @@ async def list_documents(
                     updated_at=doc.updated_at,
                     keywords=keywords_res,
                     entities=entities_res,
+                    total_dwell_time=doc.total_dwell_time,
                     visit_history=visit_res,
                 )
             )

@@ -17,12 +17,12 @@ Load `dist/` as an unpacked extension in Chrome/Brave (`chrome://extensions` →
 
 ## Documentation
 
-Full project docs are in the root [`docs/`](../docs/index.md) directory:
+Full project docs are in the root [`docs/`](../docs/README.md) directory:
 
-- [Architecture](../docs/architecture.md) — Extension modules, state management, build output
-- [API Reference](../docs/api.md) — Backend endpoints the extension calls
-- [Development Guide](../docs/development.md) — Build, test, project structure, named constants, context menus
-- [AI Pipeline](../docs/ai-pipeline.md) — Client-side extraction bypass, embedding generation
+- [Architecture](../docs/Architecture.md) — Extension modules, state management, build output
+- [API Reference](../docs/API.md) — Backend endpoints the extension calls
+- [Development Guide](../docs/Development.md) — Build, test, project structure, named constants, context menus
+- [AI Pipeline](../docs/AI-Pipeline.md) — Client-side extraction bypass, embedding generation
 
 ---
 

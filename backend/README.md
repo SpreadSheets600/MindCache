@@ -19,12 +19,12 @@ Interactive API docs at `http://127.0.0.1:8000/docs`.
 
 Full project docs are in the root [`docs/`](../docs/index.md) directory:
 
-- [Architecture](../docs/architecture.md) — System context, ingestion pipeline, retrieval
-- [API Reference](../docs/api.md) — All endpoints with request/response examples
-- [AI Pipeline](../docs/ai-pipeline.md) — Embeddings, FAISS, Ollama summarization
-- [Platform Extraction](../docs/platform-extraction.md) — YouTube, X/Twitter extractors
-- [Setup Guide](../docs/setup.md) — Config, migrations, testing, linting
-- [Development Guide](../docs/development.md) — Project structure, building, debugging
+- [Architecture](../docs/Architecture.md) — System context, ingestion pipeline, retrieval
+- [API Reference](../docs/API.md) — All endpoints with request/response examples
+- [AI Pipeline](../docs/AI-Pipeline.md) — Embeddings, FAISS, Ollama summarization
+- [Platform Extraction](../docs/Platform-Extraction.md) — YouTube, X/Twitter extractors
+- [Setup Guide](../docs/Setup.md) — Config, migrations, testing, linting
+- [Development Guide](../docs/Development.md) — Project structure, building, debugging
 
 ---
 

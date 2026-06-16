@@ -35,18 +35,18 @@ npm run build
 
 ## Documentation
 
-Everything is in the [`docs/`](docs/index.md) directory:
+Everything is in the [`docs/`](docs/README.md) directory:
 
 | Doc | What It Covers |
 |---|---|
-| [Index / Quick Start](docs/index.md) | Landing page, prerequisites, backend + extension setup |
-| [Architecture](docs/architecture.md) | System context, ingestion pipeline, extension modules, retrieval |
-| [API Reference](docs/api.md) | All REST endpoints with request/response examples |
-| [AI Pipeline](docs/ai-pipeline.md) | Embeddings, FAISS search, Ollama summarization |
-| [Platform Extraction](docs/platform-extraction.md) | YouTube, X/Twitter extractors, factory pattern |
-| [Setup Guide](docs/setup.md) | Backend config, migrations, testing, linting |
-| [Development Guide](docs/development.md) | Extension build, project structure, constants, context menus |
-| [Study Guide](docs/study.md) | Deep-dive into search, embeddings, vector databases, RAG |
+| [Index / Quick Start](docs/README.md) | Landing page, prerequisites, backend + extension setup |
+| [Architecture](docs/Architecture.md) | System context, ingestion pipeline, extension modules, retrieval |
+| [API Reference](docs/API.md) | All REST endpoints with request/response examples |
+| [AI Pipeline](docs/AI-Pipeline.md) | Embeddings, FAISS search, Ollama summarization |
+| [Platform Extraction](docs/Platform-Extraction.md) | YouTube, X/Twitter extractors, factory pattern |
+| [Setup Guide](docs/Setup.md) | Backend config, migrations, testing, linting |
+| [Development Guide](docs/Development.md) | Extension build, project structure, constants, context menus |
+| [Study Guide](docs/Study.md) | Deep-dive into search, embeddings, vector databases, RAG |
 
 ---
 

@@ -46,6 +46,7 @@ The content script runs in the page DOM context. When the background worker need
 The content script also handles `"ping"` (health check), `"toggle-overlay"` (search overlay), and `"extract-selection"` (context menu selection capture).
 
 **Content Script Entry (`src/content/index.ts`)**:
+
 - Sets up 3 message handlers: `ping`, `extract-page`, `extract-selection`
 - Initializes the SearchOverlay React component inside an isolated Shadow DOM attached to `document.documentElement`
 - Renders `<SearchOverlay />` via `React.createElement` and `createRoot`
@@ -55,6 +56,7 @@ The content script also handles `"ping"` (health check), `"toggle-overlay"` (sea
 Monitors tab activations, navigation completions, closures, and window focus changes. Computes exact dwell time per tab.
 
 **Visit filtering** (`shouldTrack()`):
+
 - Protocol must be `http:` or `https:` (not `chrome-extension://`)
 - `autoTracking` setting must be enabled
 - Domain not in user exclusion list
@@ -64,6 +66,7 @@ Monitors tab activations, navigation completions, closures, and window focus cha
 **Dwell time**: 10-second threshold (`DWELL_TIME_THRESHOLD_SEC`) before auto-indexing. Minimum 5 seconds (`MIN_DWELL_TIME_SEC`) to index on tab deactivation. Tab deactivation immediately records a visit with actual duration. Duplicate URLs within 10 seconds are suppressed (`recentVisits` Map, capped at 200 entries with LRU eviction).
 
 **Event Listeners** (6 total):
+
 1. `chrome.tabs.onActivated` — tab switch triggers `handleTabActivated()`
 2. `chrome.tabs.onUpdated` (status === "complete") — navigation completion
 3. `chrome.tabs.onRemoved` — tab closure triggers `handleTabDeactivated()`
@@ -72,6 +75,7 @@ Monitors tab activations, navigation completions, closures, and window focus cha
 6. `chrome.runtime.onMessage` — 7 message handlers for cross-context communication
 
 **Message Handlers** (in `chrome.runtime.onMessage`):
+
 - `"get-active-tabs"` — returns all open tabs with id, title, url, favIconUrl, active status
 - `"search-memory"` — proxies to `backendClient.search()` and returns results
 - `"check-backend-health"` — proxies to `backendClient.checkHealth()`
@@ -83,6 +87,7 @@ Monitors tab activations, navigation completions, closures, and window focus cha
 **Auto-extraction toggle**: When off, `processVisit()` returns early — no content extraction, no backend call. User must explicitly capture via popup, keybind, or context menu.
 
 **Three capture methods**:
+
 1. Keyboard shortcut `Ctrl+Shift+S` — `chrome.commands.onCommand` → `captureCurrentPage()`
 2. Popup "Save to MindCache" button — runtime message → same `captureCurrentPage()`
 3. Context menu — three items created on `chrome.runtime.onInstalled`:
@@ -95,6 +100,7 @@ Monitors tab activations, navigation completions, closures, and window focus cha
 ### Spotlight Search Overlay (`src/content/SearchOverlay.tsx`)
 
 Keyboard-first search window rendered in a Shadow DOM inside every page. Features:
+
 - **Two modes**: Tabs (search open browser tabs) and Memory (search indexed history)
 - **Keyboard shortcuts**: `Ctrl+Shift+K` (or `Cmd+Shift+K`) toggles overlay, `Tab` switches mode, `Ctrl+T`/`Ctrl+M` jump to mode, Arrow keys navigate results, Enter selects
 - **Debounced search**: 250ms debounce on memory search queries
@@ -105,6 +111,7 @@ Keyboard-first search window rendered in a Shadow DOM inside every page. Feature
 ### Popup (`src/popup/App.tsx`)
 
 Compact 300px-wide popup with:
+
 - **Brand header**: Brain icon + "MindCache"
 - **Connection status banner**: Green "System Active & Recording" (ping animation) or Red "Backend Disconnected"
 - **Page preview**: Title, description, first 300 chars, site name, word count
@@ -117,6 +124,7 @@ Compact 300px-wide popup with:
 Five-tab interface: Overview, Semantic Search, Knowledge Graph, Memories, Settings.
 
 **Dashboard Tab**:
+
 - Stats row: Memories count, Vectors count, AI Model name, Embedding Model name, Status indicator
 - Recent Activity: Last 7 documents with dwell time and date (clickable for detail view)
 - Diagnostics Panel: Database status, document count, FAISS vectors, Ollama status/model, Embedding status/model, Refresh button
@@ -124,6 +132,7 @@ Five-tab interface: Overview, Semantic Search, Knowledge Graph, Memories, Settin
 - Domains Indexed: Unique domain count + Top 6 sites by total dwell time
 
 **Search Tab**:
+
 - Full-text search input with AI Summary toggle
 - Suggestion chips for common queries
 - Filters sidebar: Result limit (5/10/20/30), Time range (start/end dates), Source/Platform filter, Sort order (relevance, date, domain, dwell), Min match score slider (0-100%), Min time spent slider (0-3600s)
@@ -134,6 +143,7 @@ Five-tab interface: Overview, Semantic Search, Knowledge Graph, Memories, Settin
 **Memories Tab**: Document list with search filter, title, domain, date, dwell time, keyword tags, View/Open/Delete actions.
 
 **Settings Tab**:
+
 - Server: Base URL input + Save button
 - Privacy: Auto tab tracking, Private search logging, Auto extraction toggles
 - Shortcuts: Display of keyboard shortcuts + context menu items + link to Chrome shortcuts
@@ -153,6 +163,7 @@ The background worker listens for `chrome.storage.onChanged` and calls `rehydrat
 ### Backend Client (`src/services/BackendClient.ts`)
 
 Singleton API client wrapping all backend endpoints:
+
 - **Configurable**: Reads base URL from `useSettingsStore` dynamically
 - **Retry**: Up to 2 retries with exponential backoff (300ms, 600ms) on server errors. Bypassed on 4xx responses and health checks
 - **Fail-safe**: Background ingestion catches and discards server errors silently. Popup and settings display friendly offline alerts
@@ -181,6 +192,7 @@ FastAPI application with title "MindCache Backend", version 0.1.0.
 **Lifespan Events**:
 
 **Startup**:
+
 1. **Logging** initialized
 2. **Database schema sync** — creates all tables via `Base.metadata.create_all`. Runs dynamic PRAGMA migrations to add columns (`source_type`, `platform_metadata`, `quality_score`, `total_dwell_time`) to existing databases via ALTER TABLE IF NOT EXISTS
 3. **Background AI model warmup** (`warm_up_models_background`): Warms up embedding and generative models via Ollama `/api/embed` and `/api/generate` with `keep_alive=-1`. Checks if FAISS needs reindexing (dimension mismatch or empty index with documents in DB) and triggers `document_processor.reindex_all_documents()`
@@ -214,6 +226,7 @@ Runtime overrides: `OLLAMA_MODEL=gemma4:31b-cloud`, `EMBEDDING_PROVIDER=ollama`,
 Six SQLAlchemy ORM tables:
 
 **`documents`** — Primary content table:
+
 | Column | Type | Notes |
 |---|---|---|
 | `id` | Integer (PK) | Auto-increment |
@@ -240,6 +253,7 @@ Six SQLAlchemy ORM tables:
 ### Core Services
 
 **`DocumentProcessor`** (`document_processor.py`): Orchestrates the entire ingestion pipeline. Key methods:
+
 - `process_pre_extracted()` — Handles client-side extracted content from the extension (skips server-side download)
 - `process_url()` — Full pipeline: validate URL → check duplicate → platform extractor → keyword/entity extraction → create document → chunk → embed → index → background summary
 - `_chunk_content()` — Splits text into 3000-char chunks with 500-char overlap
@@ -251,6 +265,7 @@ Six SQLAlchemy ORM tables:
 **`EmbeddingService`** (`embedding_service.py`): Generates dense vectors via Ollama `/api/embed`. Features in-memory query cache (FIFO, 512 entries). Automatically detects embedding dimension on first call.
 
 **`OllamaService`** (`ollama_service.py`): Communicates with Ollama for generation tasks:
+
 - `generate_summary()` — 2-3 sentence document summary
 - `generate_collective_summary()` — Multi-document synthesis with `[1]`, `[2]` source citations
 - `extract_keywords()` — Prompt-based keyword extraction (top N single-word keywords)
@@ -283,6 +298,7 @@ Factory pattern via `ExtractorFactory` — domain-based routing with PDF prefix 
 ### Knowledge Graph
 
 The `/graph` endpoint builds a dynamic graph from SQLite data:
+
 - **Nodes**: Documents, Entities (Person/Company/Technology/Project), Keywords
 - **Edges**: `has_keyword` (doc→keyword), `has_entity` (doc→entity), `co_occurs` (entity↔entity, keyword↔keyword)
 - **Co-occurrence**: Entities/keywords appearing in the same document are connected with weighted edges
@@ -351,6 +367,7 @@ sequenceDiagram
 ### Client-Side Extraction Bypass
 
 When the extension provides `extracted_content` in the payload, the backend **skips** server-side HTTP download and Trafilatura/BeautifulSoup extraction entirely. This enables indexing of:
+
 - Pages behind authentication or paywalls (user is already logged in)
 - JavaScript-rendered SPAs (browser has the rendered DOM)
 - Large pages (no server round-trip for download)
@@ -431,6 +448,7 @@ $$\text{base\_score} = 0.45 \cdot V_{\text{score}} + 0.25 \cdot B_{\text{score}}
 $$\text{final\_score} = \text{base\_score} \cdot (1 + \text{quality\_score} \cdot 0.05)$$
 
 Quality score (0-8) sums:
+
 - Dwell time >60s: +2
 - Word count >500: +2
 - High-value source (GitHub, PDF, docs): +2

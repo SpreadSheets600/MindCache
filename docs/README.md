@@ -63,12 +63,12 @@ Visit any webpage, wait 10 seconds, then check:
 
 | Doc | What It Covers |
 |---|---|
-| [Architecture](architecture.md) | System context, ingestion pipeline, extension modules, retrieval pipeline, state management, build outputs |
-| [API Reference](api.md) | All REST endpoints: visit ingestion, search, document management, knowledge graph, health |
+| [Architecture](Architecture.md) | System context, ingestion pipeline, extension modules, retrieval pipeline, state management, build outputs |
+| [API Reference](API.md) | All REST endpoints: visit ingestion, search, document management, knowledge graph, health |
 | [AI Pipeline](AI-Pipeline.md) | Embedding generation, FAISS search, Ollama summarization, hybrid retrieval |
-| [Platform Extraction](PlatformExtraction.md) | YouTube, X/Twitter, GitHub, Reddit, PDF, Google Search extractors, factory pattern, adding new extractors |
+| [Platform Extraction](Platform-Extraction.md) | YouTube, X/Twitter, GitHub, Reddit, PDF, Google Search extractors, factory pattern, adding new extractors |
 | [Setup Guide](Setup.md) | Backend installation, environment config, migrations, testing, linting |
-| [Development Guide](development.md) | Extension dev server, project structure, named constants, context menus, packaging |
+| [Development Guide](Development.md) | Extension dev server, project structure, named constants, context menus, packaging |
 | [Study Guide](Study.md) | Educational deep-dive into search, embeddings, vector databases, RAG |
 
 ---

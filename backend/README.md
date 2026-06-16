@@ -17,7 +17,7 @@ Interactive API docs at `http://127.0.0.1:8000/docs`.
 
 ## Documentation
 
-Full project docs are in the root [`docs/`](../docs/index.md) directory:
+Full project docs are in the root [`docs/`](../docs/README.md) directory:
 
 - [Architecture](../docs/Architecture.md) — System context, ingestion pipeline, retrieval
 - [API Reference](../docs/API.md) — All endpoints with request/response examples

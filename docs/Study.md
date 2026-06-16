@@ -753,4 +753,4 @@ Distributed search systems split a massive search index across multiple machines
 
 ---
 
-> **Note:** For detailed implementation references and code-level documentation, see the [Architecture](architecture.md), [API Reference](api.md), and [Development](development.md) guides.
+> **Note:** For detailed implementation references and code-level documentation, see the [Architecture](Architecture.md), [API Reference](API.md), and [Development](Development.md) guides.

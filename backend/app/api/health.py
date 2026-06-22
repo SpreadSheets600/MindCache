@@ -4,7 +4,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.repositories.document_repository import document_repository
-from app.services.ollama_service import ollama_service
 from app.services.vector_service import vector_service
 
 router = APIRouter(tags=["System health"])
@@ -39,10 +38,7 @@ async def health_check(db: AsyncSession = Depends(get_db)) -> dict:  # noqa: B00
     except Exception:
         pass
 
-    # Check For Model Server
-    ollama_online = await ollama_service.check_health()
-
-    # Check For Embedding Model Server/Local Status
+    # Check For Local Embedding Model
     from app.services.embedding_service import embedding_service
     embedding_online = await embedding_service.check_health()
     embedding_model = embedding_service.model_name
@@ -62,10 +58,6 @@ async def health_check(db: AsyncSession = Depends(get_db)) -> dict:  # noqa: B00
             "faiss_index": {
                 "status": faiss_status,
                 "vectors_count": vector_count,
-            },
-            "ollama": {
-                "status": "connected" if ollama_online else "offline",
-                "model": ollama_service.model if ollama_online else None,
             },
             "embedding": {
                 "status": "connected" if embedding_online else "offline",

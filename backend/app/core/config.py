@@ -24,13 +24,13 @@ class Settings(BaseSettings):
     # FAISS Vector Store
     FAISS_INDEX_PATH: str = "data/faiss_index.bin"
     BM25_INDEX_PATH: str = "data/bm25_index.pkl"
-    EMBEDDING_DIMENSION: int = 384  # Default/fallback Dimension
+    EMBEDDING_DIMENSION: int = 1024  # Detected dynamically from model at runtime
 
     # AI Models
-    EMBEDDING_PROVIDER: str = "huggingface"  # "huggingface" or "ollama"
-    EMBEDDING_MODEL_NAME: str = "BAAI/bge-small-en-v1.5"
-    OLLAMA_BASE_URL: str = "http://localhost:11434"
-    OLLAMA_MODEL: str = "llama3"
+    EMBEDDING_MODEL_PATH: str = "ai"  # Relative to BASE_DIR, or HF model ID
+    EMBEDDING_MODEL_NAME: str = "Qwen/Qwen3-Embedding-0.6B"
+    EMBEDDING_PROVIDER: str = "local"
+    EMBEDDING_DIMENSION: int = 1024  # Detected dynamically from model at runtime
 
     # General
     LOG_LEVEL: str = "INFO"

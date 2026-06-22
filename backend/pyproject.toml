@@ -24,6 +24,7 @@ dependencies = [
     "duckduckgo-search>=8.1.1",
     "ddgs>=9.14.4",
     "pypdf>=6.12.2",
+    "sentence-transformers>=5.6.0",
 ]
 
 [dependency-groups]
@@ -37,22 +38,27 @@ dev = [
 
 [tool.ruff]
 line-length = 120
-target-version = "py312"
+target-version = "py314"
 
 [tool.ruff.lint]
 select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings
-    "F",   # pyflakes
-    "I",   # isort
-    "B",   # flake8-bugbear
-    "C4",  # flake8-comprehensions
-    "UP",  # pyupgrade
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
 ]
-ignore = []
+ignore = ["I", "E"]
+
+[tool.ruff.format]
+line-ending = "lf"
+quote-style = "double"
+indent-style = "space"
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.14"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -66,9 +72,5 @@ warn_no_return = true
 warn_unreachable = true
 
 [[tool.mypy.overrides]]
-module = [
-    "trafilatura.*",
-    "faiss.*",
-    "bs4.*",
-]
+module = ["trafilatura.*", "faiss.*", "bs4.*"]
 ignore_missing_imports = true

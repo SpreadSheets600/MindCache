@@ -20,7 +20,6 @@ from app.main import app
 from app.services.bm25_service import bm25_service
 from app.services.embedding_service import embedding_service
 from app.services.keyword_extractor import keyword_extractor
-from app.services.ollama_service import ollama_service
 from app.services.entity_extractor import entity_extractor
 from app.services.vector_service import vector_service
 
@@ -102,11 +101,6 @@ def mock_ai_services() -> Generator[None, None, None]:
         patch.object(embedding_service, "generate_embeddings", return_value=np.array([mock_vector])),
         patch.object(keyword_extractor, "extract_keywords", AsyncMock(return_value=mock_keywords)),
         patch.object(entity_extractor, "extract_entities", AsyncMock(return_value=mock_entities)),
-        patch.object(ollama_service, "check_health", AsyncMock(return_value=True)),
-        patch.object(ollama_service, "generate_summary", AsyncMock(return_value="Mocked AI summary.")),
-        patch.object(
-            ollama_service, "generate_collective_summary", AsyncMock(return_value="Mocked collective AI synthesis.")
-        ),
     ):
         # Reset FAISS vector service to load from temporary test path
         vector_service.index_path = test_faiss_path

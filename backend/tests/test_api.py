@@ -22,7 +22,8 @@ async def test_health_endpoint(client_override: AsyncSession) -> None:
     assert data["components"]["database"]["status"] == "connected"
     assert data["components"]["database"]["documents_count"] == 0
     assert data["components"]["faiss_index"]["status"] == "initialized"
-    assert data["components"]["ollama"]["status"] == "connected"
+    assert data["components"]["embedding"]["status"] == "connected"
+    assert data["components"]["embedding"]["provider"] == "local"
 
 
 @pytest.mark.asyncio
@@ -94,7 +95,7 @@ async def test_visit_and_search_flow(client_override: AsyncSession) -> None:
     assert search_data["query"] == "local browser memory"
     assert len(search_data["results"]) == 1
     assert search_data["results"][0]["id"] == doc_id
-    assert search_data["ai_summary"] == "Mocked collective AI synthesis."
+    assert search_data["ai_summary"] is None
 
     # 6. Delete Document: DELETE /documents/{id}
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:

@@ -14,7 +14,8 @@ describe("BackendClient Service API Tests", () => {
       components: {
         database: { status: "connected", documents_count: 42 },
         faiss_index: { status: "initialized", vectors_count: 12 },
-        ollama: { status: "connected", model: "llama3" },
+        embedding: { status: "connected", model: "Qwen/Qwen3-Embedding-0.6B", provider: "local" },
+        generative: undefined,
       },
     };
 

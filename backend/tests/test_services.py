@@ -8,7 +8,6 @@ from app.services.bm25_service import bm25_service
 from app.services.document_processor import document_processor
 from app.services.embedding_service import embedding_service
 from app.services.keyword_extractor import keyword_extractor
-from app.services.ollama_service import ollama_service
 from app.services.vector_service import vector_service
 
 
@@ -83,14 +82,6 @@ def test_vector_service_add_and_remove():
     res_after = vector_service.search_similar(mock_vector, limit=1)
     if res_after:
         assert res_after[0][0] != 999
-
-
-@pytest.mark.asyncio
-async def test_ollama_service_generate_summary():
-    """Verifies Ollama service check health and summary generation are functional under mock."""
-    assert await ollama_service.check_health() is True
-    summary = await ollama_service.generate_summary("Clean trimmed content text")
-    assert summary == "Mocked AI summary."
 
 
 def test_bm25_service_tokenization_and_search():

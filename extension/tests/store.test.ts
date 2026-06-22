@@ -83,7 +83,8 @@ describe("MindCache Connection Store Tests", () => {
     const componentsMock = {
       database: { status: "connected" as const, documents_count: 42 },
       faiss_index: { status: "initialized", vectors_count: 42 },
-      ollama: { status: "connected" as const, model: "llama3" },
+      embedding: { status: "connected" as const, model: "Qwen/Qwen3-Embedding-0.6B", provider: "local" },
+      generative: undefined,
     };
     
     store.setConnectionStatus(true, componentsMock);

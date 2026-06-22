@@ -195,18 +195,8 @@ export const App: React.FC = () => {
 
           <div className="flex justify-between items-center py-1 border-b border-zinc-900/60">
             <span className="text-zinc-400 flex items-center space-x-1.5">
-              <Cpu className="w-3.5 h-3.5 text-zinc-500" />
-              <span>AI Model</span>
-            </span>
-            <span className="font-mono text-[11px] text-zinc-300 truncate max-w-[140px]" title={components?.ollama.model || ""}>
-              {isOnline && components?.ollama.status === "connected" ? components.ollama.model || "Active" : "OFFLINE"}
-            </span>
-          </div>
-
-          <div className="flex justify-between items-center py-1 border-b border-zinc-900/60">
-            <span className="text-zinc-400 flex items-center space-x-1.5">
               <Network className="w-3.5 h-3.5 text-zinc-500" />
-              <span>Embedding Model</span>
+              <span>Embedding</span>
             </span>
             <span className="font-mono text-[11px] text-zinc-300 truncate max-w-[140px]" title={components?.embedding?.model || ""}>
               {isOnline && components?.embedding?.status === "connected" ? components.embedding.model : "OFFLINE"}

@@ -129,11 +129,7 @@ export interface BackendComponentStatus {
     status: string;
     vectors_count: number;
   };
-  ollama: {
-    status: "connected" | "offline";
-    model: string | null;
-  };
-  embedding?: {
+  embedding: {
     status: "connected" | "offline";
     model: string;
     provider: string;

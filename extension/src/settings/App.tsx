@@ -326,11 +326,11 @@ const App: React.FC = () => {
                             </div>
                             <div className="p-4 rounded-lg border border-border">
                                 <div className="text-[11px] text-muted-foreground">
-                                    AI Model
+                                    Embedding Model
                                 </div>
-                                <div className="text-sm font-medium mt-1.5 truncate" title={components?.ollama.model || ""}>
-                                    {components?.ollama.status === "connected"
-                                        ? components.ollama.model || "Ready"
+                                <div className="text-sm font-medium mt-1.5 truncate" title={components?.embedding?.model || ""}>
+                                    {components?.embedding?.status === "connected"
+                                        ? components.embedding.model
                                         : "Offline"}
                                 </div>
                             </div>
@@ -451,26 +451,6 @@ const App: React.FC = () => {
                                                             .vectors_count
                                                     }{" "}
                                                     vectors
-                                                </span>
-                                            </div>
-                                            <div className="flex justify-between">
-                                                <span className="text-muted-foreground">
-                                                    Ollama
-                                                </span>
-                                                <span
-                                                    className={
-                                                        components.ollama
-                                                            .status ===
-                                                        "connected"
-                                                            ? "text-foreground"
-                                                            : "text-muted-foreground/60"
-                                                    }
-                                                >
-                                                    {components.ollama
-                                                        .status === "connected"
-                                                        ? components.ollama
-                                                              .model || "active"
-                                                        : "offline"}
                                                 </span>
                                             </div>
                                             <div className="flex justify-between">

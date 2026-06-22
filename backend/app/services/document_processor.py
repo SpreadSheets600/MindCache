@@ -17,14 +17,13 @@ from app.services.embedding_service import embedding_service
 from app.services.extractors import ExtractorFactory
 from app.services.entity_extractor import entity_extractor
 from app.services.keyword_extractor import keyword_extractor
-from app.services.ollama_service import ollama_service
 from app.services.vector_service import vector_service
 
 logger = get_logger(__name__)
 
 
 class DocumentProcessor:
-    """Orchestrates The Entire Asynchronous Page Fetching, Extraction, AI Analysis, And Indexing Pipeline."""
+    """Orchestrates The Entire Asynchronous Page Fetching, Extraction, And Indexing Pipeline."""
 
     @staticmethod
     def calculate_document_quality_score(
@@ -185,16 +184,6 @@ class DocumentProcessor:
 
         vector_service.add_document_chunks(doc.id, embeddings)
         bm25_service.add_document(doc.id, title or "", extracted_content, keyword_names, platform_metadata)
-
-        trimmed_content = extracted_content[:8000]
-        if await ollama_service.check_health():
-            logger.info(f"Ollama Is Online. Generating AI Summary For Document ID {doc.id}...")
-            summary = await ollama_service.generate_summary(trimmed_content)
-            if summary:
-                await document_repository.update_summary(db, doc.id, summary)
-                await db.commit()
-                await db.refresh(doc)
-                logger.info(f"Ollama Summary Saved For Document ID {doc.id}.")
 
     async def _download_page(self, url: str) -> tuple[str, str]:
         """Downloads A Web Page Asynchronously Using Httpx With A Standard User-Agent.

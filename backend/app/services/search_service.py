@@ -11,7 +11,6 @@ from app.schemas.document import KeywordResponse, SearchResponse, SearchResultIt
 from app.services.bm25_service import bm25_service
 from app.services.embedding_service import embedding_service
 from app.services.keyword_extractor import keyword_extractor
-from app.services.ollama_service import ollama_service
 from app.services.vector_service import vector_service
 
 logger = get_logger(__name__)
@@ -204,17 +203,6 @@ class SearchService:
         except Exception as e:
             logger.warning(f"Query Expansion Failed: {e}. Using Original Query.")
 
-        # 1b. LLM Query Concept Expansion — generate alternative phrasings to broaden BM25 retrieval
-        # Concepts are appended ONLY to the BM25 query, not the embedding query, to avoid semantic drift.
-        try:
-            if await ollama_service.check_health():
-                query_concepts = await ollama_service.expand_query_concepts(query, top_n=3)
-                if query_concepts:
-                    logger.info(f"Query concepts expanded: {query_concepts}")
-                    bm25_expanded_query = f"{bm25_expanded_query} {' '.join(query_concepts)}"
-        except Exception as e:
-            logger.warning(f"Query concept expansion failed: {e}. Continuing without LLM expansion.")
-
         # 2. Generate Query Embedding (uses original + keywords only, NOT concepts — to avoid semantic drift)
         try:
             query_embedding = embedding_service.generate_embedding(f"{QUERY_PREFIX}{expanded_query}")
@@ -402,7 +390,6 @@ class SearchService:
 
         # 10. Format Search Results
         results_items: list[SearchResultItem] = []
-        summary_payloads: list[dict] = []
 
         for doc, score in top_scored:
             # Filter out completely irrelevant results (less than 15% match)
@@ -434,28 +421,8 @@ class SearchService:
             )
             results_items.append(item)
 
-            # Build Data Payloads For Collective Ollama Synthesis
-            summary_payloads.append(
-                {
-                    "title": doc.title,
-                    "url": doc.url,
-                    "extracted_content": doc.extracted_content,
-                }
-            )
-
-        # 11. Optional Ollama Summary Synthesis
+        # 11. AI Summary — not available (no local generative model)
         ai_summary: Optional[str] = None  # noqa: UP045
-
-        if generate_summary and results_items:
-            logger.info("Collective AI Synthesis Requested. Querying Local Ollama...")
-
-            if await ollama_service.check_health():
-                ai_summary = await ollama_service.generate_collective_summary(query, summary_payloads)
-                logger.info("Collective AI Synthesis Complete.")
-
-            else:
-                logger.warning("Ollama Is Not Running Or Required Model Is Missing. Skipping Summary.")
-                ai_summary = "Collective summary unavailable. (Local Ollama is offline or model is missing)"
 
         return SearchResponse(
             query=query,

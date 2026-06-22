@@ -1,16 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.core.exceptions import DocumentNotFoundError, MindCacheException
-from app.core.logging import get_logger
 from app.db.session import get_db
-from app.models.document import Entity, Keyword
+from app.core.logging import get_logger
+from app.core.exceptions import DocumentNotFoundError, MindCacheException
+
+from app.services.bm25_service import bm25_service
+from app.services.vector_service import vector_service
 from app.repositories.document_repository import document_repository
 from app.schemas.document import DocumentResponse, EntityResponse, KeywordResponse
-from app.services.bm25_service import bm25_service
-from app.services.ollama_service import ollama_service
-from app.services.vector_service import vector_service
 
 router = APIRouter(tags=["Document Management"])
 logger = get_logger(__name__)
@@ -38,10 +36,7 @@ async def list_documents(
                 KeywordResponse(keyword=kw.keyword, score=kw.score)
                 for kw in sorted(doc.keywords, key=lambda k: k.score, reverse=True)
             ]
-            entities_res = [
-                EntityResponse(name=e.name, type=e.type)
-                for e in doc.entities
-            ]
+            entities_res = [EntityResponse(name=e.name, type=e.type) for e in doc.entities]
             visit_res = [visit.visited_at for visit in sorted(doc.visits, key=lambda v: v.visited_at)]
 
             response_list.append(
@@ -97,10 +92,7 @@ async def get_document(
             for kw in sorted(doc.keywords, key=lambda k: k.score, reverse=True)
         ]
 
-        entities_res = [
-            EntityResponse(name=e.name, type=e.type)
-            for e in doc.entities
-        ]
+        entities_res = [EntityResponse(name=e.name, type=e.type) for e in doc.entities]
 
         visit_res = [visit.visited_at for visit in sorted(doc.visits, key=lambda v: v.visited_at)]
 
@@ -171,56 +163,6 @@ async def delete_document(
         ) from e
 
 
-@router.post(
-    "/documents/{document_id}/summarize",
-    status_code=200,
-    summary="Generate AI Summary For Document",
-)
-async def summarize_document(
-    document_id: int,
-    db: AsyncSession = Depends(get_db),  # noqa: B008
-) -> dict:
-    """Generates An AI Summary For An Existing Document Using Ollama."""
-
-    try:
-        doc = await document_repository.get_by_id(db, document_id)
-
-        if not doc:
-            raise DocumentNotFoundError(document_id)
-
-        if not await ollama_service.check_health():
-            raise HTTPException(
-                status_code=503,
-                detail="Ollama service is offline. Cannot generate summary.",
-            )
-
-        logger.info(f"Generating AI summary for Document ID {document_id}...")
-        summary = await ollama_service.generate_summary(doc.extracted_content[:8000])
-
-        if summary:
-            await document_repository.update_summary(db, document_id, summary)
-            await db.commit()
-            return {"message": "Summary generated successfully.", "summary": summary}
-        else:
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to generate summary from Ollama.",
-            )
-
-    except MindCacheException as e:
-        raise HTTPException(status_code=e.status_code, detail=e.message) from e
-
-    except HTTPException:
-        raise
-
-    except Exception as e:
-        logger.error(f"Error Generating Summary For Document ID {document_id}: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to generate summary.",
-        ) from e
-
-
 @router.get(
     "/graph",
     status_code=200,
@@ -248,16 +190,18 @@ async def get_graph_data(
 
         for doc in documents:
             doc_id = f"doc_{doc.id}"
-            doc_nodes.append({
-                "id": doc_id,
-                "label": doc.title or doc.url,
-                "type": "document",
-                "url": doc.url,
-                "domain": doc.domain,
-                "source_type": doc.source_type,
-                "updated_at": doc.updated_at.isoformat(),
-                "visit_count": len(doc.visits),
-            })
+            doc_nodes.append(
+                {
+                    "id": doc_id,
+                    "label": doc.title or doc.url,
+                    "type": "document",
+                    "url": doc.url,
+                    "domain": doc.domain,
+                    "source_type": doc.source_type,
+                    "updated_at": doc.updated_at.isoformat(),
+                    "visit_count": len(doc.visits),
+                }
+            )
 
             # Aggregate entities
             for entity in doc.entities:
@@ -285,10 +229,7 @@ async def get_graph_data(
                     keyword_map[kw_lower]["document_ids"].append(doc_id)
 
         # Filter keywords by frequency
-        active_keywords = [
-            kw for kw in keyword_map.values()
-            if len(kw["document_ids"]) >= min_keyword_freq
-        ]
+        active_keywords = [kw for kw in keyword_map.values() if len(kw["document_ids"]) >= min_keyword_freq]
 
         # Build entity nodes
         entity_nodes = [
@@ -316,20 +257,24 @@ async def get_graph_data(
         # Build edges: document -> keyword
         for kw in active_keywords:
             for doc_id in kw["document_ids"]:
-                edges.append({
-                    "source": doc_id,
-                    "target": kw["id"],
-                    "type": "has_keyword",
-                })
+                edges.append(
+                    {
+                        "source": doc_id,
+                        "target": kw["id"],
+                        "type": "has_keyword",
+                    }
+                )
 
         # Build edges: document -> entity
         for ent in entity_map.values():
             for doc_id in ent["document_ids"]:
-                edges.append({
-                    "source": doc_id,
-                    "target": ent["id"],
-                    "type": "has_entity",
-                })
+                edges.append(
+                    {
+                        "source": doc_id,
+                        "target": ent["id"],
+                        "type": "has_entity",
+                    }
+                )
 
         # Build edges: entity co-occurrence (entities appearing in same document)
         ent_list = list(entity_map.values())
@@ -337,12 +282,14 @@ async def get_graph_data(
             for j in range(i + 1, len(ent_list)):
                 shared_docs = set(ent_list[i]["document_ids"]) & set(ent_list[j]["document_ids"])
                 if shared_docs:
-                    edges.append({
-                        "source": ent_list[i]["id"],
-                        "target": ent_list[j]["id"],
-                        "type": "co_occurs",
-                        "weight": len(shared_docs),
-                    })
+                    edges.append(
+                        {
+                            "source": ent_list[i]["id"],
+                            "target": ent_list[j]["id"],
+                            "type": "co_occurs",
+                            "weight": len(shared_docs),
+                        }
+                    )
 
         # Build edges: keyword co-occurrence (keywords appearing in same document)
         kw_list = active_keywords
@@ -350,12 +297,14 @@ async def get_graph_data(
             for j in range(i + 1, len(kw_list)):
                 shared_docs = set(kw_list[i]["document_ids"]) & set(kw_list[j]["document_ids"])
                 if len(shared_docs) >= min_keyword_freq:
-                    edges.append({
-                        "source": kw_list[i]["id"],
-                        "target": kw_list[j]["id"],
-                        "type": "co_occurs",
-                        "weight": len(shared_docs),
-                    })
+                    edges.append(
+                        {
+                            "source": kw_list[i]["id"],
+                            "target": kw_list[j]["id"],
+                            "type": "co_occurs",
+                            "weight": len(shared_docs),
+                        }
+                    )
 
         return {
             "nodes": {

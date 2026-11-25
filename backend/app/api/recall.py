@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.models.item import RecallImport, SavedItem
+from app.services.source_chunks import backfill_in_background
 from app.services.recall_import import MAX_ARCHIVE, parse_recall
 
 router = APIRouter(prefix="/imports/recall", tags=["Recall import"])
@@ -75,4 +76,5 @@ async def import_recall(file: UploadFile = File(...), db: AsyncSession = Depends
         imported += 1
         missing += int(record["missing"])
     await db.commit()
+    backfill_in_background()
     return {"imported": imported, "skipped": len(records) - imported, "missing_originals": missing}

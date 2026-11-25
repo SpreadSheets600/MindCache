@@ -2,6 +2,7 @@ from sqlalchemy import select
 
 from app.models.document import Document
 from app.models.files import Chunk, IndexedFile
+from app.models.item import SavedItem
 from app.services.chunk_index import chunk_index
 from app.services.chunk_store import WORD, keyword_hits
 from app.services.embedder import embedder
@@ -30,19 +31,22 @@ def semantic_hits(query, limit):
 
 
 async def load_sources(db, chunks):
-    wanted = {"file": set(), "document": set()}
+    wanted = {"file": set(), "document": set(), "item": set()}
     for chunk in chunks.values():
         wanted[chunk.source_kind].add(chunk.source_id)
     files = {}
     pages = {}
+    items = {}
     if wanted["file"]:
         files = {item.id: item for item in (await db.execute(select(IndexedFile).where(IndexedFile.id.in_(wanted["file"])))).scalars()}
     if wanted["document"]:
         pages = {item.id: item for item in (await db.execute(select(Document).where(Document.id.in_(wanted["document"])))).scalars()}
-    return files, pages
+    if wanted["item"]:
+        items = {item.id: item for item in (await db.execute(select(SavedItem).where(SavedItem.id.in_(wanted["item"])))).scalars()}
+    return files, pages, items
 
 
-def describe(key, files, pages):
+def describe(key, files, pages, items):
     kind, source_id = key
     if kind == "file" and source_id in files:
         item = files[source_id]
@@ -50,6 +54,11 @@ def describe(key, files, pages):
     if kind == "document" and source_id in pages:
         item = pages[source_id]
         return {"kind": "page", "id": item.id, "title": item.title or item.url, "location": item.url}
+    if kind == "item" and source_id in items:
+        item = items[source_id]
+        note = item.kind == "note"
+        location = "" if note or item.original is None else f"/items/{item.id}/file"
+        return {"kind": "note" if note else "upload", "id": item.id, "title": item.title, "location": location}
     return None
 
 
@@ -62,13 +71,13 @@ async def search_memory(db, query, limit=20):
     if not scores:
         return []
     chunks = {chunk.id: chunk for chunk in (await db.execute(select(Chunk).where(Chunk.id.in_(scores)))).scalars()}
-    files, pages = await load_sources(db, chunks)
+    files, pages, items = await load_sources(db, chunks)
     terms = WORD.findall(query)
     grouped = {}
     for chunk_id in sorted(chunks, key=lambda key: -scores[key]):
         chunk = chunks[chunk_id]
         key = (chunk.source_kind, chunk.source_id)
-        source = describe(key, files, pages)
+        source = describe(key, files, pages, items)
         if source is None:
             continue
         entry = grouped.setdefault(key, {**source, "score": scores[chunk_id], "passages": [], "reasons": set()})

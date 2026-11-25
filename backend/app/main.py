@@ -16,7 +16,7 @@ from app.db.session import engine
 from app.services.document_processor import document_processor
 from app.services.chunk_index import chunk_index
 from app.services.indexer import indexer
-from app.services.page_chunks import backfill_pages
+from app.services.source_chunks import backfill_all
 from app.services.watcher import watcher
 from app.services.vector_service import vector_service
 
@@ -26,7 +26,7 @@ logger = get_logger("app.main")
 
 async def catch_up():
     rebuilding = chunk_index.needs_rebuild
-    await backfill_pages(force=rebuilding)
+    await backfill_all(force=rebuilding)
     await indexer.rebuild_if_needed()
     await indexer.enqueue_unfinished()
 

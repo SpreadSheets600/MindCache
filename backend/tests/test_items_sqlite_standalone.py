@@ -3,7 +3,7 @@ import io
 import sys
 from types import ModuleType
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import httpx
 from fastapi import FastAPI
@@ -26,6 +26,7 @@ class Adapter:
     async def get(self, *args): return self.session.get(*args)
     async def execute(self, *args): return self.session.execute(*args)
     async def commit(self): self.session.commit()
+    async def flush(self): self.session.flush()
     async def refresh(self, item): self.session.refresh(item)
     async def delete(self, item): self.session.delete(item)
     def add(self, item): self.session.add(item)
@@ -52,7 +53,8 @@ class ItemsSQLiteTests(unittest.TestCase):
                     self.assertEqual((await get_item(saved["id"], db))["content"], "saved text")
                     await delete_item(saved["id"], db)
                     self.assertIsNone(session.get(SavedItem, saved["id"]))
-                asyncio.run(exercise())
+                with patch("app.api.items.index_source", AsyncMock()), patch("app.api.items.forget_source", AsyncMock()):
+                    asyncio.run(exercise())
             engine.dispose()
 
     def test_http_routes_share_the_library(self):
@@ -78,5 +80,6 @@ class ItemsSQLiteTests(unittest.TestCase):
                         found = await client.get("/items", params={"query": "Forest"})
                         self.assertEqual(found.json()[0]["id"], created.json()["id"])
                         self.assertEqual((await client.delete(f"/items/{created.json()['id']}")).status_code, 200)
-                asyncio.run(exercise())
+                with patch("app.api.items.index_source", AsyncMock()), patch("app.api.items.forget_source", AsyncMock()):
+                    asyncio.run(exercise())
             engine.dispose()

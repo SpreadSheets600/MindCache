@@ -454,7 +454,7 @@ Indexed files with `status` of `pending`, `indexed`, `partial` (keyword search w
 
 ### `GET /memory/search?q=&limit=`
 
-Hybrid keyword and semantic search over indexed files and saved web pages together. `kind` is `file` or `page`, and `location` is the file path or the page URL.
+Hybrid keyword and semantic search over indexed files, saved web pages, notes and uploads together. `kind` is `file`, `page`, `note` or `upload`. `location` is the file path, the page URL, or for uploads the backend path of the original (`/items/{id}/file`); notes have an empty location.
 
 ```json
 {

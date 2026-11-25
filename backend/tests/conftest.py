@@ -29,7 +29,7 @@ from app.services.entity_extractor import entity_extractor
 from app.services.vector_service import vector_service
 from app.models.files import Chunk, IndexedFile, WatchedFolder
 from app.services import memory_search
-from app.services import page_chunks
+from app.services import source_chunks
 from app.services import indexer as indexer_module
 from app.services.chunk_index import ChunkIndex
 from app.services.chunk_store import WORD
@@ -165,7 +165,7 @@ async def stack(tmp_path_factory):
     with (
         patch.object(indexer_module, "chunk_index", index),
         patch.object(memory_search, "chunk_index", index),
-        patch.object(page_chunks, "chunk_index", index),
+        patch.object(source_chunks, "chunk_index", index),
         patch.object(indexer_module.embedder, "embed_documents", side_effect=lambda texts: np.stack([fake_vector(t) for t in texts])),
         patch.object(memory_search.embedder, "embed_query", side_effect=fake_vector),
         patch.object(memory_search, "SEMANTIC_FLOOR", 0.2),

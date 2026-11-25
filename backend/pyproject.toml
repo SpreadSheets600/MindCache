@@ -24,7 +24,10 @@ dependencies = [
     "duckduckgo-search>=8.1.1",
     "ddgs>=9.14.4",
     "pypdf>=6.12.2",
-    "sentence-transformers>=5.6.0",
+    "sentence-transformers>=6.3.0",
+    "transformers>=5.24.0",
+    "pillow>=13.0.0",
+    "torchvision>=0.29.2",
 ]
 
 [dependency-groups]

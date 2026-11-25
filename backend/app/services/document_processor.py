@@ -13,7 +13,7 @@ from app.core.logging import get_logger
 from app.models.document import Document
 from app.repositories.document_repository import document_repository
 from app.services.bm25_service import bm25_service
-from app.services.embedding_service import embedding_service
+from app.services.embedder import embedder
 from app.services.extractors import ExtractorFactory
 from app.services.entity_extractor import entity_extractor
 from app.services.keyword_extractor import keyword_extractor
@@ -169,7 +169,7 @@ class DocumentProcessor:
         chunk_texts = self._build_chunk_texts(chunks, title, domain, source_type, keyword_names, entity_names, meta_str)
         bm25_service.add_document(doc.id, title or "", extracted_content, keyword_names, platform_metadata)
         try:
-            embeddings = embedding_service.generate_embeddings(chunk_texts)
+            embeddings = embedder.embed_documents(chunk_texts)
             vector_service.add_document_chunks(doc.id, embeddings)
         except Exception as exc:
             logger.warning("Semantic indexing unavailable for document %s: %s", doc.id, exc)
@@ -496,7 +496,7 @@ class DocumentProcessor:
         return "success", doc
 
     async def reindex_all_documents(self, db: AsyncSession):
-        logger.info("Starting re-indexing of all documents due to dimension mismatch...")
+        logger.info("Starting re-indexing of all documents for the current embedding model...")
 
         from sqlalchemy import select
         from sqlalchemy.orm import selectinload
@@ -513,6 +513,7 @@ class DocumentProcessor:
         bm25_service._corpus = []
         bm25_service._index = None
 
+        failures = 0
         for doc in documents:
             logger.info(f"Re-indexing document ID {doc.id}: {doc.title or doc.url}")
             keyword_names = [kw.keyword for kw in doc.keywords]
@@ -533,14 +534,25 @@ class DocumentProcessor:
 
             try:
                 import asyncio
-                embeddings = await asyncio.to_thread(embedding_service.generate_embeddings, chunk_texts)
+                embeddings = await asyncio.to_thread(embedder.embed_documents, chunk_texts)
                 await asyncio.to_thread(vector_service.add_document_chunks, doc.id, embeddings)
                 bm25_service.add_document(doc.id, doc.title or "", doc.extracted_content, keyword_names, doc.platform_metadata)
             except Exception as e:
+                failures += 1
                 logger.error(f"Failed to re-index document {doc.id}: {e}", exc_info=True)
 
         bm25_service.save()
+        if failures == 0:
+            vector_service.mark_current()
         logger.info("Re-indexing of all documents completed.")
+
+    async def reindex_if_needed(self):
+        if not vector_service.needs_reindexing or not embedder.is_downloaded():
+            return
+        from app.db.session import AsyncSessionLocal
+
+        async with AsyncSessionLocal() as db:
+            await self.reindex_all_documents(db)
 
 
 document_processor = DocumentProcessor()

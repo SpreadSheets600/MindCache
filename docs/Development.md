@@ -343,3 +343,11 @@ Content script defines:
 | `clsx` + `tailwind-merge` | Class name utilities |
 | `@tailwindcss/typography` | Prose styling for document content |
 | `vitest` + `@testing-library/react` | Testing framework |
+
+## Flutter Development
+
+Desktop app lives in `app/` (added in Phase 5 of `PLAN.md`).
+
+- Flutter 3.50.1 stable, installed at `~/.local/flutter` and added to `PATH` in `~/.zshrc`
+- Linux build needs `clang`, `cmake`, `ninja`, `pkg-config` and `gtk3`
+- Check with `flutter doctor`; only the Linux toolchain is required

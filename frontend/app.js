@@ -187,7 +187,7 @@ async function loadPrivacy() {
     $('#privacy-form').hidden = false;
     try {
       const config = await request('/ai/models');
-      const remote = ['embedding', 'generation'].filter(task => config[task].allow_remote);
+      const remote = config.generation.allow_remote ? ['generation'] : [];
       $('#privacy-model-routing').textContent = remote.length ? `Remote processing is permitted for: ${remote.join(', ')}. Review the configured endpoints in Models.` : 'Remote model processing is not permitted in the current model settings.';
     } catch { $('#privacy-model-routing').textContent = 'Model routing is unavailable. Check Models when the backend is reachable.'; }
     message.textContent = '';
@@ -268,45 +268,43 @@ const modelTasks = ['embedding', 'generation'];
 async function loadModels() {
   try {
     const config = await request('/ai/models');
-    for (const task of modelTasks) {
-      for (const field of ['provider', 'model', 'endpoint']) $(`#${task}-${field}`).value = config[task][field];
-      $(`#${task}-key`).value = config[task].api_key_env;
-      $(`#${task}-consent`).checked = config[task].allow_remote;
-    }
-    for (const task of modelTasks) updateModelHint(task);
-    $('#model-summary').textContent = `Embedding: ${config.embedding.provider === 'disabled' ? 'off' : config.embedding.model || config.embedding.provider} · Generation: ${config.generation.provider === 'disabled' ? 'off' : config.generation.model || config.generation.provider}`;
+    const embedding = config.embedding;
+    $('#embedding-info').textContent = `${embedding.model} · ${embedding.dimension} dimensions · runs on ${embedding.device} · ${embedding.status === 'ready' ? 'downloaded' : 'not downloaded yet'}`;
+    $('#download-embedding').hidden = embedding.status === 'ready';
+    for (const field of ['provider', 'model', 'endpoint']) $(`#generation-${field}`).value = config.generation[field];
+    $('#generation-key').value = '';
+    $('#generation-key').placeholder = config.generation.api_key_set ? 'Saved. Leave blank to keep it' : 'Optional';
+    $('#clear-key').hidden = !config.generation.api_key_set;
+    $('#generation-consent').checked = config.generation.allow_remote;
+    updateModelHint('generation');
+    $('#model-summary').textContent = `Embedding: EmbeddingGemma 2 · Generation: ${config.generation.provider === 'disabled' ? 'off' : config.generation.model || config.generation.provider}`;
     $('#models-form').hidden = false;
     $('#models-message').textContent = '';
     await refreshDownloads();
   } catch (error) { $('#model-summary').textContent = 'Model choices unavailable.'; $('#models-message').textContent = `Model settings unavailable. ${error.message}`; }
 }
-function modelSettings() {
-  const settings = {};
-  for (const task of modelTasks) settings[task] = {
-    provider: $(`#${task}-provider`).value, model: $(`#${task}-model`).value.trim(),
-    endpoint: $(`#${task}-endpoint`).value.trim(), api_key_env: $(`#${task}-key`).value.trim(),
-    allow_remote: $(`#${task}-consent`).checked,
+function generationSettings(clearKey = false) {
+  const key = $('#generation-key').value.trim();
+  return {
+    provider: $('#generation-provider').value, model: $('#generation-model').value.trim(),
+    endpoint: $('#generation-endpoint').value.trim(), api_key: clearKey ? '' : key || null,
+    allow_remote: $('#generation-consent').checked,
   };
-  return settings;
 }
-async function saveModels() {
-  return request('/ai/models', {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(modelSettings())});
+async function saveModels(clearKey = false) {
+  return request('/ai/generation', {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(generationSettings(clearKey))});
 }
 function updateModelHint(task) {
   const provider = $(`#${task}-provider`).value;
   const hints = {
     transformers: 'Enter a Hugging Face model ID, then save and download it for local use.',
     ollama: 'Enter an Ollama model name and endpoint, then save and download it.',
-    openai: 'Enter the model name exposed by your compatible provider. No local download is needed.',
-    disabled: 'This task is turned off. Select a provider when you want to use it.',
+    openai: 'Enter the model name exposed by your compatible provider and your API key. No local download is needed.',
+    disabled: 'Generation is turned off. Select a provider when you want to use it.',
   };
   $(`#${task}-hint`).textContent = hints[provider];
-  const examples = {
-    embedding: {transformers: ['Qwen/Qwen3-Embedding-0.6B', 'sentence-transformers/all-MiniLM-L6-v2'], ollama: ['nomic-embed-text', 'mxbai-embed-large']},
-    generation: {transformers: ['Qwen/Qwen2.5-0.5B-Instruct'], ollama: ['llama3.2', 'qwen2.5']},
-  };
-  const suggestions = $(`#${task}-suggestions`);
-  suggestions.replaceChildren(...(examples[task][provider] || []).map(value => {
+  const examples = {transformers: ['Qwen/Qwen2.5-0.5B-Instruct'], ollama: ['llama3.2', 'qwen2.5']};
+  $(`#${task}-suggestions`).replaceChildren(...(examples[provider] || []).map(value => {
     const option = document.createElement('option'); option.value = value; return option;
   }));
   const remoteProvider = ['ollama', 'openai'].includes(provider);
@@ -316,6 +314,7 @@ function updateModelHint(task) {
     input.disabled = !remoteProvider;
     document.querySelector(`label[for="${task}-${field}"]`).hidden = !remoteProvider;
   }
+  if (!remoteProvider) $('#clear-key').hidden = true;
   $(`#${task}-consent`).closest('label').hidden = !remoteProvider;
   const modelInput = $(`#${task}-model`);
   modelInput.hidden = provider === 'disabled';
@@ -356,25 +355,32 @@ $('#models-form').addEventListener('submit', async event => {
   catch (error) { $('#models-message').textContent = `Could not save models. ${error.message}`; }
   finally { submit.disabled = false; }
 });
-for (const task of modelTasks) {
-  $(`#${task}-provider`).addEventListener('change', () => updateModelHint(task));
-  $(`#download-${task}`).addEventListener('click', async event => {
-    const config = modelSettings()[task];
-    if (!['transformers', 'ollama'].includes(config.provider) || !config.model) { $('#models-message').textContent = 'Choose a local provider and enter a model name first.'; return; }
-    const source = config.provider === 'transformers' ? 'Hugging Face' : config.endpoint;
-    if (!confirm(`Save both task settings and download ${config.model} from ${source}? Downloads use network access and may be large.`)) return;
-    const button = event.currentTarget;
-    button.disabled = true;
-    $('#models-message').textContent = 'Saving model settings…';
-    try {
-      await saveModels();
-      await request('/ai/downloads', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({task})});
-      $('#models-message').textContent = 'Model settings saved.';
-      await refreshDownloads();
-    } catch (error) { $('#models-message').textContent = `Could not complete setup: ${error.message}`; }
-    finally { if ($(`#${task}-download-status`).dataset.state !== 'downloading') button.disabled = false; }
-  });
+$('#generation-provider').addEventListener('change', () => updateModelHint('generation'));
+$('#clear-key').addEventListener('click', async () => {
+  try { await saveModels(true); $('#models-message').textContent = 'Saved key removed.'; await loadModels(); }
+  catch (error) { $('#models-message').textContent = `Could not remove the key. ${error.message}`; }
+});
+async function startDownload(task, button) {
+  button.disabled = true;
+  try {
+    await request('/ai/downloads', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({task})});
+    await refreshDownloads();
+  } catch (error) { $('#models-message').textContent = `Could not start the download: ${error.message}`; }
+  finally { if ($(`#${task}-download-status`).dataset.state !== 'downloading') button.disabled = false; }
 }
+$('#download-embedding').addEventListener('click', event => {
+  if (!confirm('Download EmbeddingGemma 2 (about 1.4 GB) from Hugging Face? It is the only embedding model MindCache uses and runs on this computer.')) return;
+  startDownload('embedding', event.currentTarget);
+});
+$('#download-generation').addEventListener('click', async event => {
+  const button = event.currentTarget;
+  const config = generationSettings();
+  if (!['transformers', 'ollama'].includes(config.provider) || !config.model) { $('#models-message').textContent = 'Choose a local provider and enter a model name first.'; return; }
+  const source = config.provider === 'transformers' ? 'Hugging Face' : config.endpoint;
+  if (!confirm(`Save generation settings and download ${config.model} from ${source}? Downloads use network access and may be large.`)) return;
+  try { await saveModels(); } catch (error) { $('#models-message').textContent = `Could not save settings: ${error.message}`; return; }
+  startDownload('generation', button);
+});
 for (const button of document.querySelectorAll('nav [data-view]')) {
   button.addEventListener('click', () => {
     for (const view of document.querySelectorAll('.view')) view.hidden = view.id !== button.dataset.view;

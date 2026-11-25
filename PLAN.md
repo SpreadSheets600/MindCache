@@ -42,17 +42,23 @@ Sources read on 2026-11-25: the [Google Developers blog post](https://developers
 | Query prompt | `SearchQuery` prompt name, `task: search result \| query: {query}` | Used for every search |
 | Document prompt | `title: {title} \| text: {content}`, or `title: none \| text: {content}` | Format manually so the file name acts as the title |
 | Images, audio, video | No prefix; text can interleave `<\|image\|>` placeholders | Enables image files in a later phase |
-| Libraries | sentence-transformers, transformers, llama.cpp/GGUF (Q8_0 310 MB, BF16 558 MB), LiteRT-LM, MLX, vLLM, Ollama | We use sentence-transformers, already a dependency |
+| Libraries | sentence-transformers, transformers, llama.cpp/GGUF (Q8_0 310 MB, BF16 558 MB), LiteRT-LM, MLX, vLLM, Ollama | sentence-transformers first; GGUF as the CPU fallback if needed |
 
 Selective loading per the model card: `config_kwargs={"vision_config": None, "audio_config": None}` gives the 270M text-only model. The card warns this differs between libraries.
 
-### Things I could not verify, to settle in the Phase 1 spike
+### Spike results (2026-11-25, full numbers in `docs/AI-Pipeline.md`)
 
-- The reading agent could not see whether the Hugging Face page is gated. Check logged out. If it is, first-run download must explain it and ask for the user's own token.
-- No minimum `sentence-transformers` or `transformers` version is stated. Pin to what the spike proves works, in `uv.lock`.
-- The multimodal `encode({...})` form is shown on the card but was not tested through sentence-transformers. Image indexing (Phase 8) depends on it.
-- The 128-dimension truncation is described as best for text-only. Our default is 768 until a retrieval benchmark on our own data (Phase 1) says otherwise.
-- The EmbeddingGemma 1 prompt strings were not re-verified. The EmbeddingGemma 2 strings above come from the card.
+- The Hugging Face model is not gated. No token flow is needed.
+- Version floor: `transformers>=5.24` and `sentence-transformers>=6.3`. Text-only loading still needs `pillow` and `torchvision`.
+- The text-only load works with the `vision_config` and `audio_config` overrides: 271M parameters, 768 dimensions.
+- `max_seq_length` is unbounded by default and must be set explicitly.
+- 128-dimension truncation compresses similarity differences; keep 768 unless the Phase 1 benchmark supports 512.
+- Speed is the main risk. GPU bf16 reaches about 24 chunks/s, but CPU fp32 only about 1.3 chunks/s (about 2 hours for 10,000 chunks) and CPU bf16 about 0.4. Use bf16 on GPU and fp32 on CPU.
+- Still unverified: the multimodal `encode({...})` form (Phase 8), and the faster CPU options below.
+
+### CPU speed plan
+
+CPU users must be able to index. Phase 1 evaluates, in order: smaller chunks and a 512-token `max_seq_length`; the Q8 GGUF build (310 MB, text only) served through llama.cpp or `llama-cpp-python`, which is the one allowed implementation of the same model; ONNX export. The same model and prompts are used throughout, so no embedding choice is exposed to users. Indexing also prioritizes recently modified files and reports an honest time estimate.
 
 ### Embedding rules
 
@@ -322,7 +328,7 @@ Acceptance: `check_style.py` passes on the whole repo; all existing tests pass; 
 
 Goal: the backend uses EmbeddingGemma 2 and nothing else for embeddings.
 
-- 1.1 Spike (throwaway script in the scratchpad, not committed): load `google/embeddinggemma-2` with sentence-transformers, text-only config, bfloat16. Verify prompts, dimension, truncation, normalization, RAM, load time, throughput on this machine. Resolve the open questions in section 3. Write findings to `docs/AI-Pipeline.md`.
+- 1.1 Spike (done, results in section 3; throwaway script not committed): load `google/embeddinggemma-2` with sentence-transformers, text-only config, bfloat16. Verify prompts, dimension, truncation, normalization, RAM, load time, throughput on this machine. Resolve the open questions in section 3. Write findings to `docs/AI-Pipeline.md`.
 - 1.2 Create `services/embedder.py` with `embed_query` and `embed_documents`, model constants, signature function, explicit download with progress and `local_files_only` afterward. Delete the model/provider choice for embeddings from `core/ai_config.py`, `services/ai_providers.py`, `api/ai.py`, `data/models.json` handling, `EMBEDDING_MODEL_NAME` and `EMBEDDING_MODEL_PATH` settings. Remove `embedding_service.py`.
 - 1.3 `EMBEDDING_DIMENSION` becomes a derived constant. Store signature in `index_meta`. On mismatch (every existing install, since the index is currently Qwen 1024-d), mark the index stale and rebuild existing documents and items in the background. Lexical search keeps working during the rebuild.
 - 1.4 Update `/health` and the extension and dashboard health consumers for the new status shape (model present, downloading, ready).
@@ -444,7 +450,7 @@ Audio and video stay out of scope.
 | --- | --- | --- |
 | Model gating or terms at Hugging Face | Download fails on first run | Check in Phase 1 spike; explain and accept a user token |
 | Embedding RAM in two processes | Memory pressure on small machines | Measure in spike; serve query embeddings from worker if needed |
-| First-run index of a large folder takes hours on CPU | Poor first impression | Priority for recent files, visible progress, pause, lexical search available immediately |
+| First-run index of a large folder takes hours on CPU (measured 1.3 chunks/s) | Poor first impression | CPU speed plan in section 3, priority for recent files, visible progress and estimate, pause, lexical search available immediately |
 | inotify limits and missed events | Stale index | Reconcile scans, visible status |
 | Torch and packaging size | Large or fragile installers | `uv` bootstrapper first |
 | Index corruption on crash | Lost search | Atomic saves, SQLite authoritative, repair on startup |

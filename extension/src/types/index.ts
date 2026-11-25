@@ -132,9 +132,10 @@ export interface BackendComponentStatus {
     vectors_count: number;
   };
   embedding: {
-    status: "connected" | "offline";
+    status: "ready" | "not_downloaded";
     model: string;
-    provider: string;
+    dimension: number;
+    reindexing: boolean;
   };
 }
 

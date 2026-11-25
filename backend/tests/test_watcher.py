@@ -1,15 +1,12 @@
 import asyncio
 import os
 import shutil
-from unittest.mock import patch
 
 import pytest
 import pytest_asyncio
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.db import session as database
-from app.db.base import Base
 from app.models.files import IndexedFile, WatchedFolder
 from app.services import indexer as indexer_module
 from app.services import watcher as watcher_module
@@ -37,17 +34,6 @@ async def found(query, name):
 
 
 @pytest_asyncio.fixture
-async def file_db(tmp_path_factory):
-    path = tmp_path_factory.mktemp("db") / "test.db"
-    engine = create_async_engine(f"sqlite+aiosqlite:///{path}", connect_args={"timeout": 15})
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    with patch.object(database, "AsyncSessionLocal", async_sessionmaker(engine, expire_on_commit=False)):
-        yield
-    await engine.dispose()
-
-
-@pytest_asyncio.fixture
 async def live(file_db, stack, tmp_path, monkeypatch):
     monkeypatch.setattr(watcher_module, "DEBOUNCE_SECONDS", 0.2)
 
@@ -65,6 +51,8 @@ async def live(file_db, stack, tmp_path, monkeypatch):
     monkeypatch.setattr(indexer_module.indexer, "lock", asyncio.Lock())
     monkeypatch.setattr(indexer_module.indexer, "queue", asyncio.Queue())
     monkeypatch.setattr(indexer_module.indexer, "queued", set())
+    monkeypatch.setattr(indexer_module.indexer, "running", asyncio.Event())
+    indexer_module.indexer.running.set()
     indexer_module.indexer.start()
     watcher = Watcher()
     await watcher.start()

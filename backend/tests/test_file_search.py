@@ -41,6 +41,7 @@ def index(tmp_path):
     with (
         patch.object(file_search, "chunk_index", chunk_index),
         patch.object(file_search.embedder, "embed_query", side_effect=fake_vector),
+        patch.object(file_search, "SEMANTIC_FLOOR", 0.2),
     ):
         yield chunk_index
 
@@ -86,3 +87,14 @@ async def test_punctuation_and_empty_queries_are_safe(db_session, index):
     await add_file(db_session, index, "a.txt", "Plain text.")
     assert await file_search.search_files(db_session, '" ( ) "') == []
     assert await file_search.search_files(db_session, "   ") == []
+
+
+@pytest.mark.asyncio
+async def test_weak_semantic_matches_are_dropped(db_session, index):
+    await add_file(db_session, index, "biology.md", "The mitochondria produces energy for the cell.")
+    assert await file_search.search_files(db_session, "elephant savannah migration") == []
+    related = await file_search.search_files(db_session, "mitochondria energy cell")
+    assert related[0]["reasons"] == ["keyword", "semantic"]
+    with patch.object(file_search, "SEMANTIC_FLOOR", 0.99):
+        strict = await file_search.search_files(db_session, "mitochondria energy cell")
+    assert strict[0]["reasons"] == ["keyword"]

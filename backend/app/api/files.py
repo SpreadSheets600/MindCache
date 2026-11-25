@@ -142,3 +142,15 @@ async def reindex_file(file_id: int, db: AsyncSession = Depends(get_db)):
 @router.get("/index/status")
 async def index_status():
     return await indexer.status()
+
+
+@router.post("/index/pause")
+async def pause_index():
+    indexer.pause()
+    return await indexer.status()
+
+
+@router.post("/index/resume")
+async def resume_index():
+    indexer.resume()
+    return await indexer.status()

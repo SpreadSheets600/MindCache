@@ -9,6 +9,7 @@ from app.services.excerpts import matching_excerpt
 CANDIDATES = 100
 RRF_K = 60
 PASSAGES_PER_FILE = 3
+SEMANTIC_FLOOR = 0.70
 
 
 def fuse(*rankings):
@@ -24,7 +25,7 @@ def semantic_hits(query, limit):
         vector = embedder.embed_query(query)
     except Exception:
         return []
-    return [chunk_id for chunk_id, _ in chunk_index.search(vector, limit)]
+    return [chunk_id for chunk_id, score in chunk_index.search(vector, limit) if score >= SEMANTIC_FLOOR]
 
 
 async def search_files(db, query, limit=20):

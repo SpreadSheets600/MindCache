@@ -62,29 +62,26 @@
       </div>
     </section>
     <section id="models" class="view" hidden>
-      <div class="heading"><div><h1>Models</h1><p>Choose how each task runs.</p></div></div>
+      <div class="heading"><div><h1>Models</h1><p>Embeddings run locally. Choose how text generation runs.</p></div></div>
       <p class="provider-notice">Remote providers receive the content needed for their task.</p>
       <div class="model-summary" id="model-summary" role="status">Checking your current model choices…</div><form id="models-form" hidden>
         <div class="model-grid">
           <fieldset><legend class="visually-hidden">Embeddings</legend><div class="model-card-head"><div><h2>Embeddings</h2><p>Find related saved pages.</p></div><span class="task-chip">Search</span></div>
-            <label for="embedding-provider">Provider</label><select id="embedding-provider"><option value="disabled">Disabled</option><option value="transformers">Local Transformers</option><option value="ollama">Ollama</option><option value="openai">OpenAI compatible</option></select>
-            <label for="embedding-model">Model name</label><input id="embedding-model" list="embedding-suggestions" autocomplete="off" placeholder="e.g. sentence-transformers/all-MiniLM-L6-v2"><p class="model-hint" id="embedding-hint"></p><datalist id="embedding-suggestions"></datalist>
-            <label for="embedding-endpoint">Endpoint for Ollama or OpenAI compatible</label><input id="embedding-endpoint" type="url" placeholder="http://localhost:11434">
-            <label for="embedding-key">API key environment variable</label><input id="embedding-key" autocomplete="off" placeholder="Optional">
-            <label class="privacy-option"><span><strong>Allow remote processing</strong><small>Send saved content and queries to this endpoint.</small></span><input id="embedding-consent" type="checkbox" role="switch"></label><button type="button" id="download-embedding">Download model</button><div id="embedding-download-status" class="download-status" role="status" aria-live="polite" hidden></div>
+            <p id="embedding-info" class="model-hint"></p>
+            <button type="button" id="download-embedding">Download model</button><div id="embedding-download-status" class="download-status" role="status" aria-live="polite" hidden></div>
           </fieldset>
           <fieldset><legend class="visually-hidden">Generation</legend><div class="model-card-head"><div><h2>Generation</h2><p>Generate text when you request it.</p></div><span class="task-chip">Optional</span></div>
             <label for="generation-provider">Provider</label><select id="generation-provider"><option value="disabled">Disabled</option><option value="transformers">Local Transformers</option><option value="ollama">Ollama</option><option value="openai">OpenAI compatible</option></select>
             <label for="generation-model">Model name</label><input id="generation-model" list="generation-suggestions" autocomplete="off" placeholder="e.g. Qwen/Qwen2.5-0.5B-Instruct"><p class="model-hint" id="generation-hint"></p><datalist id="generation-suggestions"></datalist>
             <label for="generation-endpoint">Endpoint for Ollama or OpenAI compatible</label><input id="generation-endpoint" type="url" placeholder="http://localhost:11434">
-            <label for="generation-key">API key environment variable</label><input id="generation-key" autocomplete="off" placeholder="Optional">
+            <label for="generation-key">API key</label><input id="generation-key" type="password" autocomplete="off" placeholder="Optional"><button type="button" id="clear-key" hidden>Remove saved key</button>
             <label class="privacy-option"><span><strong>Allow remote processing</strong><small>Send prompts to this endpoint.</small></span><input id="generation-consent" type="checkbox" role="switch"></label><button type="button" id="download-generation">Download model</button><div id="generation-download-status" class="download-status" role="status" aria-live="polite" hidden></div>
           </fieldset>
         </div>
         <button type="submit" class="primary">Save models</button>
       </form>
       <p id="models-message" role="status">Loading model settings…</p>
-      <details class="model-help"><summary>Model and index details</summary><p>Downloads save both model choices and use the network. Changing an embedding model for a populated index requires a safe rebuild, which is not yet available. Earlier pages without vectors are not automatically indexed. API keys are read from named environment variables.</p></details>
+      <details class="model-help"><summary>Model and index details</summary><p>MindCache always embeds with EmbeddingGemma 2 on this computer. The first download uses the network. Existing pages are re-indexed automatically after the model is ready. API keys are stored in a private file in the data folder and are never shown again.</p></details>
     </section>
   </main>
   <dialog id="detail"><div class="dialog-header"><h2 id="detail-title"></h2><button id="close-detail" aria-label="Close details">Close</button></div><p id="detail-origin" class="muted"></p><p id="detail-content" class="detail-content"></p><form id="edit-note-form" hidden><label for="edit-note-title">Title</label><input id="edit-note-title" required maxlength="512"><label for="edit-note-content">Note</label><textarea id="edit-note-content" required rows="6"></textarea><button class="primary" type="submit">Save changes</button></form><div class="dialog-actions"><button id="summarize-item" type="button">Summarize saved text</button><button id="run-ocr" type="button" hidden>Extract image text</button><a id="open-source" target="_blank" rel="noopener noreferrer">Open original</a><a id="download-original" hidden>Download original</a><button id="delete-item" class="danger">Delete from MindCache</button></div><p id="summary-status" role="status"></p><p id="generated-summary" class="detail-content"></p></dialog>

@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState, useMemo } from "react";
 import { DocumentResponse } from "../types";
+import { Input } from "./ui/input";
 import { 
   Globe, 
   Search, 
@@ -24,7 +25,7 @@ import {
 } from "lucide-react";
 
 interface Node {
-  id: string; // "doc_123", "kw_react", or "ent_google"
+  id: string;
   label: string;
   type: "document" | "keyword" | "entity";
   url?: string;
@@ -38,7 +39,7 @@ interface Node {
   color: string;
   originalColor: string;
   visitCount?: number;
-  entityType?: string; // Person, Company, Technology, Project
+  entityType?: string;
 }
 
 interface Link {
@@ -54,7 +55,6 @@ interface InteractiveKnowledgeGraphProps {
   onDeleteDocument: (id: number) => void;
 }
 
-// Domain-based coloring hashing helper
 const getDomainColor = (domain: string): string => {
   if (!domain) return "#3b82f6";
   let hash = 0;
@@ -65,17 +65,15 @@ const getDomainColor = (domain: string): string => {
   return `hsl(${hue}, 75%, 55%)`;
 };
 
-// Entity type color mapping
 const getEntityColor = (entityType: string): string => {
   const typeLower = entityType?.toLowerCase() || "";
-  if (typeLower.includes("person")) return "#f59e0b"; // amber-500
-  if (typeLower.includes("company") || typeLower.includes("organization")) return "#10b981"; // emerald-500
-  if (typeLower.includes("technology") || typeLower.includes("language") || typeLower.includes("library")) return "#8b5cf6"; // violet-500
-  if (typeLower.includes("project")) return "#ec4899"; // pink-500
-  return "#6366f1"; // indigo-500 default
+  if (typeLower.includes("person")) return "#f59e0b";
+  if (typeLower.includes("company") || typeLower.includes("organization")) return "#10b981";
+  if (typeLower.includes("technology") || typeLower.includes("language") || typeLower.includes("library")) return "#8b5cf6";
+  if (typeLower.includes("project")) return "#ec4899";
+  return "#6366f1";
 };
 
-// Entity type icon helper
 const getEntityIcon = (entityType: string) => {
   const typeLower = entityType?.toLowerCase() || "";
   if (typeLower.includes("person")) return User;
@@ -85,8 +83,6 @@ const getEntityIcon = (entityType: string) => {
   return Cpu;
 };
 
-
-
 export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps> = ({
   documents,
   onDocumentClick,
@@ -95,38 +91,32 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Layout and simulation states
   const [nodes, setNodes] = useState<Node[]>([]);
   const [links, setLinks] = useState<Link[]>([]);
   const [hoveredNode, setHoveredNode] = useState<Node | null>(null);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [draggedNode, setDraggedNode] = useState<Node | null>(null);
 
-  // Zoom & Pan states
   const [panX, setPanX] = useState(0);
   const [panY, setPanY] = useState(0);
   const [scale, setScale] = useState(1);
   const isDraggingCanvas = useRef(false);
   const dragStart = useRef({ x: 0, y: 0 });
 
-  // Filtering configurations
   const [searchQuery, setSearchQuery] = useState("");
   const [maxDocs, setMaxDocs] = useState(50);
   const [minKwFrequency, setMinKwFrequency] = useState(2);
   const [colorMode, setColorMode] = useState<"type" | "domain" | "recency">("domain");
   const [timeFilter, setTimeFilter] = useState<"all" | "day" | "week" | "month">("all");
   
-  // Physics parameters configurations
   const [physicsRepulsion, setPhysicsRepulsion] = useState(60);
   const [physicsLinkDist, setPhysicsLinkDist] = useState(55);
   const [physicsGravity, setPhysicsGravity] = useState(0.001);
   const [showPhysicsConfig, setShowPhysicsConfig] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
 
-  // Responsive dimensions
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
 
-  // Sidebar details state
   const selectedDocDetails = useMemo(() => {
     if (!selectedNode || selectedNode.type !== "document") return null;
     const docId = parseInt(selectedNode.id.split("_")[1], 10);
@@ -137,7 +127,6 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
     if (!selectedNode || selectedNode.type !== "keyword") return null;
     const kw = selectedNode.label;
     
-    // Find all documents connected to this keyword
     const relatedDocs = documents.filter((doc) =>
       doc.keywords.some((k) => k.keyword.toLowerCase() === kw.toLowerCase())
     );
@@ -154,7 +143,6 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
     const entName = selectedNode.label;
     const entType = selectedNode.entityType || "";
     
-    // Find all documents connected to this entity
     const relatedDocs = documents.filter((doc) =>
       doc.entities?.some((e) => e.name.toLowerCase() === entName.toLowerCase())
     );
@@ -167,7 +155,6 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
     };
   }, [selectedNode, documents]);
 
-  // Adjust dimensions on mount and resize
   useEffect(() => {
     const handleResize = () => {
       if (containerRef.current) {
@@ -183,13 +170,11 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Filter documents based on time recency
   const filteredDocuments = useMemo(() => {
     if (!documents) return [];
     
     let docs = [...documents];
 
-    // Time filter
     if (timeFilter !== "all") {
       const now = new Date();
       const cutoff = new Date();
@@ -200,11 +185,9 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
       docs = docs.filter((doc) => new Date(doc.updated_at) >= cutoff);
     }
 
-    // Limit document size
     return docs.slice(0, maxDocs);
   }, [documents, maxDocs, timeFilter]);
 
-  // Build the network structures
   useEffect(() => {
     if (filteredDocuments.length === 0) {
       setNodes([]);
@@ -215,7 +198,6 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
     const width = dimensions.width || 800;
     const height = dimensions.height || 600;
 
-    // Count keywords frequency
     const keywordDocsMap: Record<string, string[]> = {};
     filteredDocuments.forEach((doc) => {
       const docId = `doc_${doc.id}`;
@@ -230,7 +212,6 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
       });
     });
 
-    // Count entities frequency
     const entityDocsMap: Record<string, { type: string; docIds: string[] }> = {};
     filteredDocuments.forEach((doc) => {
       const docId = `doc_${doc.id}`;
@@ -245,12 +226,10 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
       });
     });
 
-    // Pick top keywords connected to at least `minKwFrequency` documents
     const activeKeywords = Object.entries(keywordDocsMap)
       .filter(([_, docIds]) => docIds.length >= minKwFrequency)
       .map(([name]) => name);
 
-    // Pick entities connected to at least 1 document
     const activeEntities = Object.entries(entityDocsMap)
       .filter(([_, data]) => data.docIds.length >= 1)
       .map(([key, data]) => ({ key, ...data }));
@@ -259,17 +238,15 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
     const newLinks: Link[] = [];
     const nodeMap = new Map<string, Node>();
 
-    // 1. Position documents in circular distribution initially
     filteredDocuments.forEach((doc, idx) => {
       const id = `doc_${doc.id}`;
       const angle = (idx / filteredDocuments.length) * Math.PI * 2;
       const radius = 130 + Math.random() * 40;
       
-      let color = "#3b82f6"; // Default blue
+      let color = "#3b82f6";
       if (colorMode === "domain") {
         color = getDomainColor(doc.domain);
       } else if (colorMode === "recency") {
-        // Color-code based on age (newer is brighter, older is darker steel blue)
         const ageInMs = Date.now() - new Date(doc.updated_at).getTime();
         const ageInDays = ageInMs / (1000 * 60 * 60 * 24);
         const intensity = Math.max(25, Math.min(75, 80 - ageInDays * 2));
@@ -288,7 +265,7 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
         y: height / 2 + Math.sin(angle) * radius,
         vx: 0,
         vy: 0,
-        radius: Math.min(15, 6 + Math.log2(doc.visit_history?.length || 1) * 2), // larger radius for highly visited docs
+        radius: Math.min(15, 6 + Math.log2(doc.visit_history?.length || 1) * 2),
         color,
         originalColor: color,
       };
@@ -297,12 +274,10 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
       nodeMap.set(id, node);
     });
 
-    // 2. Position keyword nodes and build links
     activeKeywords.forEach((kw) => {
       const kwId = `kw_${kw}`;
       const docIds = keywordDocsMap[kw];
 
-      // Insert keyword node if not exists
       if (!nodeMap.has(kwId)) {
         const kwNode: Node = {
           id: kwId,
@@ -312,15 +287,14 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
           y: height / 2 + (Math.random() - 0.5) * 220,
           vx: 0,
           vy: 0,
-          radius: Math.min(10, 4 + Math.log2(docIds.length) * 1.5), // larger radius if connected to many docs
-          color: "#71717a", // zinc-500
+          radius: Math.min(10, 4 + Math.log2(docIds.length) * 1.5),
+          color: "#71717a",
           originalColor: "#71717a",
         };
         newNodes.push(kwNode);
         nodeMap.set(kwId, kwNode);
       }
 
-      // Link doc to keyword
       docIds.forEach((docId) => {
         if (nodeMap.has(docId)) {
           newLinks.push({
@@ -333,16 +307,14 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
       });
     });
 
-    // 3. Position entity nodes and build links
     activeEntities.forEach((ent) => {
       const entId = `ent_${ent.key.replace(/[^a-z0-9]/g, "_")}`;
       const entityColor = getEntityColor(ent.type);
 
-      // Insert entity node if not exists
       if (!nodeMap.has(entId)) {
         const entNode: Node = {
           id: entId,
-          label: ent.key.split(":")[1] || ent.key, // Extract name from "type:name"
+          label: ent.key.split(":")[1] || ent.key,
           type: "entity",
           entityType: ent.type,
           x: width / 2 + (Math.random() - 0.5) * 180,
@@ -357,7 +329,6 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
         nodeMap.set(entId, entNode);
       }
 
-      // Link doc to entity
       ent.docIds.forEach((docId) => {
         if (nodeMap.has(docId)) {
           newLinks.push({
@@ -373,14 +344,12 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
     setNodes(newNodes);
     setLinks(newLinks);
     
-    // Clear selections if nodes went away
     if (selectedNode) {
       const stillExists = newNodes.some((n) => n.id === selectedNode.id);
       if (!stillExists) setSelectedNode(null);
     }
   }, [filteredDocuments, minKwFrequency, colorMode, dimensions.width, dimensions.height]);
 
-  // Main Canvas render and simulation loop
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || nodes.length === 0) return;
@@ -393,10 +362,8 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
     const width = dimensions.width;
     const height = dimensions.height;
 
-    // Simulation logic
     const runSimulation = () => {
       if (!isPaused) {
-        // 1. Repulsion force between nodes (Charge)
         for (let i = 0; i < nodes.length; i++) {
           const n1 = nodes[i];
           for (let j = i + 1; j < nodes.length; j++) {
@@ -405,7 +372,6 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
             const dy = n2.y - n1.y;
             const dist = Math.sqrt(dx * dx + dy * dy) || 1;
             
-            // Adjust threshold based on type
             const minDist = n1.type === "keyword" || n2.type === "keyword" ? physicsRepulsion - 15 : physicsRepulsion;
 
             if (dist < minDist) {
@@ -419,7 +385,6 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
           }
         }
 
-        // 2. Attraction force along links (Gravity pull between linked nodes)
         links.forEach((link) => {
           const n1 = nodes.find((n) => n.id === link.source);
           const n2 = nodes.find((n) => n.id === link.target);
@@ -428,7 +393,6 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
             const dy = n2.y - n1.y;
             const dist = Math.sqrt(dx * dx + dy * dy) || 1;
             
-            // Hooke's Law attraction
             const force = (dist - physicsLinkDist) * 0.006;
             const fx = (dx / dist) * force;
             const fy = (dy / dist) * force;
@@ -438,49 +402,39 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
           }
         });
 
-        // 3. Central gravity and friction updates
         nodes.forEach((node) => {
           if (node === draggedNode) return;
           
-          // Pull toward center of screen
           const dx = width / 2 - node.x;
           const dy = height / 2 - node.y;
           node.vx += dx * physicsGravity;
           node.vy += dy * physicsGravity;
 
-          // Apply velocity and damping
           node.x += node.vx;
           node.y += node.vy;
-          node.vx *= 0.82; // damping / drag
+          node.vx *= 0.82;
           node.vy *= 0.82;
 
-          // Boundaries clamp
           node.x = Math.max(node.radius + 5, Math.min(width - node.radius - 5, node.x));
           node.y = Math.max(node.radius + 5, Math.min(height - node.radius - 5, node.y));
         });
       }
 
-      // Drawing Logic
       ctx.clearRect(0, 0, width, height);
 
-      // Save canvas state
       ctx.save();
       
-      // Handle Pan & Zoom
       ctx.translate(panX, panY);
       ctx.scale(scale, scale);
 
-      // Render subtle tech grid background
       drawGrid(ctx);
 
-      // 4. Render Link Edges
       ctx.lineWidth = 0.8;
       links.forEach((link) => {
         const n1 = nodes.find((n) => n.id === link.source);
         const n2 = nodes.find((n) => n.id === link.target);
         if (!n1 || !n2) return;
 
-        // Check highlight states
         const isHighlighted = getLinkHighlightState(n1, n2);
         const isFaded = isAnySelectedOrHovered() && !isHighlighted;
 
@@ -500,23 +454,19 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
         }
         ctx.stroke();
 
-        // 5. Draw flowing particle nodes along edge paths (Cool visual feature)
         if (!isPaused && !isFaded) {
           drawLinkParticles(ctx, n1, n2, isHighlighted);
         }
       });
 
-      // 6. Render Nodes
       nodes.forEach((node) => {
         const isSelected = selectedNode?.id === node.id;
         const isHovered = hoveredNode?.id === node.id;
         const isMatchingSearch = checkSearchMatch(node);
         
-        // Highlight states
         const isRelated = isNodeRelated(node);
         const isFaded = isAnySelectedOrHovered() && !isHovered && !isSelected && !isRelated;
 
-        // Node Opacity based on focus state
         let opacity = 1.0;
         if (searchQuery.trim().length > 0) {
           opacity = isMatchingSearch ? 1.0 : 0.15;
@@ -527,13 +477,11 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
         ctx.save();
         ctx.globalAlpha = opacity;
 
-        // Subtle glow filter for hovered/selected nodes
         if (isHovered || isSelected || (isMatchingSearch && searchQuery)) {
           ctx.shadowBlur = 15;
           ctx.shadowColor = node.color;
         }
 
-        // Draw node body
         ctx.beginPath();
         ctx.arc(node.x, node.y, node.radius + (isHovered ? 2.5 : 0), 0, Math.PI * 2);
         
@@ -543,13 +491,11 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
           ctx.lineWidth = isSelected ? 3.5 : 1.5;
           ctx.stroke();
         } else if (node.type === "entity") {
-          // Entity nodes - diamond shape
           ctx.fillStyle = isSelected ? "#ffffff" : node.color;
           ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
           ctx.lineWidth = 1.5;
           ctx.stroke();
         } else {
-          // Keyword
           ctx.fillStyle = isSelected ? "#3b82f6" : node.color;
           ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
           ctx.lineWidth = 1;
@@ -558,7 +504,6 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
         ctx.fill();
         ctx.restore();
 
-        // 7. Render Node Text Labels
         const shouldShowLabel = 
           isHovered || 
           isSelected || 
@@ -591,7 +536,6 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
           }
 
           let labelText = node.label;
-          // Shorten document titles to fit visually
           if (node.type === "document" && labelText.length > 28) {
             labelText = labelText.substring(0, 25) + "...";
           }
@@ -602,17 +546,14 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
         }
       });
 
-      // Restore canvas state
       ctx.restore();
 
       animationId = requestAnimationFrame(runSimulation);
     };
 
-    // Draw grid background helper
     const drawGrid = (ctx: CanvasRenderingContext2D) => {
       const gridSpacing = 48;
       
-      // Back-calculate visible bounds
       const minX = -panX / scale;
       const maxX = (width - panX) / scale;
       const minY = -panY / scale;
@@ -633,7 +574,6 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
       }
     };
 
-    // Render animated moving particles along edge lines
     const drawLinkParticles = (
       ctx: CanvasRenderingContext2D,
       n1: Node,
@@ -642,10 +582,8 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
     ) => {
       const t = Date.now();
       const speed = 0.0006;
-      // Stagger index logic using nodes coord to get a reproducible index phase
       const phaseOffset = (n1.x + n2.y) % 1.0;
       
-      // Calculate particle percentage
       const progress = (t * speed + phaseOffset) % 1.0;
 
       const px = n1.x + (n2.x - n1.x) * progress;
@@ -657,7 +595,6 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
       ctx.fill();
     };
 
-    // Helpers to evaluate highlights states
     const isAnySelectedOrHovered = () => hoveredNode !== null || selectedNode !== null;
 
     const getLinkHighlightState = (n1: Node, n2: Node) => {
@@ -695,7 +632,6 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
     return () => cancelAnimationFrame(animationId);
   }, [nodes, links, hoveredNode, selectedNode, draggedNode, panX, panY, scale, searchQuery, isPaused, dimensions, physicsRepulsion, physicsLinkDist, physicsGravity]);
 
-  // Event handler for canvas mouse moves (Hover check + canvas drag)
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -703,7 +639,6 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
 
-    // Convert screen coordinates to world scale coordinates
     const worldX = (mouseX - panX) / scale;
     const worldY = (mouseY - panY) / scale;
 
@@ -722,12 +657,10 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
       return;
     }
 
-    // Hover evaluation check
     let foundNode: Node | null = null;
     for (const node of nodes) {
       const dx = node.x - worldX;
       const dy = node.y - worldY;
-      // Hitbox padding for easier hover action on small points
       if (Math.sqrt(dx * dx + dy * dy) < node.radius + 7) {
         foundNode = node;
         break;
@@ -736,7 +669,6 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
     if (foundNode !== hoveredNode) setHoveredNode(foundNode);
   };
 
-  // Mouse clicks handles
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (hoveredNode) {
       setDraggedNode(hoveredNode);
@@ -764,31 +696,25 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
     isDraggingCanvas.current = false;
   };
 
-  // Click on a node triggers selection and focus
   const handleCanvasClick = () => {
-    // Only process click if user didn't drag the canvas a lot
     if (isDraggingCanvas.current) return;
     
     if (hoveredNode) {
       setSelectedNode(hoveredNode);
       
-      // Auto center the camera on the selected node
       const canvas = canvasRef.current;
       if (canvas) {
         const targetX = canvas.width / 2 - hoveredNode.x * scale;
         const targetY = canvas.height / 2 - hoveredNode.y * scale;
         
-        // Smoothly adjust offset
         setPanX(targetX);
         setPanY(targetY);
       }
     } else {
-      // Click on background clears selection
       setSelectedNode(null);
     }
   };
 
-  // Zoom wheel logic
   const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
     e.preventDefault();
     const canvas = canvasRef.current;
@@ -798,7 +724,6 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
 
-    // Current mouse location in world coordinates
     const worldX = (mouseX - panX) / scale;
     const worldY = (mouseY - panY) / scale;
 
@@ -806,7 +731,6 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
     const zoomFactor = e.deltaY < 0 ? 1 + zoomIntensity : 1 - zoomIntensity;
     const newScale = Math.max(0.18, Math.min(4.0, scale * zoomFactor));
 
-    // Recalculate offsets to preserve cursor center zoom focus
     const newPanX = mouseX - worldX * newScale;
     const newPanY = mouseY - worldY * newScale;
 
@@ -815,7 +739,6 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
     setPanY(newPanY);
   };
 
-  // Camera toolbar buttons
   const zoomIn = () => {
     setScale((prev) => Math.min(4.0, prev * 1.25));
   };
@@ -831,17 +754,15 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
   };
 
   return (
-    <div className="flex h-[calc(100vh-130px)] gap-4 overflow-hidden" ref={containerRef}>
-      {/* Visualizer Area */}
+    <div className="flex h-full min-h-0 gap-4 overflow-hidden" ref={containerRef}>
       <div className="relative flex-1 bg-zinc-950 border border-zinc-800 rounded-lg overflow-hidden flex flex-col">
 
-        {/* Searching / Filtering Toolbar Top Header */}
         <div className="bg-zinc-950/70 border-b border-zinc-800/60 p-3 flex items-center gap-3 flex-wrap">
-          {/* Live Search */}
           <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-md px-2.5 py-1.5 space-x-2 flex-1 min-w-[200px]">
             <Search className="w-3.5 h-3.5 text-zinc-500" />
-            <input
+            <Input
               type="text"
+              aria-label="Search graph documents or keywords"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search documents or keywords..."
@@ -854,7 +775,6 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
             )}
           </div>
 
-          {/* Domain / Recency Mode Selection */}
           <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-md p-0.5 text-xs text-zinc-400">
             <button
               onClick={() => setColorMode("domain")}
@@ -882,7 +802,6 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
             </button>
           </div>
 
-          {/* Time range selection */}
           <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-md p-0.5 text-xs text-zinc-400">
             <button
               onClick={() => setTimeFilter("all")}
@@ -910,7 +829,6 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
             </button>
           </div>
 
-          {/* Max Documents Slider */}
           <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-md px-2.5 py-1.5 space-x-2 text-[11px] text-zinc-400">
             <Filter className="w-3 h-3 text-zinc-500" />
             <span>Show:</span>
@@ -926,7 +844,6 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
             </select>
           </div>
 
-          {/* Min Keyword Frequency selection */}
           <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-md px-2.5 py-1.5 space-x-2 text-[11px] text-zinc-400">
             <Hash className="w-3 h-3 text-zinc-500" />
             <span>Keyword Conn:</span>
@@ -943,12 +860,9 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
           </div>
         </div>
 
-        {/* Canvas Frame */}
         <div className="flex-1 w-full relative">
           
-          {/* Controls Toolbar Overlay */}
           <div className="absolute top-3 left-4 right-4 flex items-center justify-between select-none pointer-events-none z-10 gap-2 flex-wrap">
-            {/* Legend and stats */}
             <div className="flex items-center space-x-2 bg-zinc-900/90 border border-zinc-800 px-3 py-1.5 rounded-md text-[10.5px] pointer-events-auto shadow-lg backdrop-blur-md">
               <span className="flex items-center space-x-1.5">
                 <span className="w-2 h-2 rounded-full bg-blue-500" />
@@ -966,7 +880,6 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
               </span>
             </div>
 
-            {/* Settings & Camera Actions */}
             <div className="flex items-center space-x-1.5 pointer-events-auto">
               <button
                 onClick={() => setShowPhysicsConfig(!showPhysicsConfig)}
@@ -1015,7 +928,6 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
             </div>
           </div>
 
-          {/* Physics Tuning Panel Overlay */}
           {showPhysicsConfig && (
             <div className="absolute top-14 right-4 w-64 bg-zinc-900/95 border border-zinc-800 rounded-lg p-3.5 text-xs text-zinc-300 z-10 shadow-xl backdrop-blur-md space-y-4">
               <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
@@ -1098,6 +1010,7 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
             </div>
           ) : (
             <canvas
+              aria-label="Interactive knowledge graph of saved pages and related terms"
               ref={canvasRef}
               width={dimensions.width}
               height={dimensions.height}
@@ -1111,23 +1024,19 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
             />
           )}
 
-          {/* Quick interactive zoom indicator */}
-          <div className="absolute bottom-3 right-4 text-[10.5px] font-mono text-zinc-500 select-none bg-zinc-900/50 px-2 py-0.5 rounded border border-zinc-800/30">
+          <div className="absolute bottom-3 right-4 text-[10.5px] text-zinc-500 select-none bg-zinc-900/50 px-2 py-0.5 rounded border border-zinc-800/30">
             Zoom: {Math.round(scale * 100)}%
           </div>
 
-          {/* Tips Overlay */}
           <div className="absolute bottom-3 left-4 text-[10.5px] text-zinc-500 select-none hidden md:block">
-            Scroll to Zoom &bull; Drag to Pan &bull; Drag nodes to rearrange &bull; Click to inspect
+            Scroll to zoom, drag to pan or rearrange nodes, click to inspect
           </div>
         </div>
       </div>
 
-      {/* Node Info Sidebar Panel */}
       {selectedNode && (
-        <div className="w-[320px] bg-zinc-900 border border-zinc-800 rounded-lg p-4 overflow-y-auto flex flex-col justify-between shadow-xl animate-in slide-in-from-right duration-250">
+        <div className="w-[min(320px,45%)] shrink-0 bg-zinc-900 border border-zinc-800 rounded-lg p-4 overflow-y-auto flex flex-col justify-between shadow-xl animate-in slide-in-from-right duration-250">
           
-          {/* Content details based on node type */}
           <div>
             <div className="flex items-start justify-between border-b border-zinc-800 pb-3 mb-4">
               <div className="flex items-center space-x-2">
@@ -1137,7 +1046,7 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
                   const Icon = getEntityIcon(selectedNode.entityType || "");
                   return <Icon className="w-4 h-4" style={{ color: selectedNode.color }} />;
                 })()}
-                <span className="text-xs uppercase tracking-wider font-semibold text-zinc-400">
+                <span className="text-xs font-semibold text-zinc-400">
                   {selectedNode.type === "document" 
                     ? "Memory Page" 
                     : selectedNode.type === "entity" 
@@ -1153,7 +1062,6 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
               </button>
             </div>
 
-            {/* Document Details Block */}
             {selectedNode.type === "document" && selectedDocDetails && (
               <div className="space-y-4">
                 <div>
@@ -1171,7 +1079,7 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
 
                 {selectedDocDetails.summary && (
                   <div className="space-y-1.5">
-                    <h4 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">AI Summary</h4>
+                    <h4 className="text-[11px] font-semibold text-zinc-400">AI summary</h4>
                     <p className="text-[11.5px] text-zinc-300 leading-relaxed bg-zinc-950 p-2.5 rounded border border-zinc-800/60 max-h-36 overflow-y-auto">
                       {selectedDocDetails.summary}
                     </p>
@@ -1192,7 +1100,7 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-zinc-400 py-1">
-                    <span className="flex items-center space-x-1"><span>🎯</span> <span>Visit Count</span></span>
+                    <span className="flex items-center space-x-1"><span>Visit Count</span></span>
                     <span className="font-mono text-zinc-300">
                       {selectedDocDetails.visit_history?.length || 1}
                     </span>
@@ -1201,13 +1109,12 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
 
                 {selectedDocDetails.keywords && selectedDocDetails.keywords.length > 0 && (
                   <div className="space-y-1.5">
-                    <h4 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Related Keywords</h4>
+                    <h4 className="text-[11px] font-semibold text-zinc-400">Related keywords</h4>
                     <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto pt-0.5">
                       {selectedDocDetails.keywords.map((kw, i) => (
                         <button
                           key={i}
                           onClick={() => {
-                            // Find and highlight keyword node
                             const kwNode = nodes.find(n => n.type === "keyword" && n.label.toLowerCase() === kw.keyword.toLowerCase());
                             if (kwNode) {
                               setSelectedNode(kwNode);
@@ -1224,7 +1131,7 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
 
                 {selectedDocDetails.entities && selectedDocDetails.entities.length > 0 && (
                   <div className="space-y-1.5">
-                    <h4 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Extracted Entities</h4>
+                    <h4 className="text-[11px] font-semibold text-zinc-400">Extracted entities</h4>
                     <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto pt-0.5">
                       {selectedDocDetails.entities.map((ent, i) => {
                         const entColor = getEntityColor(ent.type);
@@ -1232,7 +1139,6 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
                           <button
                             key={i}
                             onClick={() => {
-                              // Find and highlight entity node
                               const entKey = `${ent.type}:${ent.name}`.toLowerCase();
                               const entId = `ent_${entKey.replace(/[^a-z0-9]/g, "_")}`;
                               const entNode = nodes.find(n => n.id === entId);
@@ -1257,7 +1163,6 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
               </div>
             )}
 
-            {/* Keyword Details Block */}
             {selectedNode.type === "keyword" && selectedKwDetails && (
               <div className="space-y-4">
                 <div>
@@ -1270,7 +1175,7 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
                 </div>
 
                 <div className="space-y-2">
-                  <h4 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Connected Pages</h4>
+                  <h4 className="text-[11px] font-semibold text-zinc-400">Connected pages</h4>
                   <div className="space-y-1.5 max-h-[220px] overflow-y-auto">
                     {selectedKwDetails.documents.map((doc) => (
                       <div 
@@ -1296,7 +1201,6 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
               </div>
             )}
 
-            {/* Entity Details Block */}
             {selectedNode.type === "entity" && selectedEntDetails && (
               <div className="space-y-4">
                 <div>
@@ -1321,7 +1225,7 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
                 </div>
 
                 <div className="space-y-2">
-                  <h4 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Mentioned In</h4>
+                  <h4 className="text-[11px] font-semibold text-zinc-400">Mentioned in</h4>
                   <div className="space-y-1.5 max-h-[220px] overflow-y-auto">
                     {selectedEntDetails.documents.map((doc) => (
                       <div 
@@ -1348,7 +1252,6 @@ export const InteractiveKnowledgeGraph: React.FC<InteractiveKnowledgeGraphProps>
             )}
           </div>
 
-          {/* Action Footer controls */}
           <div className="pt-4 border-t border-zinc-800 mt-6 space-y-2">
             {selectedNode.type === "document" && selectedDocDetails && (
               <>

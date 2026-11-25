@@ -3,10 +3,8 @@ import { useSettingsStore } from "../store/settingsStore";
 
 const recentVisits = new Map<string, number>();
 
-// Rehydrate settings store on background startup
 useSettingsStore.persist.rehydrate();
 
-// Create context menus on install
 function createContextMenus() {
   chrome.contextMenus.create({
     id: "save-page",
@@ -31,7 +29,6 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
-// Handle context menu clicks
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === "save-page" && tab?.id && tab?.url) {
     captureCurrentPage(tab.id, tab.url, tab.title || "");
@@ -44,7 +41,6 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   }
 });
 
-// Workaround: Sync settings changes from the popup/options UI to the background context
 if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.onChanged) {
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName === "local" && changes["mindcache-settings-store"]) {
@@ -207,7 +203,6 @@ async function getPageExtraction(tabId: number): Promise<any | null> {
     ]);
     if (result && result.content) return result;
   } catch {
-    // Content script not available
   }
   return null;
 }
@@ -251,7 +246,6 @@ async function processVisit(url: string, title: string, dwellTime: number, tabId
   const settings = useSettingsStore.getState();
 
   try {
-    // When auto-extract is off, skip extraction entirely — user must trigger manually
     if (!settings.autoExtract) {
       console.log(`[MindCache Background] Auto-extract disabled. Skipping extraction for ${url}`);
       return;
@@ -296,7 +290,6 @@ async function processVisit(url: string, title: string, dwellTime: number, tabId
   }
 }
 
-// 1. Monitor active tab switches
 chrome.tabs.onActivated.addListener((activeInfo) => {
   chrome.tabs.get(activeInfo.tabId, (tab) => {
     if (chrome.runtime.lastError) return;
@@ -306,19 +299,16 @@ chrome.tabs.onActivated.addListener((activeInfo) => {
   });
 });
 
-// 2. Monitor page navigation updates
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === "complete" && tab.url && tab.active) {
     handleTabActivated(tabId, tab.url, tab.title || "");
   }
 });
 
-// 3. Monitor tab closure
 chrome.tabs.onRemoved.addListener((tabId) => {
   handleTabDeactivated(tabId);
 });
 
-// 4. Monitor window focus changes
 chrome.windows.onFocusChanged.addListener((windowId) => {
   if (windowId === chrome.windows.WINDOW_ID_NONE) {
     handleTabDeactivated(null);
@@ -332,7 +322,6 @@ chrome.windows.onFocusChanged.addListener((windowId) => {
   }
 });
 
-// 5. Monitor extension command hotkeys
 chrome.commands.onCommand.addListener((command) => {
   if (command === "toggle-search-overlay") {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -415,7 +404,6 @@ async function captureSelection(tabId: number, url: string, title: string) {
   }
 }
 
-// 6. Handle messages
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.action === "get-active-tabs") {
     chrome.tabs.query({}, (tabs) => {

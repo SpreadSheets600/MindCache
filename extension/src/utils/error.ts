@@ -1,17 +1,11 @@
-/**
- * Utility function to cleanly extract and format error messages from backend responses,
- * standard Error instances, or arbitrary exception objects.
- */
 export const getErrorMessage = (err: any, fallback = "An error occurred during the request."): string => {
   if (!err) return fallback;
 
-  // 1. Check if the error contains details object/array (e.g., from BackendClientError)
   if (err.details) {
     if (typeof err.details === "string") {
       return err.details;
     }
     if (Array.isArray(err.details)) {
-      // Pydantic validation errors: e.g. [{"msg": "String should have at least 1 character"}]
       return err.details.map((d: any) => d.msg || JSON.stringify(d)).join(", ");
     }
     if (typeof err.details === "object") {
@@ -26,7 +20,6 @@ export const getErrorMessage = (err: any, fallback = "An error occurred during t
     }
   }
 
-  // 2. Check the message property on the error object
   if (err.message) {
     if (typeof err.message === "object") {
       try {
@@ -36,7 +29,6 @@ export const getErrorMessage = (err: any, fallback = "An error occurred during t
       }
     }
 
-    // If message is a JSON string, try to parse it to see if it contains details/messages
     try {
       const parsed = JSON.parse(err.message);
       if (Array.isArray(parsed)) {
@@ -53,12 +45,10 @@ export const getErrorMessage = (err: any, fallback = "An error occurred during t
         return JSON.stringify(parsed);
       }
     } catch {
-      // Not a JSON string, fallback to String(message)
     }
 
     return String(err.message);
   }
 
-  // 3. Fallback to general String conversion
   return String(err);
 };

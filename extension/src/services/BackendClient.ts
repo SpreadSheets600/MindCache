@@ -23,6 +23,7 @@ export class BackendClientError extends Error {
 
 class BackendClient {
   private getBaseUrl(): string {
+    if (typeof window !== "undefined" && /^https?:$/.test(window.location.protocol) && window.location.pathname.startsWith("/app/") && ["localhost", "127.0.0.1", "[::1]"].includes(window.location.hostname)) return window.location.origin;
     return useSettingsStore.getState().backendUrl.replace(/\/+$/, "");
   }
 
@@ -72,7 +73,6 @@ class BackendClient {
       } catch (err: any) {
         lastError = err;
         
-        // Don't retry client errors (4xx)
         if (err instanceof BackendClientError && err.status && err.status >= 400 && err.status < 500) {
           throw err;
         }
@@ -86,17 +86,12 @@ class BackendClient {
     throw lastError || new BackendClientError("Network error: Unable to connect to local backend.");
   }
 
-  /**
-   * Health Check Diagnostic ping
-   */
   public async checkHealth(): Promise<HealthCheckResponse> {
     const { setConnectionStatus, setChecking } = useConnectionStore.getState();
     setChecking(true);
     try {
-      // 0 retries for health check to avoid hanging UI
       const data = await this.request<HealthCheckResponse>("/health", { method: "GET" }, 0);
       
-      // Response validation
       if (!data || typeof data.status !== "string" || !data.components) {
         throw new Error("Invalid health check response schema");
       }
@@ -109,9 +104,6 @@ class BackendClient {
     }
   }
 
-  /**
-   * Post visit record
-   */
   public async recordVisit(payload: VisitRequest): Promise<VisitResponse> {
     try {
       const data = await this.request<VisitResponse>("/visit", {
@@ -130,9 +122,6 @@ class BackendClient {
     }
   }
 
-  /**
-   * Perform Natural Language Semantic Search
-   */
   public async search(
     query: string,
     limit = 5,
@@ -155,7 +144,6 @@ class BackendClient {
         body: JSON.stringify(payload),
       });
 
-      // Simple structural validation
       if (!data || typeof data.query !== "string" || !Array.isArray(data.results)) {
         throw new Error("Invalid search response schema");
       }
@@ -167,9 +155,6 @@ class BackendClient {
     }
   }
 
-  /**
-   * Delete Document
-   */
   public async deleteDocument(documentId: number): Promise<{ message: string }> {
     try {
       const data = await this.request<{ message: string }>(
@@ -183,9 +168,6 @@ class BackendClient {
     }
   }
 
-  /**
-   * Fetch Single Document Details By ID
-   */
   public async getDocument(documentId: number): Promise<DocumentResponse> {
     try {
       const data = await this.request<DocumentResponse>(`/documents/${documentId}`);
@@ -199,9 +181,6 @@ class BackendClient {
     }
   }
 
-  /**
-   * List Stored Documents (ordered by last updated timestamp)
-   */
   public async listDocuments(skip = 0, limit = 100): Promise<DocumentResponse[]> {
     try {
       const data = await this.request<DocumentResponse[]>(
@@ -217,9 +196,6 @@ class BackendClient {
     }
   }
 
-  /**
-   * Fetch Knowledge Graph Data (entities, keywords, relationships)
-   */
   public async getGraphData(limit = 100, minKeywordFreq = 2): Promise<GraphResponse> {
     try {
       const data = await this.request<GraphResponse>(
@@ -235,9 +211,6 @@ class BackendClient {
     }
   }
 
-  /**
-   * Generate AI Summary for a document
-   */
   public async summarizeDocument(documentId: number): Promise<{ message: string; summary: string }> {
     try {
       const data = await this.request<{ message: string; summary: string }>(

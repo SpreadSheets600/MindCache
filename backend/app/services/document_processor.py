@@ -23,7 +23,6 @@ logger = get_logger(__name__)
 
 
 class DocumentProcessor:
-    """Orchestrates The Entire Asynchronous Page Fetching, Extraction, And Indexing Pipeline."""
 
     @staticmethod
     def calculate_document_quality_score(
@@ -32,33 +31,27 @@ class DocumentProcessor:
         dwell_time: Optional[float],
         platform_metadata: Optional[dict],
         revisit_count: int = 1,
-    ) -> float:
+    ):
         quality_score = 0.0
 
-        # 1. Dwell time check
         if dwell_time is not None and dwell_time > 60.0:
             quality_score += 2.0
 
-        # 2. Word count check
         if word_count > 500:
             quality_score += 2.0
 
-        # 3. High value document type check
         if source_type in ["PDF", "GitHub", "Documentation"]:
             quality_score += 2.0
 
-        # 4. Transcript availability check
         if platform_metadata and platform_metadata.get("transcript_available"):
             quality_score += 1.0
 
-        # 5. Revisit count check
         if revisit_count > 1:
             quality_score += 1.0
 
         return quality_score
 
-    def _validate_and_parse_url(self, url: str) -> str:
-        """Validates That A URL Is Malformed Or Invalid, Returning Its Parsed Domain."""
+    def _validate_and_parse_url(self, url: str):
 
         parsed = urlparse(url)
 
@@ -71,8 +64,7 @@ class DocumentProcessor:
         return parsed.netloc
 
     @staticmethod
-    def _classify_url(url: str) -> dict:
-        """Returns basic URL info: hostname, path, parsed."""
+    def _classify_url(url: str):
         parsed = urlparse(url)
         hostname = (parsed.hostname or "").lower()
         if hostname.startswith("www."):
@@ -87,8 +79,7 @@ class DocumentProcessor:
 
     async def _handle_duplicate(
         self, db: AsyncSession, doc: Document, visited_at: datetime, dwell_time: Optional[float]
-    ) -> Document:
-        """Records a revisit and updates quality score for an existing document."""
+    ):
         logger.info(f"URL Already Processed: '{doc.url}'. Recording Visit.")
         await document_repository.add_visit(db, doc.id, sanitize_datetime(visited_at) or visited_at)
         revisit_count = len(doc.visits) + 1
@@ -108,8 +99,7 @@ class DocumentProcessor:
         return doc
 
     @staticmethod
-    def _chunk_content(content: str, max_length: int = 40000, chunk_size: int = 3000, overlap: int = 500) -> list[str]:
-        """Splits content into overlapping chunks."""
+    def _chunk_content(content: str, max_length: int = 40000, chunk_size: int = 3000, overlap: int = 500):
         content_to_chunk = content[:max_length]
         if len(content_to_chunk) <= chunk_size:
             return [content_to_chunk]
@@ -127,8 +117,7 @@ class DocumentProcessor:
     def _build_chunk_texts(
         chunks: list[str], title: str, domain: str, source_type: str,
         keyword_names: list[str], entity_names: list[str], meta_str: str,
-    ) -> list[str]:
-        """Prepends metadata to each chunk for embedding context."""
+    ):
         chunk_texts = []
         for i, chunk in enumerate(chunks):
             chunk_text = (
@@ -144,8 +133,7 @@ class DocumentProcessor:
         return chunk_texts
 
     @staticmethod
-    def _compute_knowledge_score(word_count: int, unique_words: int, path: str, source_type: Optional[str] = None) -> int:
-        """Computes a knowledge signal score for logging purposes."""
+    def _compute_knowledge_score(word_count: int, unique_words: int, path: str, source_type: Optional[str] = None):
         knowledge_score = 0
         if word_count > 300:
             knowledge_score += 2
@@ -169,8 +157,7 @@ class DocumentProcessor:
         entity_names: list[str],
         platform_metadata: dict,
         visited_at: datetime,
-    ) -> None:
-        """Chunks content, generates embeddings, indexes into FAISS and BM25, then generates summary."""
+    ):
         meta_parts = []
         if platform_metadata:
             for k, v in platform_metadata.items():
@@ -180,14 +167,14 @@ class DocumentProcessor:
 
         chunks = self._chunk_content(extracted_content)
         chunk_texts = self._build_chunk_texts(chunks, title, domain, source_type, keyword_names, entity_names, meta_str)
-        embeddings = embedding_service.generate_embeddings(chunk_texts)
-
-        vector_service.add_document_chunks(doc.id, embeddings)
         bm25_service.add_document(doc.id, title or "", extracted_content, keyword_names, platform_metadata)
+        try:
+            embeddings = embedding_service.generate_embeddings(chunk_texts)
+            vector_service.add_document_chunks(doc.id, embeddings)
+        except Exception as exc:
+            logger.warning("Semantic indexing unavailable for document %s: %s", doc.id, exc)
 
-    async def _download_page(self, url: str) -> tuple[str, str]:
-        """Downloads A Web Page Asynchronously Using Httpx With A Standard User-Agent.
-        Returns (html_content, final_url) where final_url is the URL after any redirects."""
+    async def _download_page(self, url: str):
 
         headers = {
             "User-Agent": (
@@ -210,7 +197,6 @@ class DocumentProcessor:
                 f"httpx download failed for '{url}': {httpx_err}. Retrying with urllib fallback."
             )
             try:
-                # Fallback to urllib which bypasses TLS JA3 fingerprints checks (e.g. Cloudflare on Medium)
                 import urllib.request
                 import asyncio
 
@@ -221,7 +207,7 @@ class DocumentProcessor:
                         charset = "utf-8"
                         if "charset=" in content_type:
                             charset = content_type.split("charset=")[-1].strip()
-                        final_url = resp.url  # urllib follows redirects and exposes final URL
+                        final_url = resp.url
                         return resp.read().decode(charset, errors="ignore"), final_url
 
                 return await asyncio.to_thread(_urllib_download)
@@ -234,27 +220,19 @@ class DocumentProcessor:
                     url, f"Network Request Failed (httpx: {httpx_err}, urllib: {urllib_err})"
                 ) from urllib_err
 
-    def _fallback_extract(self, html: str) -> tuple[str, Optional[str]]:  # noqa: UP045
-        """Fallback Content Extractor Using BeautifulSoup When Trafilatura Fails.
-        
-        Performs a rich structural HTML-to-Markdown extraction, preserving headings, lists,
-        tables, code blocks, and meta descriptions to optimize search and retrieval.
-        """
+    def _fallback_extract(self, html: str):
 
         try:
             soup = BeautifulSoup(html, "html.parser")
 
-            # Extract Title If Present
             title = soup.title.string.strip() if soup.title and soup.title.string else None
 
-            # Extract meta tags for context preservation
             meta_desc = soup.find("meta", attrs={"name": "description"}) or soup.find("meta", attrs={"property": "og:description"})
             desc = meta_desc["content"].strip() if meta_desc and meta_desc.get("content") else ""
 
             meta_kws = soup.find("meta", attrs={"name": "keywords"})
             kws = meta_kws["content"].strip() if meta_kws and meta_kws.get("content") else ""
 
-            # Remove Non-Content/Navigational Elements
             for tag in soup(["script", "style", "noscript", "iframe", "svg", "meta", "nav", "footer", "header"]):
                 tag.decompose()
 
@@ -265,7 +243,6 @@ class DocumentProcessor:
             if kws:
                 content_parts.append(f"Keywords: {kws}")
 
-            # Structure elements into a clean representation
             for element in soup.find_all(["h1", "h2", "h3", "h4", "p", "ul", "ol", "pre", "table"]):
                 tag_name = element.name
 
@@ -297,11 +274,9 @@ class DocumentProcessor:
                     if rows:
                         content_parts.append("\n" + "\n".join(rows) + "\n")
 
-            # Collapse multi-newlines and spaces
             raw_text = "\n\n".join(content_parts)
             clean_text = re.sub(r"\n{3,}", "\n\n", raw_text).strip()
 
-            # Absolute fallback if no content was matched structurally
             if not clean_text:
                 clean_text = re.sub(r"\s+", " ", soup.get_text()).strip()
 
@@ -311,18 +286,15 @@ class DocumentProcessor:
             logger.error(f"BeautifulSoup Structural Fallback Extraction Failed: {e}", exc_info=True)
             return "", None
 
-    def _parse_date(self, date_str: Optional[str]) -> Optional[datetime]:  # noqa: UP045
-        """Parses ISO Date String From Trafilatura Metadata."""
+    def _parse_date(self, date_str: Optional[str]):
 
         if not date_str:
             return None
 
         try:
-            # Try to parse full ISO format first (preserves time details if present)
             return datetime.fromisoformat(date_str)
         except Exception:
             try:
-                # Trafilatura Dates Are Usually 'YYYY-MM-DD' Or ISO Format
                 clean_date = date_str.split("T")[0]
                 return datetime.strptime(clean_date, "%Y-%m-%d")
             except Exception:
@@ -348,13 +320,7 @@ class DocumentProcessor:
         highlights: Optional[list[dict]] = None,
         selection: Optional[str] = None,
         selection_html: Optional[str] = None,
-    ) -> tuple[str, Optional[Document]]:
-        """Processes A Pre-Extracted Page (From Client-Side Defuddle Extraction).
-
-        Skips server-side HTTP download and content extraction entirely.
-        Uses the provided content and metadata directly, then proceeds with
-        the standard chunking -> keyword/entity extraction -> embeddings -> indexing pipeline.
-        """
+    ):
         domain = self._validate_and_parse_url(url)
         visited_at = datetime.now(UTC).replace(tzinfo=None)
 
@@ -394,7 +360,7 @@ class DocumentProcessor:
 
         words = extracted_content.split()
         word_count = len(words)
-        unique_words = len(set(w.lower() for w in words))
+        unique_words = len({w.lower() for w in words})
         knowledge_score = self._compute_knowledge_score(word_count, unique_words, info["path"])
         logger.info(f"Content quality score={knowledge_score} (words={word_count}, unique={unique_words}): {url}")
 
@@ -445,8 +411,7 @@ class DocumentProcessor:
         url: str,
         title: Optional[str] = None,
         dwell_time: Optional[float] = None,
-    ) -> tuple[str, Optional[Document]]:
-        """Runs The Asynchronous Pipeline To Ingest, Extract, Analyze, And Index A Webpage."""
+    ):
 
         domain = self._validate_and_parse_url(url)
         visited_at = datetime.now(UTC).replace(tzinfo=None)
@@ -485,7 +450,7 @@ class DocumentProcessor:
 
         words = extracted_content.split()
         word_count = len(words)
-        unique_words = len(set(w.lower() for w in words))
+        unique_words = len({w.lower() for w in words})
         knowledge_score = self._compute_knowledge_score(word_count, unique_words, info["path"], source_type)
         logger.info(f"Content quality score={knowledge_score} (words={word_count}, unique={unique_words}): {url}")
 
@@ -530,8 +495,7 @@ class DocumentProcessor:
 
         return "success", doc
 
-    async def reindex_all_documents(self, db: AsyncSession) -> None:
-        """Re-generates embeddings and re-indexes all documents in the database."""
+    async def reindex_all_documents(self, db: AsyncSession):
         logger.info("Starting re-indexing of all documents due to dimension mismatch...")
 
         from sqlalchemy import select
@@ -545,7 +509,6 @@ class DocumentProcessor:
         documents = list(result.scalars().all())
         logger.info(f"Found {len(documents)} documents to re-index.")
 
-        # Clear BM25 index for full rebuild with enriched metadata
         bm25_service._doc_ids = []
         bm25_service._corpus = []
         bm25_service._index = None
@@ -576,10 +539,8 @@ class DocumentProcessor:
             except Exception as e:
                 logger.error(f"Failed to re-index document {doc.id}: {e}", exc_info=True)
 
-        # Save BM25 index after full rebuild
         bm25_service.save()
         logger.info("Re-indexing of all documents completed.")
 
 
-# Singleton Instance
 document_processor = DocumentProcessor()

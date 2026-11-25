@@ -2,7 +2,6 @@ import asyncio
 import os
 import tempfile
 from datetime import datetime
-from typing import Any
 
 import httpx
 from pypdf import PdfReader
@@ -14,10 +13,9 @@ from app.services.extractors.base import ContentExtractor, ExtractionResult
 logger = get_logger(__name__)
 
 
-def parse_pdf_date(date_str: str) -> datetime | None:
+def parse_pdf_date(date_str: str):
     if not date_str:
         return None
-    # PDF date formats look like D:20160216125042-08'00' or "2015"
     date_str = date_str.replace("D:", "")
     try:
         if len(date_str) >= 8 and date_str[:8].isdigit():
@@ -29,14 +27,14 @@ def parse_pdf_date(date_str: str) -> datetime | None:
     return None
 
 
-def is_generic_title(title: str | None) -> bool:
+def is_generic_title(title: str | None):
     if not title:
         return True
     title_lower = title.strip().lower()
     return title_lower in ("abstract", "introduction", "title", "document", "untitled", "draft", "preprint")
 
 
-def extract_title_from_pdf_text(page_text: str) -> str | None:
+def extract_title_from_pdf_text(page_text: str):
     if not page_text:
         return None
     lines = [line.strip() for line in page_text.splitlines() if line.strip()]
@@ -70,9 +68,8 @@ def extract_title_from_pdf_text(page_text: str) -> str | None:
 
 
 class PDFExtractor(ContentExtractor):
-    """Extractor for PDF documents using @pspdfkit/pdf-to-markdown and pypdf metadata extraction."""
 
-    async def extract(self, url: str) -> ExtractionResult:
+    async def extract(self, url: str):
         logger.info(f"PDFExtractor Selected For URL: '{url}'")
 
         headers = {
@@ -84,7 +81,6 @@ class PDFExtractor(ContentExtractor):
             "Accept": "application/pdf,*/*",
         }
 
-        # 1. Download PDF bytes
         pdf_bytes = None
         final_url = url
         try:
@@ -98,7 +94,7 @@ class PDFExtractor(ContentExtractor):
             try:
                 import urllib.request
 
-                def _urllib_download() -> tuple[bytes, str]:
+                def _urllib_download():
                     req = urllib.request.Request(url, headers=headers)
                     with urllib.request.urlopen(req, timeout=30.0) as resp:
                         return resp.read(), resp.url
@@ -111,20 +107,18 @@ class PDFExtractor(ContentExtractor):
         if not pdf_bytes:
             raise ContentExtractionError(url, "Downloaded PDF bytes are empty.")
 
-        # 2. Write to a temporary file
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as temp_pdf:
             temp_pdf.write(pdf_bytes)
             temp_pdf_path = temp_pdf.name
 
         try:
-            # 3. Read metadata and first page text with pypdf in worker thread
             meta = {}
             title = None
             author = None
             published_date = None
             try:
 
-                def _read_meta_and_first_page_text() -> tuple[Any, str]:
+                def _read_meta_and_first_page_text():
                     reader = PdfReader(temp_pdf_path)
                     first_page_text = ""
                     if reader.pages:
@@ -149,7 +143,6 @@ class PDFExtractor(ContentExtractor):
                     if date_val:
                         published_date = parse_pdf_date(date_val)
 
-                # Attempt to extract title from first page text if metadata title is missing/generic
                 if not title or is_generic_title(title):
                     extracted_title = extract_title_from_pdf_text(first_page_text)
                     if extracted_title:
@@ -157,7 +150,6 @@ class PDFExtractor(ContentExtractor):
             except Exception as meta_err:
                 logger.warning(f"Failed to extract PDF metadata: {meta_err}")
 
-            # 4. Convert PDF to Markdown using @pspdfkit/pdf-to-markdown via npx
             cmd = ["npx", "-y", "@pspdfkit/pdf-to-markdown", temp_pdf_path]
             process = await asyncio.create_subprocess_exec(
                 *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
@@ -174,7 +166,6 @@ class PDFExtractor(ContentExtractor):
             if not markdown_content:
                 raise ContentExtractionError(url, "Converted markdown content is empty.")
 
-            # Fallback title from markdown headers (making sure they aren't generic section headers)
             if not title or is_generic_title(title):
                 for line in markdown_content.splitlines():
                     line_stripped = line.strip()
@@ -189,7 +180,6 @@ class PDFExtractor(ContentExtractor):
                             title = candidate
                             break
 
-            # Fallback title from filename
             if not title or is_generic_title(title):
                 from urllib.parse import urlparse
 

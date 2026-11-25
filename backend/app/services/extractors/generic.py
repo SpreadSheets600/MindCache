@@ -3,7 +3,6 @@ import re
 from datetime import datetime
 from typing import Optional
 
-import httpx
 import trafilatura
 from bs4 import BeautifulSoup
 
@@ -15,15 +14,12 @@ logger = get_logger(__name__)
 
 
 class GenericExtractor(ContentExtractor):
-    """Fallback Extractor For Standard Websites Using Trafilatura And BeautifulSoup."""
 
-    def _fallback_extract(self, html: str) -> tuple[str, Optional[str]]:  # noqa: UP045
-        """Fallback Content Extractor Using BeautifulSoup When Trafilatura Fails."""
+    def _fallback_extract(self, html: str):
         try:
             soup = BeautifulSoup(html, "html.parser")
             title = soup.title.string.strip() if soup.title and soup.title.string else None
 
-            # Remove Non-Text Elements
             for tag in soup(["script", "style", "noscript", "iframe", "svg", "meta"]):
                 tag.decompose()
 
@@ -38,8 +34,7 @@ class GenericExtractor(ContentExtractor):
             logger.error(f"GenericExtractor: BeautifulSoup Fallback Extraction Failed: {e}", exc_info=True)
             return "", None
 
-    def _parse_date(self, date_str: Optional[str]) -> Optional[datetime]:  # noqa: UP045
-        """Parses ISO Date String From Trafilatura Metadata."""
+    def _parse_date(self, date_str: Optional[str]):
         if not date_str:
             return None
         try:
@@ -54,7 +49,7 @@ class GenericExtractor(ContentExtractor):
 
     def _extract_sync(
         self, html_content: str, url: str
-    ) -> tuple[Optional[str], Optional[str], Optional[datetime], str, str, str, str, str]:
+    ):
         from app.services.document_processor import document_processor
 
         title = None
@@ -65,30 +60,24 @@ class GenericExtractor(ContentExtractor):
         headings = ""
         schema_data = ""
 
-        # Use BeautifulSoup to parse structural metadata for extra context
         try:
             soup = BeautifulSoup(html_content, "html.parser")
 
-            # 1. Title
             title_tag = soup.title.string.strip() if soup.title and soup.title.string else None
             og_title = soup.find("meta", {"property": "og:title"})
             title = (og_title["content"].strip() if og_title and og_title.get("content") else None) or title_tag
 
-            # 2. Meta Description
             meta_desc = soup.find("meta", attrs={"name": "description"}) or soup.find(
                 "meta", attrs={"property": "og:description"}
             )
             desc = meta_desc["content"].strip() if meta_desc and meta_desc.get("content") else ""
 
-            # 3. Keywords
             meta_kws = soup.find("meta", attrs={"name": "keywords"})
             kws = meta_kws["content"].strip() if meta_kws and meta_kws.get("content") else ""
 
-            # 4. Headings
             headings_list = [h.get_text().strip() for h in soup.find_all(["h1", "h2", "h3"]) if h.get_text().strip()]
             headings = " | ".join(headings_list) if headings_list else ""
 
-            # 5. Schema JSON-LD Data
             try:
                 json_ld_scripts = soup.find_all("script", type="application/ld+json")
                 schema_list = []
@@ -104,7 +93,6 @@ class GenericExtractor(ContentExtractor):
         except Exception as e:
             logger.warning(f"GenericExtractor: BeautifulSoup metadata extraction had issues: {e}")
 
-        # Use Trafilatura for the main article content
         trafilatura_text = ""
         try:
             trafilatura_text = trafilatura.extract(html_content, no_fallback=True) or ""
@@ -117,7 +105,6 @@ class GenericExtractor(ContentExtractor):
         except Exception as e:
             logger.warning(f"GenericExtractor: Trafilatura Extraction had issues for {url}: {e}")
 
-        # Fallback to BeautifulSoup structural markdown if Trafilatura is empty
         main_content = trafilatura_text.strip()
         if not main_content:
             logger.info(
@@ -130,14 +117,12 @@ class GenericExtractor(ContentExtractor):
 
         return title, author, published_date, desc, kws, headings, schema_data, main_content
 
-    async def extract(self, url: str) -> ExtractionResult:
-        """Downloads and extracts webpage contents using a rich Trafilatura + BeautifulSoup combined pipeline."""
+    async def extract(self, url: str):
         logger.info(f"GenericExtractor Selected For URL: '{url}'")
         from app.services.document_processor import document_processor
 
         html_content, final_url = await document_processor._download_page(url)
 
-        # Run heavy HTML parsing and extraction in a worker thread
         (
             title,
             author,
@@ -153,7 +138,6 @@ class GenericExtractor(ContentExtractor):
             logger.error(f"GenericExtractor: Extraction Failed Completely for {url}")
             raise ContentExtractionError(url, "Webpage has no parseable text content.")
 
-        # Combine Trafilatura and BS4 structural metadata into a highly searchable payload
         combined_parts = []
         if title:
             combined_parts.append(f"Title: {title}")

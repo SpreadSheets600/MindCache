@@ -1,40 +1,36 @@
-import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
+from app.core.local_access import allowed_origin, local_host
+from app.core.pairing import trusted_ids
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import documents, health, search, visit
+from app.api import ai, documents, health, items, pairing, privacy, recall, search, visit
 from app.core.config import settings
 from app.core.logging import get_logger, setup_logging
 from app.db.base import Base
 from app.db.session import engine
-from app.services.bm25_service import bm25_service
-from app.services.embedding_service import embedding_service
 from app.services.vector_service import vector_service
 
-# Initialization Of Logging Setup
 setup_logging()
 logger = get_logger("app.main")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Handles The Startup And Shutdown Lifecycle Of The Application"""
-
     logger.info("Starting MindCache Local Backend...")
 
-    # Automatic Database Schema Synchronization
     try:
         logger.info("Synchronizing SQLite Database Schemas ...")
 
         from sqlalchemy import text
-        from app.models.document import Document, Keyword, VisitHistory, Entity, SearchClick, SearchQuery
+        import app.models.document
 
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
 
-            # Retrieve existing columns to execute dynamic schema migration
             cursor = await conn.execute(text("PRAGMA table_info(documents)"))
             columns = [row[1] for row in cursor.fetchall()]
 
@@ -56,43 +52,8 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.critical(f"Critical Error During Database Schema Sync : {e}", exc_info=True)
 
-    # Asynchronously Warm Up Local Embedding Model and check for reindexing in background
-    async def warm_up_models_background():
-        try:
-            # Warm up the embedding model (loads into memory)
-            logger.info(f"Loading embedding model '{embedding_service.model_name}' in background...")
-            dim = embedding_service.get_dimension()
-            logger.info(f"Embedding model loaded. Dimension: {dim}")
+    yield
 
-            # Check if FAISS index is empty or dimension mismatch occurred, and re-index from DB if necessary
-            from app.db.session import AsyncSessionLocal
-            from sqlalchemy import select, func
-            from app.models.document import Document
-            from app.services.document_processor import document_processor
-
-            async with AsyncSessionLocal() as db:
-                cursor = await db.execute(select(func.count(Document.id)))
-                db_doc_count = cursor.scalar() or 0
-
-                if vector_service.needs_reindexing or (
-                    vector_service._index is not None and vector_service._index.ntotal == 0 and db_doc_count > 0
-                ):
-                    logger.info(
-                        f"FAISS index needs rebuild/re-index (needs_reindexing={vector_service.needs_reindexing}, "
-                        f"vectors={vector_service._index.ntotal if vector_service._index else 0}, db_docs={db_doc_count}). Re-indexing now..."
-                    )
-                    await document_processor.reindex_all_documents(db)
-                    await db.commit()
-
-        except Exception as err:
-            logger.error(f"Background AI model warmup or re-indexing failed: {err}", exc_info=True)
-
-    # Spawn the background task immediately on startup
-    asyncio.create_task(warm_up_models_background())
-
-    yield  # Application Runs Here
-
-    # Shutdown Cleanup
     logger.info("MindCache Backend Shutting Down ...")
 
     try:
@@ -110,28 +71,51 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS Middleware For Local Browser Extension Connections
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=["*"],
+    allow_credentials=False,
+    allow_origins=[],
+    allow_origin_regex=r"^(http://(localhost|127\.0\.0\.1|\[::1\])(:[0-9]+)?|chrome-extension://[a-p]{32})$",
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Register Routers For API Endpoints
+@app.middleware("http")
+async def restrict_local_browser_requests(request, call_next):
+    host = request.headers.get("host", "")
+    origin = request.headers.get("origin")
+    if not local_host(host) or not allowed_origin(origin, host):
+        return JSONResponse({"detail": "Only local MindCache clients may access this service."}, status_code=403)
+    if origin and origin.startswith("chrome-extension://"):
+        if request.url.path.startswith(("/ai", "/privacy", "/imports", "/pairing")):
+            return JSONResponse({"detail": "Use the local web app to change these settings."}, status_code=403)
+        try:
+            paired = origin.removeprefix("chrome-extension://") in trusted_ids(pairing.PAIRING_PATH)
+        except (ValueError, OSError):
+            paired = False
+        if not paired:
+            return JSONResponse({"detail": "Pair this extension in MindCache Setup."}, status_code=403)
+    return await call_next(request)
+
+
 app.include_router(visit.router)
 app.include_router(health.router)
 app.include_router(search.router)
 app.include_router(documents.router)
+app.include_router(privacy.router)
+app.include_router(ai.router)
+app.include_router(items.router)
+app.include_router(recall.router)
+app.include_router(pairing.router)
 
 
 @app.get("/")
-async def root() -> dict:
-    """Standard Root Endpoint Returning Backend Metadata."""
+async def root():
 
     return {
         "app": settings.APP_NAME,
         "status": "Online",
         "documentation": "/docs",
     }
+
+app.mount("/app", StaticFiles(directory=str(settings.BASE_DIR.parent / "frontend"), html=True), name="web")

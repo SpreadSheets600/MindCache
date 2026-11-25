@@ -262,7 +262,7 @@ Six SQLAlchemy ORM tables:
 - `reindex_all_documents()` — Regenerates all embeddings from stored content
 - `calculate_document_quality_score()` — Quality score (0-8) from dwell time, word count, source type, transcript, revisits
 
-**`EmbeddingService`** (`embedding_service.py`): Generates dense vectors via Ollama `/api/embed`. Features in-memory query cache (FIFO, 512 entries). Automatically detects embedding dimension on first call.
+**`Embedder`** (`embedder.py`): Runs `google/embeddinggemma-2` locally through sentence-transformers (bf16 on GPU, fp32 on CPU) with the `SearchQuery` and `Document` prompts, 768-dimension L2-normalized output and an in-memory query cache (FIFO, 512 entries).
 
 **`OllamaService`** (`ollama_service.py`): Communicates with Ollama for generation tasks:
 
@@ -467,7 +467,7 @@ Short queries (≤8 words) use stopword filtering to extract significant terms. 
 
 ### Embeddings
 
-FAISS `IndexFlatIP` (Inner Product) with L2-normalized vectors. Since both stored and query vectors are unit-length, inner product equals cosine similarity. Uses `embeddinggemma:300m` producing 768-dimensional vectors. The index is persisted to `data/faiss_index.bin` and loaded on server startup, with automatic dimension-mismatch detection and re-indexing if the embedding model changes.
+FAISS `IndexFlatIP` (Inner Product) with L2-normalized vectors. Since both stored and query vectors are unit-length, inner product equals cosine similarity. Uses `google/embeddinggemma-2` producing 768-dimensional vectors. The index is persisted to `data/faiss_index.bin` with a signature file (`index-embedding.json`). A missing or different signature resets the index and re-embeds every document in the background.
 
 ---
 

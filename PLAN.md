@@ -11,7 +11,7 @@ Status: in progress. Date: 2026-11-25. Rules for whoever implements this are in 
 | 2 Chunk storage and search | Done, with the indexer running in the API process. Splitting out a separate worker process is deferred until measurements show search latency suffering during indexing. Saved web pages are chunked, embedded and searched together with files through `/memory/search` (existing pages are backfilled at startup). Notes and uploads (including Recall imports) are chunked and searched the same way |
 | 3 Folder indexing | Done for text and PDF files |
 | 4 Live watching | Done. Renames are detected by size, modification time and extension, so a moved file keeps its index without re-embedding |
-| 5 and 6 Flutter app | Search, Folders, Index and Settings screens done. Global hotkey, tray and the knowledge graph are open |
+| 5 and 6 Flutter app | Done: Search, Folders, Graph, Index and Settings screens, Ctrl+K, tray with close-to-tray. The system-wide hotkey is registered but only works on X11, not Wayland |
 | 7 Resource behavior | Pause and resume, newest-first order, rate and ETA done. Worker niceness, free-memory batch sizing and the CPU speed plan are open |
 | 8 Images, 9 Packaging | Not started |
 

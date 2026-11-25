@@ -1,0 +1,134 @@
+{
+  "positive": [
+    {
+      "query": "how do cells generate power",
+      "expected": "cell-biology.md"
+    },
+    {
+      "query": "feeding a starter and baking bread with a crusty loaf",
+      "expected": "sourdough.md"
+    },
+    {
+      "query": "memory safety without garbage collection",
+      "expected": "rust-ownership.md"
+    },
+    {
+      "query": "when do I have to submit my sales tax filing",
+      "expected": "vat-return.md"
+    },
+    {
+      "query": "what to do on a weekend in portugal's capital",
+      "expected": "lisbon-trip.md"
+    },
+    {
+      "query": "what did the team decide about the release date",
+      "expected": "sprint-meeting.md"
+    },
+    {
+      "query": "making a hard drive available automatically at startup",
+      "expected": "linux-mount.md"
+    },
+    {
+      "query": "training schedule for running 42 kilometres",
+      "expected": "marathon-plan.md"
+    },
+    {
+      "query": "why is my plant's soil always soggy and the leaves yellow",
+      "expected": "houseplants.md"
+    },
+    {
+      "query": "running many coroutines without blocking",
+      "expected": "python-asyncio.md"
+    },
+    {
+      "query": "how to protect my accounts from hackers",
+      "expected": "password-security.md"
+    },
+    {
+      "query": "common chord sequence in pop music",
+      "expected": "guitar-chords.md"
+    },
+    {
+      "query": "smallest unit I can deploy in a container orchestrator",
+      "expected": "kubernetes-pods.md"
+    },
+    {
+      "query": "plan spending after getting paid",
+      "expected": "household-budget.md"
+    },
+    {
+      "query": "roman egg and cured pork spaghetti",
+      "expected": "pasta-recipe.md"
+    },
+    {
+      "query": "balancing light sensitivity and lens opening",
+      "expected": "photography-exposure.md"
+    },
+    {
+      "query": "tips for falling asleep and waking refreshed",
+      "expected": "sleep-hygiene.md"
+    },
+    {
+      "query": "tidy up commit history before merging",
+      "expected": "git-rebase.md"
+    },
+    {
+      "query": "putting photovoltaics on my house",
+      "expected": "solar-panels.md"
+    },
+    {
+      "query": "first moves for white in chess",
+      "expected": "chess-openings.md"
+    },
+    {
+      "query": "why mountain ice is melting",
+      "expected": "glacier-retreat.md"
+    },
+    {
+      "query": "rules for handling customer personal information in europe",
+      "expected": "gdpr-compliance.md"
+    },
+    {
+      "query": "best way to make filter coffee",
+      "expected": "coffee-brewing.md"
+    },
+    {
+      "query": "cheapest time to plug in my battery car",
+      "expected": "ev-charging.md"
+    },
+    {
+      "query": "cell energy ATP",
+      "expected": "cell-biology.md"
+    },
+    {
+      "query": "vat quarterly deadline",
+      "expected": "vat-return.md"
+    },
+    {
+      "query": "fstab uuid",
+      "expected": "linux-mount.md"
+    },
+    {
+      "query": "carbonara",
+      "expected": "pasta-recipe.md"
+    },
+    {
+      "query": "kubernetes deployment replicas",
+      "expected": "kubernetes-pods.md"
+    },
+    {
+      "query": "marathon taper",
+      "expected": "marathon-plan.md"
+    }
+  ],
+  "negative": [
+    "medieval falconry techniques",
+    "how to knit a sweater",
+    "football world cup final score",
+    "quantum chromodynamics lattice gauge",
+    "zxqv blorp",
+    "history of the roman senate",
+    "repairing a bicycle tyre puncture",
+    "best beaches in thailand"
+  ]
+}

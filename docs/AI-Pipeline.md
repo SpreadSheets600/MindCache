@@ -302,3 +302,17 @@ Consequences: use bf16 on GPU and fp32 on CPU, and treat CPU indexing speed as t
 
 CPU throughput is compute-bound. Mitigations are in the product instead: newest files are indexed first, progress and time remaining are shown, indexing can be paused, and keyword search works immediately.
 
+### Search benchmark (2026-11-25)
+
+24 short documents, 30 paraphrased queries, 8 unanswerable queries, RTX 2050, `backend/benchmarks`.
+
+| Relevance floor | recall@1 | recall@3 | MRR | Unanswerable queries correctly empty |
+| --- | --- | --- | --- | --- |
+| none | 0.93 | 1.00 | 0.96 | 0.00 |
+| 0.60 | 0.93 | 1.00 | 0.96 | 0.75 |
+| 0.65 | 0.97 | 1.00 | 0.98 | 0.88 |
+| 0.70 (default) | 0.97 | 1.00 | 0.98 | 0.88 |
+| 0.75 | 0.93 | 1.00 | 0.96 | 0.88 |
+
+Query latency is about 2 ms (p95 under 4 ms). Indexing runs at about 40 chunks/s on the GPU once the model is warm. Every document fits in one chunk, so this corpus cannot compare chunk sizes (800, 1600 and 3200 characters scored the same); the 1,600 character default stays until a corpus of long documents says otherwise.
+

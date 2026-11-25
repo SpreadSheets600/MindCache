@@ -35,10 +35,8 @@ export const SearchOverlay: React.FC = () => {
   const resultsContainerRef = useRef<HTMLDivElement>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 1. Listen for toggle events and global toggle shortcut
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      // Toggle overlay on Ctrl + Shift + K or Cmd + Shift + K (Mac)
       const isK = e.key.toLowerCase() === "k";
       const isModifier = e.ctrlKey || e.metaKey;
       if (isModifier && e.shiftKey && isK) {
@@ -72,7 +70,6 @@ export const SearchOverlay: React.FC = () => {
     };
   }, []);
 
-  // 2. Clear state and auto-focus input when opened
   useEffect(() => {
     if (isOpen) {
       setSearchQuery("");
@@ -81,19 +78,16 @@ export const SearchOverlay: React.FC = () => {
       checkBackendHealth();
       fetchActiveTabs();
       
-      // Auto focus with short timeout to ensure modal rendering is complete
       setTimeout(() => {
         inputRef.current?.focus();
       }, 50);
     }
   }, [isOpen]);
 
-  // 3. Reset selected index when search query or mode changes
   useEffect(() => {
     setSelectedIndex(0);
   }, [searchQuery, mode]);
 
-  // 4. Fetch open tabs from background
   const fetchActiveTabs = () => {
     if (typeof chrome !== "undefined" && chrome.runtime) {
       chrome.runtime.sendMessage({ action: "get-active-tabs" }, (response) => {
@@ -104,7 +98,6 @@ export const SearchOverlay: React.FC = () => {
     }
   };
 
-  // 5. Query memory from backend (via background script)
   const searchMemory = (query: string) => {
     if (!query.trim()) {
       setMemoryResults([]);
@@ -128,7 +121,6 @@ export const SearchOverlay: React.FC = () => {
     }
   };
 
-  // 6. Check FastAPI backend status
   const checkBackendHealth = () => {
     if (typeof chrome !== "undefined" && chrome.runtime) {
       chrome.runtime.sendMessage({ action: "check-backend-health" }, (response) => {
@@ -141,7 +133,6 @@ export const SearchOverlay: React.FC = () => {
     }
   };
 
-  // 7. Handle search text changes
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setSearchQuery(val);
@@ -155,7 +146,6 @@ export const SearchOverlay: React.FC = () => {
     }
   };
 
-  // 8. Handle mode changes
   const handleModeChange = (newMode: "tabs" | "memory") => {
     setMode(newMode);
     if (newMode === "memory" && searchQuery.trim()) {
@@ -163,7 +153,6 @@ export const SearchOverlay: React.FC = () => {
     }
   };
 
-  // 9. Switch active tab / Open memory URL
   const handleSelectItem = (item: any) => {
     if (mode === "tabs") {
       const tab = item as TabItem;
@@ -187,7 +176,6 @@ export const SearchOverlay: React.FC = () => {
     }
   };
 
-  // 10. Filter tabs locally
   const getFilteredTabs = () => {
     if (!searchQuery.trim()) return activeTabs;
     const lowerQuery = searchQuery.toLowerCase();
@@ -197,12 +185,10 @@ export const SearchOverlay: React.FC = () => {
     );
   };
 
-  // Current list based on mode
   const currentResults = mode === "tabs" ? getFilteredTabs() : memoryResults;
 
-  // 11. Handle keydown events inside the modal
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    e.stopPropagation(); // Stop propagation to host page listeners
+    e.stopPropagation();
     if (e.key === "Escape") {
       e.preventDefault();
       setIsOpen(false);
@@ -211,19 +197,16 @@ export const SearchOverlay: React.FC = () => {
 
     if (e.key === "Tab") {
       e.preventDefault();
-      // Toggle mode
       handleModeChange(mode === "tabs" ? "memory" : "tabs");
       return;
     }
 
-    // Ctrl + T to jump to tabs mode
     if (e.ctrlKey && e.key.toLowerCase() === "t") {
       e.preventDefault();
       handleModeChange("tabs");
       return;
     }
 
-    // Ctrl + M to jump to memory mode
     if (e.ctrlKey && e.key.toLowerCase() === "m") {
       e.preventDefault();
       handleModeChange("memory");
@@ -252,7 +235,6 @@ export const SearchOverlay: React.FC = () => {
     }
   };
 
-  // Auto-scroll inside list container
   const scrollToItem = (index: number) => {
     const container = resultsContainerRef.current;
     if (!container) return;
@@ -294,7 +276,6 @@ export const SearchOverlay: React.FC = () => {
           onKeyUp={(e) => e.stopPropagation()}
           onKeyPress={(e) => e.stopPropagation()}
         >
-          {/* Search header row */}
           <div className="search-header">
             <Search className="search-icon" size={20} />
             <input
@@ -320,7 +301,6 @@ export const SearchOverlay: React.FC = () => {
             </button>
           </div>
 
-          {/* Mode selector tab bar */}
           <div className="tab-nav">
             <button
               className={`tab-btn ${mode === "tabs" ? "active" : ""}`}
@@ -342,7 +322,6 @@ export const SearchOverlay: React.FC = () => {
             </button>
           </div>
 
-          {/* Results view list */}
           <div 
             ref={resultsContainerRef}
             className="results-list"
@@ -475,7 +454,6 @@ export const SearchOverlay: React.FC = () => {
             })}
           </div>
 
-          {/* Footer shortcuts help bar */}
           <div className="footer">
             <div className="shortcut-hints">
               <div className="shortcut-hint">

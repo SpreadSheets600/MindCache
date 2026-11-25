@@ -1,12 +1,15 @@
-import os
-import stat as stat_module
+import logging
+import stat
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+logger = logging.getLogger(__name__)
+
+_SQLITE_PREFIX = "sqlite:///"
+
 
 class Settings(BaseSettings):
-    """Application Settings And Configuration."""
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -14,55 +17,56 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # Base Paths
     BASE_DIR: Path = Path(__file__).resolve().parent.parent.parent
     DATA_DIR: Path = BASE_DIR / "data"
 
-    # Database
-    DATABASE_URL: str = "sqlite:///" + str(BASE_DIR / "data" / "mindcache.db")
+    DATABASE_URL: str = f"{_SQLITE_PREFIX}{BASE_DIR / 'data' / 'mindcache.db'}"
 
-    # FAISS Vector Store
-    FAISS_INDEX_PATH: str = "data/faiss_index.bin"
-    BM25_INDEX_PATH: str = "data/bm25_index.pkl"
-    EMBEDDING_DIMENSION: int = 1024  # Detected dynamically from model at runtime
+    FAISS_INDEX_PATH: str = str(BASE_DIR / "data" / "faiss_index.bin")
+    BM25_INDEX_PATH: str = str(BASE_DIR / "data" / "bm25_index.pkl")
+    EMBEDDING_DIMENSION: int = 1024
 
-    # AI Models
-    EMBEDDING_MODEL_PATH: str = "ai"  # Relative to BASE_DIR, or HF model ID
+    EMBEDDING_MODEL_PATH: str = "ai"
     EMBEDDING_MODEL_NAME: str = "Qwen/Qwen3-Embedding-0.6B"
-    EMBEDDING_PROVIDER: str = "local"
-    EMBEDDING_DIMENSION: int = 1024  # Detected dynamically from model at runtime
 
-    # General
     LOG_LEVEL: str = "INFO"
     APP_NAME: str = "MindCache Backend"
 
-    def model_post_init(self, __context) -> None:
-        """Ensure Data Directories Exist and Validate Permissions"""
+    def model_post_init(self, __context: object):
+        self.DATA_DIR.mkdir(parents=True, exist_ok=True)
+        self.FAISS_INDEX_PATH = self._absolute(self.FAISS_INDEX_PATH)
+        self.BM25_INDEX_PATH = self._absolute(self.BM25_INDEX_PATH)
+        for index_path in (self.FAISS_INDEX_PATH, self.BM25_INDEX_PATH):
+            Path(index_path).parent.mkdir(parents=True, exist_ok=True)
+        self._ensure_database_writable()
 
-        os.makedirs(self.DATA_DIR, mode=0o755, exist_ok=True)
+    def _absolute(self, value: str):
+        path = Path(value).expanduser()
+        return str(path if path.is_absolute() else self.BASE_DIR / path)
 
-        # Create FAISS Parent Directory
-        faiss_dir = Path(self.FAISS_INDEX_PATH).parent
-        if faiss_dir:
-            os.makedirs(faiss_dir, mode=0o755, exist_ok=True)
+    @property
+    def database_path(self):
+        if not self.DATABASE_URL.startswith(_SQLITE_PREFIX):
+            return None
+        return Path(self.DATABASE_URL[len(_SQLITE_PREFIX) :])
 
-        # Ensure the database directory and file are writable
-        if self.DATABASE_URL.startswith("sqlite:///"):
-            db_path_str = self.DATABASE_URL.replace("sqlite:///", "")
-            db_path = Path(db_path_str)
-            db_dir = db_path.parent
+    @property
+    def database_size_bytes(self):
+        path = self.database_path
+        return path.stat().st_size if path is not None and path.is_file() else None
 
-            os.makedirs(db_dir, mode=0o755, exist_ok=True)
-
-            # If the database file already exists, ensure it's writable
-            if db_path.exists():
-                file_mode = db_path.stat().st_mode
-                if not (file_mode & stat_module.S_IWUSR):
-                    db_path.chmod(stat_module.S_IWUSR | stat_module.S_IRUSR | stat_module.S_IRGRP | stat_module.S_IROTH)
-                    import logging
-                    logging.getLogger("app.core.config").warning(
-                        f"Fixed read-only permissions on database file: {db_path}"
-                    )
+    def _ensure_database_writable(self):
+        path = self.database_path
+        if path is None:
+            return
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if not path.exists():
+            return
+        mode = path.stat().st_mode
+        if mode & stat.S_IWUSR:
+            return
+        path.chmod(mode | stat.S_IWUSR | stat.S_IRUSR)
+        logger.warning("fixed read-only permissions on database file: %s", path)
 
 
 settings = Settings()

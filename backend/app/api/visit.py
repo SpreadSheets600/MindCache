@@ -20,14 +20,12 @@ logger = get_logger(__name__)
 )
 async def record_visit(
     request: VisitRequest,
-    db: AsyncSession = Depends(get_db),  # noqa: B008
-) -> VisitResponse:
-    """Accepts A URL, Extracts Page Content/Metadata, Generates Keywords & Embeddings, And Indexes It."""
+    db: AsyncSession = Depends(get_db),
+):
 
     logger.info(f"Accepting Visit URL : {request.url}")
 
     try:
-        # When auto_extract is false and no content provided, skip processing entirely
         if not request.auto_extract and not request.extracted_content:
             parsed = urlparse(request.url)
             return VisitResponse(

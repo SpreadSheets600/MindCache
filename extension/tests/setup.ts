@@ -1,7 +1,6 @@
 import "@testing-library/jest-dom";
 import { vi } from "vitest";
 
-// Mock Chrome Extension API namespaces
 const chromeMock = {
   storage: {
     local: {
@@ -42,10 +41,8 @@ const chromeMock = {
 
 global.chrome = chromeMock as any;
 
-// Mock global fetch API
 global.fetch = vi.fn();
 
-// Clear mocks before each test runs
 beforeEach(() => {
   vi.clearAllMocks();
 });

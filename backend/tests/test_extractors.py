@@ -18,21 +18,16 @@ from app.services.extractors.youtube import YouTubeExtractor, extract_youtube_id
 from app.services.extractors.google_search import GoogleSearchExtractor
 
 
-
 def test_extractor_factory_selection():
-    """Verifies that ExtractorFactory resolves the correct extractor based on domain name."""
-    # YouTube domains
     assert isinstance(ExtractorFactory.get_extractor("https://youtube.com/watch?v=123"), YouTubeExtractor)
     assert isinstance(ExtractorFactory.get_extractor("https://youtu.be/123"), YouTubeExtractor)
     assert isinstance(ExtractorFactory.get_extractor("https://www.youtube.com/shorts/123"), YouTubeExtractor)
     assert isinstance(ExtractorFactory.get_extractor("https://m.youtube.com/watch?v=123"), YouTubeExtractor)
 
-    # X / Twitter domains
     assert isinstance(ExtractorFactory.get_extractor("https://x.com/jack/status/20"), XExtractor)
     assert isinstance(ExtractorFactory.get_extractor("https://twitter.com/jack/status/20"), XExtractor)
     assert isinstance(ExtractorFactory.get_extractor("https://www.x.com/jack/status/20"), XExtractor)
 
-    # Other domains
     assert isinstance(ExtractorFactory.get_extractor("https://google.com"), GenericExtractor)
     assert isinstance(ExtractorFactory.get_extractor("https://google.com/search?q=best+rag"), GoogleSearchExtractor)
     assert isinstance(ExtractorFactory.get_extractor("https://www.google.com/search?q=hello"), GoogleSearchExtractor)
@@ -41,9 +36,7 @@ def test_extractor_factory_selection():
     assert isinstance(ExtractorFactory.get_extractor("https://example.com/blog/1"), GenericExtractor)
 
 
-
 def test_youtube_video_id_extraction():
-    """Ensures YouTube video ID parser handles diverse URL formats correctly."""
     assert extract_youtube_id("https://www.youtube.com/watch?v=dQw4w9WgXcQ") == "dQw4w9WgXcQ"
     assert extract_youtube_id("https://youtube.com/watch?v=dQw4w9WgXcQ&feature=share") == "dQw4w9WgXcQ"
     assert extract_youtube_id("https://youtu.be/dQw4w9WgXcQ") == "dQw4w9WgXcQ"
@@ -54,10 +47,8 @@ def test_youtube_video_id_extraction():
 
 @pytest.mark.asyncio
 async def test_youtube_extractor_success():
-    """Verifies YouTubeExtractor extracts video details and transcripts correctly."""
     url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 
-    # 1. Mock yt-dlp
     mock_ydl = MagicMock()
     mock_ydl.__enter__.return_value = mock_ydl
     mock_ydl.extract_info.return_value = {
@@ -69,7 +60,6 @@ async def test_youtube_extractor_success():
         "duration": 212,
     }
 
-    # 2. Mock transcript
     mock_transcript = [
         {"text": "We're no strangers to love", "start": 0.0, "duration": 2.0},
         {"text": "You know the rules and so do I", "start": 2.0, "duration": 2.0},
@@ -87,7 +77,6 @@ async def test_youtube_extractor_success():
         extractor = YouTubeExtractor()
         result = await extractor.extract(url)
 
-        # Assert results
         assert result.source_type == "YouTube"
         assert result.title == "Rick Astley - Never Gonna Give You Up"
         assert result.author == "Rick Astley"
@@ -96,7 +85,6 @@ async def test_youtube_extractor_success():
         assert "You know the rules and so do I" in result.content
         assert "The official video" in result.content
 
-        # Check platform_metadata
         meta = result.platform_metadata
         assert meta["video_id"] == "dQw4w9WgXcQ"
         assert meta["duration"] == 212
@@ -107,7 +95,6 @@ async def test_youtube_extractor_success():
 
 @pytest.mark.asyncio
 async def test_youtube_extractor_missing_transcript_fallback():
-    """Ensures YouTubeExtractor falls back cleanly to title/desc/tags when transcript is disabled/missing."""
     url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 
     mock_ydl = MagicMock()
@@ -140,7 +127,6 @@ async def test_youtube_extractor_missing_transcript_fallback():
 
 @pytest.mark.asyncio
 async def test_x_extractor_success():
-    """Verifies XExtractor parses full tweet contents using the fixupx HTML scraper mock."""
     url = "https://x.com/jack/status/20"
 
     mock_html = """
@@ -166,10 +152,8 @@ async def test_x_extractor_success():
         assert result.content == "just setting up my twttr"
 
 
-
 @pytest.mark.asyncio
 async def test_x_extractor_partial_fallback():
-    """Ensures XExtractor raises XExtractionError on request failure."""
     url = "https://x.com/jack/status/20"
 
     with patch("app.services.extractors.x.httpx.AsyncClient.get", side_effect=httpx.RequestError("No internet", request=MagicMock())):
@@ -178,14 +162,11 @@ async def test_x_extractor_partial_fallback():
             await extractor.extract(url)
 
 
-
 @pytest.mark.asyncio
 async def test_pipeline_integration_youtube_and_x(client_override: AsyncSession):
-    """Integration test verifying YouTube and X flow through DocumentProcessor."""
     yt_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
     x_url = "https://x.com/jack/status/20"
 
-    # Mock YouTube Extraction
     yt_result = {
         "title": "Rick Astley - Never Gonna Give You Up",
         "description": "Never Gonna Give You Up.",
@@ -196,7 +177,6 @@ async def test_pipeline_integration_youtube_and_x(client_override: AsyncSession)
     }
     yt_transcript = [{"text": "We're no strangers to love"}]
 
-    # Mock X Extraction
     x_html = """
     <html>
         <head>
@@ -210,7 +190,6 @@ async def test_pipeline_integration_youtube_and_x(client_override: AsyncSession)
     x_response.text = x_html
     x_response.raise_for_status = MagicMock()
 
-    # 1. Test YouTube Processing Flow
     mock_ydl = MagicMock()
     mock_ydl.__enter__.return_value = mock_ydl
     mock_ydl.extract_info.return_value = yt_result
@@ -231,7 +210,6 @@ async def test_pipeline_integration_youtube_and_x(client_override: AsyncSession)
         assert doc.platform_metadata["duration"] == 212
         assert "We're no strangers to love" in doc.extracted_content
 
-    # 2. Test X Processing Flow
     with patch("app.services.extractors.x.httpx.AsyncClient.get", return_value=x_response):
         status, doc = await document_processor.process_url(client_override, x_url)
         assert status == "success"
@@ -240,10 +218,8 @@ async def test_pipeline_integration_youtube_and_x(client_override: AsyncSession)
         assert "just setting up my twttr" in doc.extracted_content
 
 
-
 @pytest.mark.asyncio
 async def test_github_extractor_success():
-    """Verifies GitHubExtractor extracts repository details and README correctly."""
     url = "https://github.com/google-deepmind/antigravity"
 
     mock_html = """
@@ -288,7 +264,6 @@ async def test_github_extractor_success():
 
 @pytest.mark.asyncio
 async def test_x_extractor_fxtwitter_success():
-    """Verifies that XExtractor parses FxTwitter/FixupX HTML pre-rendered OpenGraph tags correctly."""
     url = "https://x.com/jerryjliu0/status/2060401682610262424"
 
     mock_html = """
@@ -317,7 +292,6 @@ async def test_x_extractor_fxtwitter_success():
 
 @pytest.mark.asyncio
 async def test_google_search_extractor_success():
-    """Verifies that GoogleSearchExtractor extracts the query and search results from HTML correctly."""
     url = "https://www.google.com/search?q=best+vector+database+for+rag"
 
     mock_html = """
@@ -346,7 +320,6 @@ async def test_google_search_extractor_success():
 
 @pytest.mark.asyncio
 async def test_google_search_extractor_ddg_fallback():
-    """Verifies that GoogleSearchExtractor falls back to DDG search when HTML scraping fails."""
     url = "https://www.google.com/search?q=fallback+search+query"
 
     with patch("app.services.document_processor.document_processor._download_page", side_effect=Exception("Blocked")):
@@ -357,11 +330,11 @@ async def test_google_search_extractor_ddg_fallback():
         mock_ddg_instance = MagicMock()
         mock_ddg_instance.__enter__.return_value = mock_ddg_instance
         mock_ddg_instance.text.return_value = mock_ddg_results
-        
+
         with patch("ddgs.DDGS", return_value=mock_ddg_instance):
             extractor = GoogleSearchExtractor()
             result = await extractor.extract(url)
-            
+
             assert result.source_type == "GoogleSearch"
             assert result.title == "Google Search: fallback search query"
             assert "DDG Result 1" in result.content
@@ -373,7 +346,6 @@ async def test_google_search_extractor_ddg_fallback():
 
 @pytest.mark.asyncio
 async def test_reddit_extractor_post_success():
-    """Verifies that RedditExtractor successfully fetches and parses Reddit posts using old.reddit HTML."""
     url = "https://www.reddit.com/r/python/comments/12345/my_awesome_post/"
 
     mock_html = """
@@ -402,7 +374,7 @@ async def test_reddit_extractor_post_success():
             </div>
           </div>
         </div>
-        
+
         <div class="comment">
           <p class="tagline">
             <a class="author">commenter1</a>
@@ -440,15 +412,12 @@ async def test_reddit_extractor_post_success():
 
 @pytest.mark.asyncio
 async def test_reddit_extractor_fallback():
-    """Verifies that RedditExtractor falls back to GenericExtractor when JSON fetching fails."""
     url = "https://www.reddit.com/r/python/comments/12345/my_awesome_post/"
 
-    # Mock JSON fetch failure (e.g., rate limit)
     mock_response = MagicMock(spec=httpx.Response)
     mock_response.status_code = 429
     mock_response.raise_for_status = MagicMock(side_effect=httpx.HTTPStatusError("Too Many Requests", request=MagicMock(), response=mock_response))
 
-    # Mock GenericExtractor's return result
     mock_fallback_result = ExtractionResult(
         content="Title: Fallback Title\n\nMain Content:\nFallback content from HTML parsing.",
         title="Fallback Title",
@@ -463,22 +432,19 @@ async def test_reddit_extractor_fallback():
         extractor = RedditExtractor()
         result = await extractor.extract(url)
 
-        assert result.source_type == "Reddit"  # Should be overridden to Reddit
+        assert result.source_type == "Reddit"
         assert result.title == "Fallback Title"
         assert "Fallback content from HTML parsing" in result.content
 
 
 @pytest.mark.asyncio
 async def test_reddit_extractor_json_fallback():
-    """Verifies That RedditExtractor Normalizes A JSON URL And Passes The Normalized URL To GenericExtractor On Fallback."""
     url = "https://www.reddit.com/r/python/comments/12345/my_awesome_post/.json"
 
-    # Mock JSON Fetch Failure (E.G., Rate Limit)
     mock_response = MagicMock(spec=httpx.Response)
     mock_response.status_code = 429
     mock_response.raise_for_status = MagicMock(side_effect=httpx.HTTPStatusError("Too Many Requests", request=MagicMock(), response=mock_response))
 
-    # Mock GenericExtractor's Return Result
     mock_fallback_result = ExtractionResult(
         content="Title: Fallback Title\n\nMain Content:\nFallback content.",
         title="Fallback Title",
@@ -497,5 +463,4 @@ async def test_reddit_extractor_json_fallback():
 
         assert result.source_type == "Reddit"
         assert result.title == "Fallback Title"
-        # Check That generic.extract Was Called With The Normalized URL (No .json, old.reddit.com)
         mock_generic_extract.assert_called_once_with("https://old.reddit.com/r/python/comments/12345/my_awesome_post")

@@ -15,8 +15,7 @@ from app.services.extractors.generic import GenericExtractor
 logger = get_logger(__name__)
 
 
-def extract_youtube_id(url: str) -> str | None:
-    """Robustly Extracts The 11-Character YouTube Video ID From Various URL Formats."""
+def extract_youtube_id(url: str):
     try:
         parsed = urlparse(url)
         if parsed.hostname in ("youtu.be", "www.youtu.be"):
@@ -28,7 +27,6 @@ def extract_youtube_id(url: str) -> str | None:
             if len(parts) >= 3:
                 return parts[2]
 
-        # Fallback General Regex Match
         match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", url)
         if match:
             return match.group(1)
@@ -38,13 +36,8 @@ def extract_youtube_id(url: str) -> str | None:
 
 
 class YouTubeExtractor(ContentExtractor):
-    """Platform-Specific Extractor For YouTube Videos.
 
-    Uses yt-dlp to retrieve metadata and youtube-transcript-api to retrieve captions/transcript.
-    """
-
-    def _parse_upload_date(self, date_str: Optional[str]) -> Optional[datetime]:  # noqa: UP045
-        """Parses YYYYMMDD Format Date String Into A Datetime Object."""
+    def _parse_upload_date(self, date_str: Optional[str]):
         if not date_str:
             return None
         try:
@@ -52,8 +45,7 @@ class YouTubeExtractor(ContentExtractor):
         except Exception:
             return None
 
-    async def extract(self, url: str) -> ExtractionResult:
-        """Extracts YouTube video metadata and transcript, falling back gracefully if transcripts are disabled."""
+    async def extract(self, url: str):
         logger.info(f"YouTubeExtractor Selected For URL: '{url}'")
 
         video_id = extract_youtube_id(url)
@@ -62,7 +54,6 @@ class YouTubeExtractor(ContentExtractor):
             generic = GenericExtractor()
             return await generic.extract(url)
 
-        # 1. Fetch metadata via yt-dlp
         title = None
         description = None
         channel = None
@@ -94,10 +85,8 @@ class YouTubeExtractor(ContentExtractor):
             logger.info(f"YouTubeExtractor: Metadata successfully retrieved for video {video_id}.")
         except Exception as e:
             logger.warning(f"YouTubeExtractor: Metadata retrieval failed via yt-dlp for video {video_id}: {e}")
-            # Do not fail completely, use fallbacks
             title = title or f"YouTube Video {video_id}"
 
-        # 2. Retrieve Transcript
         transcript = None
         transcript_available = False
 
@@ -117,14 +106,13 @@ class YouTubeExtractor(ContentExtractor):
                     else:
                         return str(entry)
 
-                # Format transcript with [MM:SS] timestamps every 30 seconds
-                def format_timestamp(seconds: float) -> str:
+                def format_timestamp(seconds: float):
                     minutes = int(seconds // 60)
                     secs = int(seconds % 60)
                     return f"{minutes:02d}:{secs:02d}"
 
                 formatted_lines = []
-                last_time_marked = -100.0  # Mark every 30 seconds
+                last_time_marked = -100.0
                 for entry in transcript_list:
                     start_time = (
                         entry.get("start", 0.0)
@@ -144,11 +132,9 @@ class YouTubeExtractor(ContentExtractor):
                 logger.info(f"YouTubeExtractor: Transcript Availability - Success for video {video_id}.")
         except Exception as e:
             logger.warning(f"YouTubeExtractor: Transcript Availability - Unavailable for video {video_id}: {e}")
-            # Create the platform specific exception internally to follow design specs
             err = YouTubeTranscriptUnavailableError(url, str(e))
             logger.debug(f"YouTubeExtractor: Wrapped exception: {err}")
 
-        # 3. Build Unified Searchable Document & Handle Fallbacks
         content_parts = []
         if title:
             content_parts.append(title)
@@ -159,14 +145,12 @@ class YouTubeExtractor(ContentExtractor):
             content_parts.append(transcript)
             logger.info("YouTubeExtractor: Unified document constructed using transcript as primary source.")
         else:
-            # Fallback usage
             logger.info("YouTubeExtractor: Fallback Usage - Constructing unified document from metadata.")
             if tags:
                 content_parts.append("Tags: " + ", ".join(tags))
 
         unified_content = "\n\n".join(content_parts)
 
-        # 4. Pack Metadata
         platform_metadata = {
             "video_id": video_id,
             "duration": duration,

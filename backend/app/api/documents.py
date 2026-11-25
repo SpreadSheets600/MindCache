@@ -23,9 +23,8 @@ logger = get_logger(__name__)
 async def list_documents(
     skip: int = Query(0, ge=0, description="Number Of Documents to Skip."),
     limit: int = Query(20, ge=1, le=100, description="Max Number Of Documents To Return."),
-    db: AsyncSession = Depends(get_db),  # noqa: B008
-) -> list[DocumentResponse]:
-    """Retrieves All Indexed Browser Memory Documents Ordered By Last Updated Timestamp."""
+    db: AsyncSession = Depends(get_db),
+):
 
     try:
         documents = await document_repository.list_documents(db, skip=skip, limit=limit)
@@ -77,9 +76,8 @@ async def list_documents(
 )
 async def get_document(
     document_id: int,
-    db: AsyncSession = Depends(get_db),  # noqa: B008
-) -> DocumentResponse:
-    """Retrieves The Full Extracted Content, Metadata, Keyword List, And Visit History Of A Single Page."""
+    db: AsyncSession = Depends(get_db),
+):
 
     try:
         doc = await document_repository.get_by_id(db, document_id)
@@ -132,21 +130,17 @@ async def get_document(
 )
 async def delete_document(
     document_id: int,
-    db: AsyncSession = Depends(get_db),  # noqa: B008
-) -> dict:
-    """Deletes A Webpage's Database Record ( SQLite Cascading Keywords And Visits ) And Clears Its FAISS Vector."""
+    db: AsyncSession = Depends(get_db),
+):
 
     try:
-        # Delete From SQLite DB
         deleted = await document_repository.delete(db, document_id)
 
         if not deleted:
             raise DocumentNotFoundError(document_id)
 
-        # Commit SQLite Transaction First So FAISS Deletion Only Occurs if DB Delete Succeeds
         await db.commit()
 
-        # Delete Vector From FAISS Index And BM25 Index
         vector_service.delete_document(document_id)
         bm25_service.remove_document(document_id)
 
@@ -171,21 +165,15 @@ async def delete_document(
 async def get_graph_data(
     limit: int = Query(100, ge=1, le=500, description="Maximum number of documents to include."),
     min_keyword_freq: int = Query(2, ge=1, le=10, description="Minimum keyword frequency to include."),
-    db: AsyncSession = Depends(get_db),  # noqa: B008
-) -> dict:
-    """Returns entities, keywords, and relationships for knowledge graph visualization."""
+    db: AsyncSession = Depends(get_db),
+):
 
     try:
-        # Fetch documents with preloaded relationships
         documents = await document_repository.list_documents(db, skip=0, limit=limit)
 
-        # Build entity aggregation
         entity_map: dict[str, dict] = {}
-        # Build keyword aggregation
         keyword_map: dict[str, dict] = {}
-        # Build document nodes
         doc_nodes = []
-        # Build edges
         edges = []
 
         for doc in documents:
@@ -203,7 +191,6 @@ async def get_graph_data(
                 }
             )
 
-            # Aggregate entities
             for entity in doc.entities:
                 key = f"{entity.type}:{entity.name}".lower()
                 if key not in entity_map:
@@ -216,7 +203,6 @@ async def get_graph_data(
                 if doc_id not in entity_map[key]["document_ids"]:
                     entity_map[key]["document_ids"].append(doc_id)
 
-            # Aggregate keywords
             for kw in doc.keywords:
                 kw_lower = kw.keyword.lower().strip()
                 if kw_lower not in keyword_map:
@@ -228,10 +214,8 @@ async def get_graph_data(
                 if doc_id not in keyword_map[kw_lower]["document_ids"]:
                     keyword_map[kw_lower]["document_ids"].append(doc_id)
 
-        # Filter keywords by frequency
         active_keywords = [kw for kw in keyword_map.values() if len(kw["document_ids"]) >= min_keyword_freq]
 
-        # Build entity nodes
         entity_nodes = [
             {
                 "id": ent["id"],
@@ -243,7 +227,6 @@ async def get_graph_data(
             for ent in entity_map.values()
         ]
 
-        # Build keyword nodes
         keyword_nodes = [
             {
                 "id": kw["id"],
@@ -254,7 +237,6 @@ async def get_graph_data(
             for kw in active_keywords
         ]
 
-        # Build edges: document -> keyword
         for kw in active_keywords:
             for doc_id in kw["document_ids"]:
                 edges.append(
@@ -265,7 +247,6 @@ async def get_graph_data(
                     }
                 )
 
-        # Build edges: document -> entity
         for ent in entity_map.values():
             for doc_id in ent["document_ids"]:
                 edges.append(
@@ -276,7 +257,6 @@ async def get_graph_data(
                     }
                 )
 
-        # Build edges: entity co-occurrence (entities appearing in same document)
         ent_list = list(entity_map.values())
         for i in range(len(ent_list)):
             for j in range(i + 1, len(ent_list)):
@@ -291,7 +271,6 @@ async def get_graph_data(
                         }
                     )
 
-        # Build edges: keyword co-occurrence (keywords appearing in same document)
         kw_list = active_keywords
         for i in range(len(kw_list)):
             for j in range(i + 1, len(kw_list)):

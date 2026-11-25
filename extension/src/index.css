@@ -1,26 +1,28 @@
+
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 240 10% 4%;       /* zinc-950 */
-    --foreground: 0 0% 98%;         /* zinc-50 */
+    --background: 240 10% 4%;       
+    --foreground: 0 0% 98%;         
 
-    --card: 240 6% 10%;             /* zinc-900 */
+    --card: 240 6% 10%;             
     --card-foreground: 0 0% 98%;
 
     --popover: 240 6% 10%;
     --popover-foreground: 0 0% 98%;
 
-    --primary: 217 91% 60%;         /* blue-500, used sparingly */
+    --primary: 217 91% 60%;         
     --primary-foreground: 0 0% 4%;
 
-    --secondary: 240 6% 14%;        /* zinc-800 */
+    --secondary: 240 6% 14%;        
     --secondary-foreground: 0 0% 98%;
 
     --muted: 240 6% 14%;
-    --muted-foreground: 240 5% 65%; /* zinc-400 */
+    --muted-foreground: 240 5% 65%; 
 
     --accent: 217 91% 60%;
     --accent-foreground: 0 0% 98%;
@@ -28,11 +30,13 @@
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 240 6% 14%;           /* zinc-800 */
+    --border: 240 6% 14%;           
     --input: 240 6% 14%;
     --ring: 217 91% 60%;
 
-    --radius: 0.5rem;
+    --radius: 0.625rem;
+    --scroll-thumb: rgba(255, 255, 255, 0.06);
+    --scroll-thumb-hover: rgba(255, 255, 255, 0.12);
   }
 }
 
@@ -45,7 +49,7 @@
   }
 }
 
-/* Custom Scrollbar */
+
 ::-webkit-scrollbar {
   width: 5px;
   height: 5px;
@@ -54,18 +58,18 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--scroll-thumb);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--scroll-thumb-hover);
 }
 
-/* Thin accent loading bar */
+
 @keyframes loadingBar {
-  0% { left: -100%; }
-  50% { left: 0%; }
-  100% { left: 100%; }
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(0); }
+  100% { transform: translateX(100%); }
 }
 .loading-scan-line {
   position: absolute;
@@ -73,4 +77,74 @@
   width: 100%;
   background: linear-gradient(90deg, transparent, hsl(var(--primary)), transparent);
   animation: loadingBar 2s infinite ease-in-out;
+}
+
+html, body { overflow-x: clip; }
+:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
+
+@layer components {
+  .overview-intro { @apply flex flex-col items-start justify-between gap-6 rounded-xl border border-border bg-card/40 p-6 md:flex-row md:items-end md:p-8; }
+  .overview-action { @apply inline-flex shrink-0 items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-500; }
+  .overview-metrics { @apply grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border md:grid-cols-4; }
+  .overview-metrics > div { @apply min-w-0 bg-background p-5; }
+  .overview-metrics span { @apply block text-xs text-muted-foreground; }
+  .overview-metrics strong { @apply mt-2 block text-lg font-semibold; }
+  .overview-section { @apply min-w-0 rounded-xl border border-border bg-card/20 p-5; }
+  .overview-section-heading { @apply flex items-start justify-between gap-4 border-b border-border pb-4; }
+  .overview-section-heading h3 { @apply text-sm font-semibold; }
+  .overview-section-heading p { @apply mt-1 text-xs text-muted-foreground; }
+  .overview-section-heading button { @apply text-xs text-blue-300 hover:text-blue-200; }
+  .overview-row { @apply flex w-full items-center justify-between gap-4 border-b border-border/60 py-4 text-left text-xs last:border-0 hover:text-blue-300; }
+  .overview-row strong { @apply mb-1 text-sm font-medium; }
+  .diagnostic-list { @apply space-y-3 py-4 text-xs; }
+  .diagnostic-list div { @apply flex justify-between gap-4; }
+  .diagnostic-list dt { @apply text-muted-foreground; }
+  .diagnostic-list dd { @apply min-w-0 text-right; }
+  .overview-secondary { @apply w-full rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-50; }
+}
+
+@layer components {
+  .home-layout { @apply space-y-8; }
+  .home-welcome { @apply rounded-xl border border-border bg-card/30 p-6 md:p-8; }
+  .home-kicker { @apply text-sm font-medium text-blue-300; }
+  .home-welcome h2 { @apply mt-2 text-3xl font-semibold tracking-tight; }
+  .home-welcome > div > p:last-child { @apply mt-3 text-sm leading-6 text-muted-foreground; }
+  .home-search { @apply mt-7 flex items-center gap-3 rounded-lg border border-border bg-background p-2 pl-4 focus-within:border-primary; }
+  .home-search input { @apply min-w-0 flex-1 bg-transparent py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground; }
+  .home-search button { @apply rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500; }
+  .home-columns { @apply grid grid-cols-1 gap-8 xl:grid-cols-[minmax(0,1fr)_300px]; }
+  .home-recent, .home-aside section, .home-aside details { @apply min-w-0 rounded-xl border border-border bg-card/20 p-5; }
+  .home-section-header { @apply flex items-start justify-between gap-4 border-b border-border pb-4; }
+  .home-section-header h3, .home-aside h3 { @apply text-sm font-semibold; }
+  .home-section-header p, .home-aside p { @apply mt-1 text-sm leading-6 text-muted-foreground; }
+  .home-section-header > button, .home-link { @apply text-left text-sm font-medium text-blue-300 hover:text-blue-200; }
+  .home-rows { @apply divide-y divide-border; }
+  .home-row { @apply flex w-full items-center gap-4 py-4 text-left; }
+  .home-row strong { @apply block truncate text-sm font-medium text-foreground; }
+  .home-row:hover strong { @apply text-blue-300; }
+  .home-row span span { @apply mt-1 block truncate text-xs text-muted-foreground; }
+  .home-row time { @apply shrink-0 text-xs text-muted-foreground; }
+  .home-document-icon { @apply grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-secondary text-muted-foreground; }
+  .home-document-icon svg { @apply h-4 w-4; }
+  .home-empty { @apply flex flex-col items-start gap-2 py-10 text-sm text-muted-foreground; }
+  .home-empty p { @apply font-medium text-foreground; }
+  .home-empty button { @apply mt-2 text-blue-300 hover:text-blue-200; }
+  .home-aside { @apply space-y-4; }
+  .home-status { @apply flex justify-between gap-4 border-b border-border py-3 text-sm; }
+  .home-status span { @apply min-w-0 truncate text-muted-foreground; }
+  .home-status strong { @apply min-w-0 truncate text-right font-medium; }
+  .home-link { @apply mt-4 block; }
+  .home-aside summary { @apply cursor-pointer text-sm font-medium text-muted-foreground; }
+}
+
+@layer components {
+  .home-title-row { @apply flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between; }
+  .home-title-row h2 { @apply mt-0 text-2xl; }
+  .home-title-row p { @apply mt-2 text-sm text-muted-foreground; }
+  .home-add { @apply inline-flex items-center justify-center gap-2 self-start rounded-lg border border-border bg-secondary px-4 py-2.5 text-sm font-medium hover:bg-secondary/70; }
+  .home-metrics { @apply grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border xl:grid-cols-4; }
+  .home-metrics > div { @apply min-w-0 bg-card p-5; }
+  .home-metrics span, .home-metrics small { @apply block text-xs text-muted-foreground; }
+  .home-metrics strong { @apply my-2 block text-2xl font-semibold tabular-nums; }
 }

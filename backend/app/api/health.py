@@ -10,10 +10,8 @@ router = APIRouter(tags=["System health"])
 
 
 @router.get("/health", summary="Health check endpoint")
-async def health_check(db: AsyncSession = Depends(get_db)) -> dict:  # noqa: B008
-    """Executed Live Diagnostics Checks On The Database, Vector Store, And Local AI Model Server."""
+async def health_check(db: AsyncSession = Depends(get_db)):
 
-    # Check For SQLite Database Connection
     db_connected = False
     documents_count = 0
 
@@ -25,7 +23,6 @@ async def health_check(db: AsyncSession = Depends(get_db)) -> dict:  # noqa: B00
     except Exception:
         pass
 
-    # Check For FAISS Index
     faiss_status = "error"
     vector_count = 0
 
@@ -38,13 +35,11 @@ async def health_check(db: AsyncSession = Depends(get_db)) -> dict:  # noqa: B00
     except Exception:
         pass
 
-    # Check For Local Embedding Model
     from app.services.embedding_service import embedding_service
     embedding_online = await embedding_service.check_health()
     embedding_model = embedding_service.model_name
     embedding_provider = embedding_service.provider
 
-    # Determine Overall Status
     is_healthy = db_connected and faiss_status == "initialized"
     status_str = "healthy" if is_healthy else "degraded"
 

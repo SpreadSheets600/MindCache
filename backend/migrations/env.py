@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from app.core.config import settings
 from app.db.base import Base
 
-# Alembic Configuration
 config = context.config
 
 if config.config_file_name is not None:
@@ -17,7 +16,7 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
-def get_db_url() -> str:
+def get_db_url():
     url = settings.DATABASE_URL
 
     if url.startswith("sqlite:///"):
@@ -26,7 +25,7 @@ def get_db_url() -> str:
     return url
 
 
-def run_migrations_offline() -> None:
+def run_migrations_offline():
     url = get_db_url()
     context.configure(
         url=url,
@@ -39,14 +38,14 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
-def do_run_migrations(connection) -> None:
+def do_run_migrations(connection):
     context.configure(connection=connection, target_metadata=target_metadata)
 
     with context.begin_transaction():
         context.run_migrations()
 
 
-async def run_migrations_online() -> None:
+async def run_migrations_online():
     url = get_db_url()
 
     configuration = config.get_section(config.config_ini_section) or {}

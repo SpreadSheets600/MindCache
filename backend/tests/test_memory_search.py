@@ -98,3 +98,11 @@ async def test_weak_semantic_matches_are_dropped(db_session, index):
     with patch.object(memory_search, "SEMANTIC_FLOOR", 0.99):
         strict = await memory_search.search_memory(db_session, "mitochondria energy cell")
     assert strict[0]["reasons"] == ["keyword"]
+
+
+@pytest.mark.asyncio
+async def test_common_words_do_not_create_keyword_matches(db_session, index):
+    await add_file(db_session, index, "shopping.txt", "Do not forget the tomatoes.")
+    assert await keyword_hits(db_session, "how do cells produce power", 5) == []
+    assert await keyword_hits(db_session, "tomatoes", 5)
+    assert await keyword_hits(db_session, "do the", 5)

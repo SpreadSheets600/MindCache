@@ -57,3 +57,17 @@ def inside(path, root):
         return Path(path).resolve().is_relative_to(Path(root).resolve())
     except OSError:
         return False
+
+
+def wanted(path, root, extra=()):
+    path = Path(path)
+    try:
+        relative = path.relative_to(root)
+    except ValueError:
+        return False
+    parts = relative.parts
+    if not parts or any(part in EXCLUDED_DIRS for part in parts[:-1]):
+        return False
+    if any(excluded_name(part, extra) for part in parts):
+        return False
+    return path.suffix.lower() in SUPPORTED_EXTENSIONS

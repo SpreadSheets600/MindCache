@@ -10,6 +10,7 @@ from app.models.files import IndexedFile, WatchedFolder
 from app.services.file_search import search_files
 from app.services.indexer import indexer
 from app.services.scanner import inside
+from app.services.watcher import watcher
 
 router = APIRouter(tags=["Folders and files"])
 
@@ -69,6 +70,7 @@ async def add_folder(body: FolderBody, db: AsyncSession = Depends(get_db)):
     db.add(folder)
     await db.commit()
     await db.refresh(folder)
+    await watcher.refresh()
     await indexer.scan_folder_later(folder.id)
     return folder_json(folder)
 
@@ -83,6 +85,7 @@ async def update_folder(folder_id: int, body: FolderPatch, db: AsyncSession = De
     if body.exclude_globs is not None:
         folder.exclude_globs = [glob.strip() for glob in body.exclude_globs if glob.strip()]
     await db.commit()
+    await watcher.refresh()
     await indexer.scan_folder_later(folder.id)
     return folder_json(folder)
 
@@ -101,6 +104,7 @@ async def forget_folder(folder_id: int, db: AsyncSession = Depends(get_db)):
     if folder is None:
         raise HTTPException(404, "Folder not found.")
     await indexer.forget_folder(db, folder)
+    await watcher.refresh()
     return {"status": "forgotten"}
 
 

@@ -1,4 +1,5 @@
 import asyncio
+import os
 from datetime import UTC, datetime
 
 from sqlalchemy import delete, func, select
@@ -10,7 +11,7 @@ from app.services import chunk_store
 from app.services.chunk_index import chunk_index
 from app.services.embedder import embedder
 from app.services.file_extract import Unreadable, extract_text, file_hash
-from app.services.scanner import scan
+from app.services.scanner import MAX_BYTES, scan, wanted
 
 logger = get_logger(__name__)
 SAVE_EVERY = 25
@@ -23,6 +24,7 @@ class Indexer:
         self.current = None
         self.worker = None
         self.unsaved = 0
+        self.lock = asyncio.Lock()
 
     def start(self):
         if self.worker is None or self.worker.done():
@@ -62,9 +64,13 @@ class Indexer:
                     self.unsaved = 0
 
     async def scan_folder(self, folder_id):
-        async with database.AsyncSessionLocal() as db:
+        async with self.lock, database.AsyncSessionLocal() as db:
             folder = await db.get(WatchedFolder, folder_id)
             if folder is None or not folder.enabled:
+                return
+            if not os.path.isdir(folder.path):
+                folder.status = "unavailable"
+                await db.commit()
                 return
             found = {item["path"]: item for item in await asyncio.to_thread(scan, folder.path, folder.exclude_globs)}
             rows = {row.path: row for row in (await db.execute(select(IndexedFile).where(IndexedFile.folder_id == folder_id))).scalars()}
@@ -81,6 +87,31 @@ class Indexer:
             folder.status = "ready"
             await db.commit()
         await self.enqueue_unfinished(("pending",))
+
+    async def sync_path(self, folder_id, path):
+        async with self.lock, database.AsyncSessionLocal() as db:
+            folder = await db.get(WatchedFolder, folder_id)
+            if folder is None or not folder.enabled or not os.path.isdir(folder.path):
+                return
+            row = (await db.execute(select(IndexedFile).where(IndexedFile.path == path))).scalar_one_or_none()
+            try:
+                info = os.stat(path, follow_symlinks=False)
+                present = wanted(path, folder.path, folder.exclude_globs) and 0 < info.st_size <= MAX_BYTES and not os.path.islink(path)
+            except OSError:
+                present = False
+            if not present:
+                if row is not None:
+                    await self.remove_file(db, row)
+                return
+            if row is None:
+                row = IndexedFile(folder_id=folder_id, path=path, name=os.path.basename(path), ext=os.path.splitext(path)[1].lower(), status="pending")
+                db.add(row)
+            elif (row.size, row.mtime_ns) == (info.st_size, info.st_mtime_ns) and row.status != "failed":
+                return
+            row.size, row.mtime_ns, row.status = info.st_size, info.st_mtime_ns, "pending"
+            await db.commit()
+            file_id = row.id
+        self.enqueue(file_id)
 
     async def scan_folder_later(self, folder_id):
         asyncio.create_task(self.scan_folder(folder_id))

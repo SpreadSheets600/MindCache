@@ -332,6 +332,7 @@ Goal: the backend uses EmbeddingGemma 2 and nothing else for embeddings.
 - 1.2 Create `services/embedder.py` with `embed_query` and `embed_documents`, model constants, signature function, explicit download with progress and `local_files_only` afterward. Delete the model/provider choice for embeddings from `core/ai_config.py`, `services/ai_providers.py`, `api/ai.py`, `data/models.json` handling, `EMBEDDING_MODEL_NAME` and `EMBEDDING_MODEL_PATH` settings. Remove `embedding_service.py`.
 - 1.3 `EMBEDDING_DIMENSION` becomes a derived constant. Store signature in `index_meta`. On mismatch (every existing install, since the index is currently Qwen 1024-d), mark the index stale and rebuild existing documents and items in the background. Lexical search keeps working during the rebuild.
 - 1.4 Update `/health` and the extension and dashboard health consumers for the new status shape (model present, downloading, ready).
+- 1.5 Relevance floor: semantic search always returns nearest neighbours, so even a nonsense query returns results. Calibrate a minimum similarity (and a minimum fused score) on the fixture and apply it in `file_search.py`.
 - 1.5 Benchmark harness: a fixture corpus plus a query set with expected hits, reporting recall@10 and latency. Use it to choose chunk size and truncation dimension. Commit the harness, not the corpus if it contains personal data.
 - 1.6 Tests: fake embedder for unit tests; one slow-marked test that runs the real model when present.
 

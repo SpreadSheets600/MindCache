@@ -8,12 +8,13 @@ from app.core.local_access import allowed_origin, local_host
 from app.core.pairing import trusted_ids
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import ai, documents, health, items, pairing, privacy, recall, search, visit
+from app.api import ai, documents, files, health, items, pairing, privacy, recall, search, visit
 from app.core.config import settings
 from app.core.logging import get_logger, setup_logging
 from app.db.base import Base
 from app.db.session import engine
 from app.services.document_processor import document_processor
+from app.services.indexer import indexer
 from app.services.vector_service import vector_service
 
 setup_logging()
@@ -55,10 +56,13 @@ async def lifespan(app: FastAPI):
         logger.critical(f"Critical Error During Database Schema Sync : {e}", exc_info=True)
 
     reindex = asyncio.create_task(document_processor.reindex_if_needed())
+    indexer.start()
+    await indexer.enqueue_unfinished()
 
     yield
 
     reindex.cancel()
+    await indexer.stop()
     logger.info("MindCache Backend Shutting Down ...")
 
     try:
@@ -92,7 +96,7 @@ async def restrict_local_browser_requests(request, call_next):
     if not local_host(host) or not allowed_origin(origin, host):
         return JSONResponse({"detail": "Only local MindCache clients may access this service."}, status_code=403)
     if origin and origin.startswith("chrome-extension://"):
-        if request.url.path.startswith(("/ai", "/privacy", "/imports", "/pairing")):
+        if request.url.path.startswith(("/ai", "/privacy", "/imports", "/pairing", "/folders", "/files", "/index")):
             return JSONResponse({"detail": "Use the local web app to change these settings."}, status_code=403)
         try:
             paired = origin.removeprefix("chrome-extension://") in trusted_ids(pairing.PAIRING_PATH)
@@ -110,6 +114,7 @@ app.include_router(documents.router)
 app.include_router(privacy.router)
 app.include_router(ai.router)
 app.include_router(items.router)
+app.include_router(files.router)
 app.include_router(recall.router)
 app.include_router(pairing.router)
 

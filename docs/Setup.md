@@ -12,16 +12,7 @@ You need these tools installed on your system.
 
 ### Ollama Models
 
-Pull the required models:
-
-```bash
-ollama pull qwen3.5:2b          # LLM for summaries, keywords, synthesis
-ollama pull embeddinggemma:300m # Embedding model for FAISS indexing
-```
-
-You can also configure alternative models in `.env`:
-- `OLLAMA_MODEL` — any Ollama chat model (e.g., `llama3`, `gemma4:31b-cloud`)
-- `EMBEDDING_MODEL_NAME` — any Ollama embedding model (e.g., `nomic-embed-text`, `mxbai-embed-large`)
+Embeddings use `google/embeddinggemma-2`, downloaded once (about 1.4 GB) from Hugging Face on your confirmation in the web app's Models page. It is not gated and needs no token. It runs on your computer, on the GPU when CUDA is available and on the CPU otherwise. Text generation is optional and is chosen on the same page: a local Transformers model, Ollama, or an OpenAI-compatible API with your own key.
 
 ---
 
@@ -67,11 +58,6 @@ MindCache checks settings via environmental variables. Create a `.env` file in t
 DATABASE_URL=sqlite:///data/mindcache.db
 FAISS_INDEX_PATH=data/faiss_index.bin
 BM25_INDEX_PATH=data/bm25_index.pkl
-EMBEDDING_PROVIDER=ollama
-EMBEDDING_MODEL_NAME=embeddinggemma:300m
-EMBEDDING_DIMENSION=768
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=qwen3.5:2b
 LOG_LEVEL=INFO
 ```
 
@@ -82,170 +68,19 @@ LOG_LEVEL=INFO
 | `DATABASE_URL` | `sqlite:///data/mindcache.db` | SQLite database path |
 | `FAISS_INDEX_PATH` | `data/faiss_index.bin` | FAISS vector index file |
 | `BM25_INDEX_PATH` | `data/bm25_index.pkl` | BM25 lexical index file |
-| `EMBEDDING_PROVIDER` | `huggingface` | "huggingface" or "ollama" |
-| `EMBEDDING_MODEL_NAME` | `BAAI/bge-small-en-v1.5` | Embedding model name |
-| `EMBEDDING_DIMENSION` | `384` | Default embedding dimension (auto-detected for Ollama) |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL |
-| `OLLAMA_MODEL` | `llama3` | Ollama generative model |
 | `LOG_LEVEL` | `INFO` | Logging level (DEBUG, INFO, WARNING, ERROR) |
 
-### Rationale: Ollama-Exclusive Integration vs. Hugging Face
+### Embedding Model
 
-MindCache executes all model inference via a local **Ollama** server rather than embedding Python-native Hugging Face / PyTorch loaders:
-
-1. **Zero Access Friction**: Models like Gemma require accepting license agreements on Hugging Face. Loading them via Python would require a valid `HF_TOKEN`. Ollama bypasses this entirely.
-2. **RAM Preservation**: Running model execution in Ollama's optimized C++ (llama.cpp) runtime avoids loading heavy models into Python's process space (saving 1GB+ RAM).
-3. **Process Memory Isolation**: Offloading vector generation to Ollama means the Python backend never loads model binaries, keeping API server startup instant.
-4. **Dynamic Dimension Detection**: The embedding dimension is auto-detected by querying Ollama `/api/embed` on first use, falling back to `EMBEDDING_DIMENSION` (384) if detection fails.
-
----
-
-## Running the Application
-
-```bash
-# Start the server using uv runner (development mode with auto-reload)
-uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
-```
-
-### What Happens on Startup
-
-1. **Logging** is initialized
-2. **Database schema** is synced — all tables created if missing, dynamic ALTER TABLE for column additions
-3. **Background warmup** — AI models are pre-loaded in Ollama via `/api/embed` and `/api/generate` with `keep_alive=-1`
-4. **FAISS index health check** — if dimension mismatch or empty index with documents in DB, automatic reindexing is triggered
-5. Server is ready to accept requests on port 8000
-
-Access interactive API documentation at `http://127.0.0.1:8000/docs`.
-
----
-
-## Docker Deployment
-
-### Build and Run
-
-```bash
-docker compose up --build -d
-```
-
-### Docker Configuration
-
-- **Image**: `python:3.12-slim` with `uv` for dependency installation
-- **Ports**: `8000:8000`
-- **Volumes**: `./data:/app/data` (persistent SQLite/FAISS/BM25)
-- **Ollama connection**: `http://host.docker.internal:11434` (via `extra_hosts`)
-- **Embedding model**: defaults to `all-MiniLM-L6-v2` (pre-downloaded in build for cold start)
-- **Restart policy**: `unless-stopped`
-
-### Environment Overrides for Docker
-
-```yaml
-environment:
-  - DATABASE_URL=sqlite:///data/mindcache.db
-  - FAISS_INDEX_PATH=data/faiss_index.bin
-  - EMBEDDING_MODEL_NAME=all-MiniLM-L6-v2
-  - OLLAMA_BASE_URL=http://host.docker.internal:11434
-  - OLLAMA_MODEL=llama3
-  - LOG_LEVEL=INFO
-```
-
----
-
-## Database Migrations
-
-MindCache handles migration versions using Alembic.
-
-```bash
-# Generate a new migration revision based on model changes
-uv run alembic revision --autogenerate -m "describe_changes"
-
-# Apply pending migrations to the local database
-uv run alembic upgrade head
-
-# Downgrade the schema by one revision
-uv run alembic downgrade -1
-```
-
-**Note**: The project currently uses dynamic schema creation in `main.py` — tables are auto-created on startup via `Base.metadata.create_all()`, and missing columns are added via PRAGMA-based ALTER TABLE. The `migrations/versions/` directory is intentionally empty.
-
----
-
-## Running the Test Suite
-
-Execute the test suite using pytest. The tests use mocks for AI pipelines, so they run in milliseconds and require no internet access or model downloads.
-
-```bash
-# Run all tests
-uv run pytest
-
-# Run tests and show logs/print outputs
-uv run pytest -s
-
-# Run tests with coverage report
-uv run pytest --cov=app tests/
-
-# Run a specific test file
-uv run pytest tests/test_api.py
-
-# Run a specific test by name
-uv run pytest tests/test_api.py -k "test_health_endpoint"
-```
-
-### Test Coverage
-
-| Test File | Tests | Coverage Area |
-|---|---|---|
-| `tests/test_api.py` | 9 | Full API integration, search evaluation regression |
-| `tests/test_extractors.py` | 14 | All platform extractors, factory, fallbacks |
-| `tests/test_services.py` | 9 | Core services, quality scoring, BM25, FAISS |
-
----
-
-## Linting and Code Quality
-
-MindCache enforces strict formatting and linting rules using Ruff and Mypy.
-
-```bash
-# Run Ruff lint checks (with auto-fix)
-uv run ruff check .
-
-# Run Ruff formatting check
-uv run ruff format --check .
-
-# Run Mypy static type verification
-uv run mypy .
-```
-
-You can activate pre-commit hooks to run these style checks automatically on every git commit.
-
-```bash
-uv run pre-commit install
-```
-
-### Pre-commit Hooks
-
-Configured in `.pre-commit-config.yaml`:
-- `ruff` — lints with `--fix --exit-non-zero-on-fix`
-- `ruff-format` — checks formatting
-
-### Code Style Rules
-
-- Line length: 120 characters
-- Target Python: 3.12
-- Enabled rules: E, W, F, I, B, C4, UP
-- Strict mypy with `warn_return_any` and `disallow_untyped_defs`
-- Mypy overrides for trafilatura, faiss, bs4, yt_dlp (ignore_missing_imports)
+MindCache uses one embedding model, `google/embeddinggemma-2` (768 dimensions), and it cannot be changed. The vector index records the model it was built with. If it was built with anything else, the index is reset on startup and every saved page is re-embedded in the background once the model is available. Keyword search keeps working in the meantime.
 
 ---
 
 ## Troubleshooting
 
-### FAISS Index Dimension Mismatch
+### Search Shows Only Keyword Matches
 
-If you change the embedding model, the stored FAISS index may have a different dimension than the new model's output. MindCache auto-detects this and triggers a full reindex on startup. To force reindex manually, delete the FAISS index file:
-
-```bash
-rm backend/data/faiss_index.bin
-```
+The embedding model has not been downloaded yet. Open Models in the web app and download EmbeddingGemma 2. Saved pages are re-indexed automatically afterwards.
 
 ### Ollama Connection Issues
 

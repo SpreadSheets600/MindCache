@@ -79,7 +79,7 @@ describe("MindCache Connection Store Tests", () => {
     const componentsMock = {
       database: { status: "connected" as const, documents_count: 42 },
       faiss_index: { status: "initialized", vectors_count: 42 },
-      embedding: { status: "connected" as const, model: "Qwen/Qwen3-Embedding-0.6B", provider: "local" },
+      embedding: { status: "ready" as const, model: "google/embeddinggemma-2", dimension: 768, reindexing: false },
       generative: undefined,
     };
     

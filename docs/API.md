@@ -362,7 +362,7 @@ Returns entities, keywords, and relationships for knowledge graph visualization.
 
 ### `GET /health`
 
-Checks diagnostic status of all system components — database, FAISS index, Ollama generative model, and embedding service.
+Checks diagnostic status of all system components — database, FAISS index, and the embedding model.
 
 #### Response (200)
 
@@ -372,8 +372,7 @@ Checks diagnostic status of all system components — database, FAISS index, Oll
     "components": {
         "database": { "status": "connected", "documents_count": 128 },
         "faiss_index": { "status": "initialized", "vectors_count": 256 },
-        "ollama": { "status": "connected", "model": "qwen3.5:2b" },
-        "embedding": { "status": "connected", "model": "embeddinggemma:300m", "provider": "ollama" }
+        "embedding": { "status": "ready", "model": "google/embeddinggemma-2", "dimension": 768, "reindexing": false }
     }
 }
 ```
@@ -407,3 +406,30 @@ Possible `status` values: `"healthy"` (all components online) or `"degraded"` (s
 - **Retry**: Up to 2 retries with exponential backoff (300ms, 600ms) on server errors. Bypassed on 4xx responses and health checks
 - **Validation**: Rejects malformed JSON responses, preventing backend format issues from breaking the UI
 - **Error formatting**: `BackendClientError` with `status` and `details` properties for structured error handling
+
+---
+
+## AI Models
+
+### `GET /ai/models`
+
+```json
+{
+    "embedding": { "model": "google/embeddinggemma-2", "dimension": 768, "status": "ready", "device": "cuda" },
+    "generation": { "provider": "openai", "model": "gpt", "endpoint": "https://example.com/v1", "allow_remote": true, "api_key_set": true }
+}
+```
+
+`embedding.status` is `ready` or `not_downloaded`. The API key is never returned.
+
+### `PUT /ai/generation`
+
+Body: `provider` (`disabled`, `transformers`, `ollama`, `openai`), `model`, `endpoint`, `allow_remote` and `api_key`. Omit `api_key` or send `null` to keep the saved key, or send `""` to remove it. Remote endpoints need `allow_remote` and HTTPS.
+
+### `POST /ai/generate`
+
+Body `{ "prompt": "..." }`. Returns `{ "text": "..." }`.
+
+### `GET /ai/downloads`, `POST /ai/downloads`
+
+Body `{ "task": "embedding" | "generation" }` starts a background download and returns 202. Poll `GET /ai/downloads` for `downloading`, `completed` or `failed`. A completed embedding download starts re-indexing when the index needs it.

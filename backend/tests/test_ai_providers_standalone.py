@@ -1,18 +1,12 @@
 import io
-import os
 import unittest
 from unittest.mock import patch
 from app.core.ai_config import TaskModel
-from app.services.ai_providers import _post, embeddings, generate
+from app.services.ai_providers import _post, generate
 
 
 class ProviderTests(unittest.TestCase):
-    def test_openai_embedding_response_order(self):
-        model = TaskModel("openai", "embed", "http://localhost:8001/v1")
-        with patch("app.services.ai_providers._post", return_value={"data": [{"index": 1, "embedding": [2]}, {"index": 0, "embedding": [1]}]}):
-            self.assertEqual(embeddings(model, ["one", "two"]), [[1], [2]])
-
-    def test_http_adapter_uses_environment_key(self):
+    def test_http_adapter_sends_stored_key(self):
         class FakeResponse(io.BytesIO):
             def __enter__(self):
                 return self
@@ -23,8 +17,8 @@ class ProviderTests(unittest.TestCase):
                 self.request = request
                 return FakeResponse(b'{"ok": true}')
         opener = FakeOpener()
-        model = TaskModel("openai", "writer", "http://localhost:8001/v1", "MINDCACHE_TEST_KEY")
-        with patch.dict(os.environ, {"MINDCACHE_TEST_KEY": "private-value"}), patch("app.services.ai_providers.build_opener", return_value=opener):
+        model = TaskModel("openai", "writer", "http://localhost:8001/v1", "private-value")
+        with patch("app.services.ai_providers.build_opener", return_value=opener):
             self.assertEqual(_post(model, "/chat/completions", {"content": "hello"}), {"ok": True})
         self.assertEqual(opener.request.get_header("Authorization"), "Bearer private-value")
         self.assertEqual(opener.request.full_url, "http://localhost:8001/v1/chat/completions")

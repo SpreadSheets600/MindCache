@@ -21,8 +21,8 @@ async def test_health_endpoint(client_override: AsyncSession):
     assert data["components"]["database"]["status"] == "connected"
     assert data["components"]["database"]["documents_count"] == 0
     assert data["components"]["faiss_index"]["status"] == "initialized"
-    assert data["components"]["embedding"]["status"] == "connected"
-    assert data["components"]["embedding"]["provider"] == "local"
+    assert data["components"]["embedding"]["status"] == "ready"
+    assert data["components"]["embedding"]["model"] == "google/embeddinggemma-2"
 
 
 @pytest.mark.asyncio
@@ -129,7 +129,7 @@ async def test_visit_with_custom_title(client_override: AsyncSession):
 
 @pytest.mark.asyncio
 async def test_search_uses_lexical_index_when_embedding_fails(client_override: AsyncSession):
-    from app.services.embedding_service import embedding_service
+    from app.services.embedder import embedder
 
     url = "https://example.com/lexical-fallback"
     html = "<html><head><title>Quantum cedar</title></head><body>Quantum cedar research notes.</body></html>"
@@ -138,7 +138,7 @@ async def test_search_uses_lexical_index_when_embedding_fails(client_override: A
         with patch.object(document_processor, "_download_page", AsyncMock(return_value=(html, url))):
             visit = await ac.post("/visit", json={"url": url})
         assert visit.status_code == 201
-        with patch.object(embedding_service, "generate_embedding", side_effect=RuntimeError("model unavailable")):
+        with patch.object(embedder, "embed_query", side_effect=RuntimeError("model unavailable")):
             response = await ac.post("/search", json={"query": "quantum cedar"})
 
     assert response.status_code == 200

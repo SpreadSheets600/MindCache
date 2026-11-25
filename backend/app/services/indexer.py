@@ -17,6 +17,7 @@ from app.services.scanner import MAX_BYTES, scan, wanted
 
 logger = get_logger(__name__)
 SAVE_EVERY = 25
+MISSING_GRACE_SECONDS = 30.0
 
 
 class Indexer:
@@ -30,12 +31,16 @@ class Indexer:
         self.running = asyncio.Event()
         self.running.set()
         self.finished = deque(maxlen=50)
+        self.missing_since = {}
+        self.purge_handle = None
 
     def start(self):
         if self.worker is None or self.worker.done():
             self.worker = asyncio.create_task(self.run())
 
     async def stop(self):
+        if self.purge_handle:
+            self.purge_handle.cancel()
         if self.worker:
             self.worker.cancel()
         if self.unsaved:
@@ -107,15 +112,20 @@ class Indexer:
                 return
             found = {item["path"]: item for item in await asyncio.to_thread(scan, folder.path, folder.exclude_globs)}
             rows = {row.path: row for row in (await db.execute(select(IndexedFile).where(IndexedFile.folder_id == folder_id))).scalars()}
-            for path, row in rows.items():
-                if path not in found:
-                    await self.remove_file(db, row)
+            gone = [row for path, row in rows.items() if path not in found]
             for path, item in found.items():
                 row = rows.get(path)
                 if row is None:
+                    twin = next((old for old in gone if (old.size, old.mtime_ns, old.ext) == (item["size"], item["mtime_ns"], item["ext"])), None)
+                    if twin is not None:
+                        gone.remove(twin)
+                        await self.adopt(db, twin, item["path"], item["name"])
+                        continue
                     db.add(IndexedFile(folder_id=folder_id, **item))
-                elif (row.size, row.mtime_ns) != (item["size"], item["mtime_ns"]) or row.status in {"pending", "failed"}:
+                elif (row.size, row.mtime_ns) != (item["size"], item["mtime_ns"]) or row.status in {"pending", "failed", "missing"}:
                     row.size, row.mtime_ns, row.status = item["size"], item["mtime_ns"], "pending"
+            for row in gone:
+                await self.remove_file(db, row)
             folder.last_scan_at = datetime.now(UTC).replace(tzinfo=None)
             folder.status = "ready"
             await db.commit()
@@ -133,13 +143,29 @@ class Indexer:
             except OSError:
                 present = False
             if not present:
-                if row is not None:
-                    await self.remove_file(db, row)
+                if row is not None and row.status != "missing":
+                    await self.mark_missing(db, row)
                 return
             if row is None:
-                row = IndexedFile(folder_id=folder_id, path=path, name=os.path.basename(path), ext=os.path.splitext(path)[1].lower(), status="pending")
+                name = os.path.basename(path)
+                twin = (
+                    await db.execute(
+                        select(IndexedFile).where(
+                            IndexedFile.folder_id == folder_id,
+                            IndexedFile.status == "missing",
+                            IndexedFile.size == info.st_size,
+                            IndexedFile.mtime_ns == info.st_mtime_ns,
+                            IndexedFile.ext == os.path.splitext(name)[1].lower(),
+                        )
+                    )
+                ).scalars().first()
+                if twin is not None:
+                    await self.adopt(db, twin, path, name)
+                    await db.commit()
+                    return
+                row = IndexedFile(folder_id=folder_id, path=path, name=name, ext=os.path.splitext(name)[1].lower(), status="pending")
                 db.add(row)
-            elif (row.size, row.mtime_ns) == (info.st_size, info.st_mtime_ns) and row.status != "failed":
+            elif (row.size, row.mtime_ns) == (info.st_size, info.st_mtime_ns) and row.status not in {"failed", "missing"}:
                 return
             row.size, row.mtime_ns, row.status = info.st_size, info.st_mtime_ns, "pending"
             await db.commit()
@@ -148,6 +174,35 @@ class Indexer:
 
     async def scan_folder_later(self, folder_id):
         asyncio.create_task(self.scan_folder(folder_id))
+
+    async def adopt(self, db, row, path, name):
+        await db.flush()
+        row.path, row.name = path, name
+        row.ext = os.path.splitext(name)[1].lower()
+        if row.status == "missing":
+            row.status = "indexed" if row.chunk_count else "pending"
+        self.missing_since.pop(row.id, None)
+        await chunk_store.retitle_source(db, "file", row.id, name)
+
+    async def mark_missing(self, db, row):
+        row.status = "missing"
+        await db.commit()
+        self.missing_since[row.id] = time.monotonic()
+        if self.purge_handle:
+            self.purge_handle.cancel()
+        self.purge_handle = asyncio.get_running_loop().call_later(
+            MISSING_GRACE_SECONDS + 1, lambda: asyncio.create_task(self.purge_missing())
+        )
+
+    async def purge_missing(self):
+        async with self.lock, database.AsyncSessionLocal() as db:
+            for file_id, since in list(self.missing_since.items()):
+                if time.monotonic() - since < MISSING_GRACE_SECONDS:
+                    continue
+                self.missing_since.pop(file_id)
+                row = await db.get(IndexedFile, file_id)
+                if row is not None and row.status == "missing":
+                    await self.remove_file(db, row)
 
     async def remove_file(self, db, row):
         old_ids = await chunk_store.remove_source(db, "file", row.id)

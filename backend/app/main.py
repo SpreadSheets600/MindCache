@@ -15,6 +15,7 @@ from app.db.base import Base
 from app.db.session import engine
 from app.services.document_processor import document_processor
 from app.services.indexer import indexer
+from app.services.watcher import watcher
 from app.services.vector_service import vector_service
 
 setup_logging()
@@ -58,10 +59,12 @@ async def lifespan(app: FastAPI):
     reindex = asyncio.create_task(document_processor.reindex_if_needed())
     indexer.start()
     await indexer.enqueue_unfinished()
+    await watcher.start()
 
     yield
 
     reindex.cancel()
+    await watcher.stop()
     await indexer.stop()
     logger.info("MindCache Backend Shutting Down ...")
 

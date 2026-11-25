@@ -1,12 +1,14 @@
 import asyncio
 import os
 import tempfile
+import zlib
 from collections.abc import AsyncGenerator, Generator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import numpy as np
 import pytest
 import pytest_asyncio
+from sqlalchemy import delete, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 SESSION_DATA = tempfile.mkdtemp(prefix="mindcache-tests-")
@@ -24,6 +26,12 @@ from app.services.embedder import embedder
 from app.services.keyword_extractor import keyword_extractor
 from app.services.entity_extractor import entity_extractor
 from app.services.vector_service import vector_service
+from app.models.files import Chunk, IndexedFile, WatchedFolder
+from app.services import file_search
+from app.services import indexer as indexer_module
+from app.services.chunk_index import ChunkIndex
+from app.services.chunk_store import WORD
+from app.services.embedder import DIMENSION
 
 TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
 
@@ -129,3 +137,36 @@ async def client_override(db_session: AsyncSession):
     app.dependency_overrides[get_db] = _get_db_override
     yield db_session
     app.dependency_overrides.clear()
+
+
+def fake_vector(text):
+    vector = np.zeros(DIMENSION, dtype=np.float32)
+    for word in WORD.findall(text.lower()):
+        vector[zlib.crc32(word.encode()) % DIMENSION] += 1.0
+    return vector / (np.linalg.norm(vector) or 1.0)
+
+
+async def clear_tables():
+    from app.db import session as database
+
+    async with database.AsyncSessionLocal() as db:
+        await db.execute(text("DELETE FROM chunks_fts"))
+        for model in (Chunk, IndexedFile, WatchedFolder):
+            await db.execute(delete(model))
+        await db.commit()
+
+
+@pytest_asyncio.fixture
+async def stack(tmp_path_factory):
+    await clear_tables()
+    index = ChunkIndex(tmp_path_factory.mktemp("index") / "chunks.faiss")
+    with (
+        patch.object(indexer_module, "chunk_index", index),
+        patch.object(file_search, "chunk_index", index),
+        patch.object(indexer_module.embedder, "embed_documents", side_effect=lambda texts: np.stack([fake_vector(t) for t in texts])),
+        patch.object(file_search.embedder, "embed_query", side_effect=fake_vector),
+    ):
+        yield index
+    await clear_tables()
+
+

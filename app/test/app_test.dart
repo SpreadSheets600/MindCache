@@ -64,13 +64,23 @@ class FakeApi extends Api {
     folderList = [];
   }
 
+  var paused = false;
+
   @override
   Future<IndexStatus> indexStatus() async => IndexStatus(
     files: {'indexed': 8, 'pending': 2},
     queued: 2,
     vectors: 31,
     embedding: 'ready',
+    paused: paused,
+    etaSeconds: 40,
   );
+
+  @override
+  Future<void> setIndexPaused(bool value) async {
+    calls.add('paused:$value');
+    paused = value;
+  }
 
   @override
   Future<ModelsInfo> models() async => ModelsInfo(
@@ -218,6 +228,16 @@ void main() {
     await openTab(tester, 'Index');
     expect(find.text('8 of 10 files searchable'), findsOneWidget);
     expect(find.text('vectors: 31'), findsOneWidget);
+    expect(find.textContaining('About 40 seconds left'), findsOneWidget);
+  });
+
+  testWidgets('indexing can be paused from the index page', (tester) async {
+    final api = FakeApi();
+    await show(tester, api);
+    await openTab(tester, 'Index');
+    await tester.tap(find.text('Pause'));
+    await tester.pumpAndSettle();
+    expect(api.calls, contains('paused:true'));
   });
 
   testWidgets('settings keeps the saved key unless a new one is typed', (

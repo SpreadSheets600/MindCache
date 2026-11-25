@@ -18,6 +18,7 @@ os.environ["FAISS_INDEX_PATH"] = f"{SESSION_DATA}/faiss_index.bin"
 os.environ["BM25_INDEX_PATH"] = f"{SESSION_DATA}/bm25_index.pkl"
 
 from app.core.config import settings
+from app.db import session as database
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
@@ -165,8 +166,18 @@ async def stack(tmp_path_factory):
         patch.object(file_search, "chunk_index", index),
         patch.object(indexer_module.embedder, "embed_documents", side_effect=lambda texts: np.stack([fake_vector(t) for t in texts])),
         patch.object(file_search.embedder, "embed_query", side_effect=fake_vector),
+        patch.object(file_search, "SEMANTIC_FLOOR", 0.2),
     ):
         yield index
     await clear_tables()
 
 
+@pytest_asyncio.fixture
+async def file_db(tmp_path_factory):
+    path = tmp_path_factory.mktemp("db") / "test.db"
+    engine = create_async_engine(f"sqlite+aiosqlite:///{path}", connect_args={"timeout": 15})
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+    with patch.object(database, "AsyncSessionLocal", async_sessionmaker(engine, expire_on_commit=False)):
+        yield
+    await engine.dispose()

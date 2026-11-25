@@ -1,5 +1,7 @@
 import asyncio
 import os
+import time
+from collections import deque
 from datetime import UTC, datetime
 
 from sqlalchemy import delete, func, select, update
@@ -25,6 +27,9 @@ class Indexer:
         self.worker = None
         self.unsaved = 0
         self.lock = asyncio.Lock()
+        self.running = asyncio.Event()
+        self.running.set()
+        self.finished = deque(maxlen=50)
 
     def start(self):
         if self.worker is None or self.worker.done():
@@ -42,9 +47,16 @@ class Indexer:
             self.queued.add(file_id)
             self.queue.put_nowait(file_id)
 
+    def pause(self):
+        self.running.clear()
+
+    def resume(self):
+        self.running.set()
+
     async def enqueue_unfinished(self, statuses=("pending", "partial")):
         async with database.AsyncSessionLocal() as db:
-            ids = (await db.execute(select(IndexedFile.id).where(IndexedFile.status.in_(statuses)))).scalars().all()
+            statement = select(IndexedFile.id).where(IndexedFile.status.in_(statuses)).order_by(IndexedFile.mtime_ns.desc())
+            ids = (await db.execute(statement)).scalars().all()
         for file_id in ids:
             self.enqueue(file_id)
 
@@ -68,12 +80,14 @@ class Indexer:
     async def run(self):
         while True:
             file_id = await self.queue.get()
+            await self.running.wait()
             self.current = file_id
             try:
                 await self.index_file(file_id)
             except Exception as exc:
                 logger.error("Indexing file %s failed: %s", file_id, exc, exc_info=True)
             finally:
+                self.finished.append(time.monotonic())
                 self.queued.discard(file_id)
                 self.current = None
                 if self.queue.empty():
@@ -185,9 +199,16 @@ class Indexer:
     async def status(self):
         async with database.AsyncSessionLocal() as db:
             rows = (await db.execute(select(IndexedFile.status, func.count()).group_by(IndexedFile.status))).all()
+        per_second = None
+        if len(self.finished) >= 2 and self.finished[-1] > self.finished[0]:
+            per_second = (len(self.finished) - 1) / (self.finished[-1] - self.finished[0])
+        waiting = self.queue.qsize() + (1 if self.current else 0)
         return {
             "files": dict(rows),
             "queued": self.queue.qsize(),
+            "paused": not self.running.is_set(),
+            "files_per_minute": round(per_second * 60, 1) if per_second else None,
+            "eta_seconds": round(waiting / per_second) if per_second and waiting else None,
             "current": self.current,
             "vectors": chunk_index.count,
             "embedding": embedder.status(),

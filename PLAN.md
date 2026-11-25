@@ -1,6 +1,19 @@
 # MindCache System Memory: Architecture and Implementation Plan
 
-Status: draft for review. Date: 2026-11-25. Rules for whoever implements this are in `AGENT.md`.
+Status: in progress. Date: 2026-11-25. Rules for whoever implements this are in `AGENT.md`.
+
+## Implementation status
+
+| Phase | State |
+| --- | --- |
+| 0 Housekeeping | Done except Alembic migrations, which were never used (tables are created at startup) |
+| 1 EmbeddingGemma 2 | Done: spike, embedder, signature and re-embedding, relevance floor (0.70, calibrated on the real model). Benchmark harness for chunk size and truncation is still open |
+| 2 Chunk storage and search | Done, with the indexer running in the API process. Splitting out a separate worker process is deferred until measurements show search latency suffering during indexing. Web pages and notes are not yet moved onto chunks |
+| 3 Folder indexing | Done for text and PDF files |
+| 4 Live watching | Done except rename detection by content hash |
+| 5 and 6 Flutter app | Search, Folders, Index and Settings screens done. Global hotkey, tray and the knowledge graph are open |
+| 7 Resource behavior | Pause and resume, newest-first order, rate and ETA done. Worker niceness, free-memory batch sizing and the CPU speed plan are open |
+| 8 Images, 9 Packaging | Not started |
 
 The previous plan (Recall integration) is kept at `docs/PLAN-recall-integration.md`. Its pairing, local-access, notes/uploads and privacy work is already in the tree and this plan builds on it.
 

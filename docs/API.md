@@ -433,3 +433,62 @@ Body `{ "prompt": "..." }`. Returns `{ "text": "..." }`.
 ### `GET /ai/downloads`, `POST /ai/downloads`
 
 Body `{ "task": "embedding" | "generation" }` starts a background download and returns 202. Poll `GET /ai/downloads` for `downloading`, `completed` or `failed`. A completed embedding download starts re-indexing when the index needs it.
+
+---
+
+## Folders and Files
+
+These routes are for the desktop app and web app. Browser extensions cannot call them.
+
+### `GET /folders`, `POST /folders`
+
+`POST` body: `{ "path": "/home/me/notes", "exclude_globs": ["*.tmp"] }`. The path must be an absolute, existing directory, not the filesystem root, and must not overlap a folder that is already watched (409). Returns the folder and starts a scan.
+
+### `PATCH /folders/{id}`, `POST /folders/{id}/rescan`, `DELETE /folders/{id}`
+
+`PATCH` accepts `enabled` and `exclude_globs`. `DELETE` removes the folder from the index only; files on disk are never touched. A folder that cannot be reached is marked `unavailable` and keeps its index.
+
+### `GET /files?folder_id=&status=&limit=`
+
+Indexed files with `status` of `pending`, `indexed`, `partial` (keyword search works, embedding missing), `skipped` (unreadable or blank) or `failed`, plus `error` and `chunk_count`.
+
+### `GET /files/search?q=&limit=`
+
+Hybrid keyword and semantic search over indexed files.
+
+```json
+{
+    "results": [
+        {
+            "file_id": 3,
+            "name": "cells.md",
+            "path": "/home/me/notes/cells.md",
+            "score": 0.03279,
+            "reasons": ["keyword", "semantic"],
+            "passages": [{ "text": "The mitochondria produces energy…", "start": 0 }]
+        }
+    ]
+}
+```
+
+Semantic matches below a cosine similarity of 0.70 are dropped, so a query with no related content returns nothing.
+
+### `POST /files/{id}/reindex`
+
+Queues one file again.
+
+### `GET /index/status`, `POST /index/pause`, `POST /index/resume`
+
+```json
+{
+    "files": { "indexed": 120, "partial": 3 },
+    "queued": 4,
+    "paused": false,
+    "files_per_minute": 42.0,
+    "eta_seconds": 6,
+    "current": 17,
+    "vectors": 410,
+    "embedding": "ready"
+}
+```
+

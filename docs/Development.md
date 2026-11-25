@@ -344,6 +344,18 @@ Content script defines:
 | `@tailwindcss/typography` | Prose styling for document content |
 | `vitest` + `@testing-library/react` | Testing framework |
 
+## Search Benchmark
+
+`backend/benchmarks` holds a 24 document corpus and 30 paraphrased queries, plus 8 queries that have no answer. The harness builds a throwaway index with the real embedder and reports recall, MRR, false positives, latency and indexing speed for several chunk sizes and relevance floors.
+
+```bash
+cd backend
+uv run python -m benchmarks.search_bench
+uv run python -m benchmarks.search_bench --models-dir /path/to/hub --chunk-chars 1600 --floors 0.65 0.7
+```
+
+Run it after any change to chunking, ranking or the embedding setup.
+
 ## Flutter Development
 
 The desktop app lives in `app/` and talks to the local backend over HTTP.

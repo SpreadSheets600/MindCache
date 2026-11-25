@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.models.files import IndexedFile, WatchedFolder
-from app.services.file_search import search_files
+from app.services.memory_search import search_memory
 from app.services.indexer import indexer
 from app.services.scanner import inside
 from app.services.watcher import watcher
@@ -123,9 +123,9 @@ async def list_files(
     return [file_json(file) for file in (await db.execute(statement)).scalars()]
 
 
-@router.get("/files/search")
+@router.get("/memory/search")
 async def search(q: str = Query(min_length=1, max_length=500), limit: int = Query(20, ge=1, le=100), db: AsyncSession = Depends(get_db)):
-    return {"results": await search_files(db, q, limit)}
+    return {"results": await search_memory(db, q, limit)}
 
 
 @router.post("/files/{file_id}/reindex", status_code=202)

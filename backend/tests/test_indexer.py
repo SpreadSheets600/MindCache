@@ -7,8 +7,8 @@ from sqlalchemy import select
 
 from app.main import app
 from app.models.files import Chunk, IndexedFile, WatchedFolder
-from app.services import file_search, indexer as indexer_module
-from app.services.file_search import search_files
+from app.services import memory_search, indexer as indexer_module
+from app.services.memory_search import search_memory
 
 
 async def index_pending(db):
@@ -47,8 +47,8 @@ async def test_new_files_become_searchable(db_session, stack, tmp_path):
     files = (await db_session.execute(select(IndexedFile))).scalars().all()
     assert sorted(file.name for file in files) == ["cells.md", "shop.txt"]
     assert all(file.status == "indexed" and file.chunk_count == 1 for file in files)
-    results = await search_files(db_session, "mitochondria")
-    assert results[0]["name"] == "cells.md"
+    results = await search_memory(db_session, "mitochondria")
+    assert results[0]["title"] == "cells.md"
     assert stack.count == 2
 
 
@@ -60,9 +60,9 @@ async def test_changed_file_replaces_its_old_content(db_session, stack, tmp_path
     await scan_and_index(db_session, folder_id)
     target.write_text("Replacement giraffe text, now longer.")
     await scan_and_index(db_session, folder_id)
-    stale = await search_files(db_session, "zebra")
+    stale = await search_memory(db_session, "zebra")
     assert not any("zebra" in passage["text"] for result in stale for passage in result["passages"])
-    assert (await search_files(db_session, "giraffe"))[0]["name"] == "a.txt"
+    assert (await search_memory(db_session, "giraffe"))[0]["title"] == "a.txt"
     assert stack.count == 1
 
 
@@ -89,7 +89,7 @@ async def test_deleted_file_disappears_from_search_and_vectors(db_session, stack
     await scan_and_index(db_session, folder_id)
     target.unlink()
     await scan_and_index(db_session, folder_id)
-    assert all(result["name"] != "gone.txt" for result in await search_files(db_session, "platypus"))
+    assert all(result["title"] != "gone.txt" for result in await search_memory(db_session, "platypus"))
     assert [file.name for file in (await db_session.execute(select(IndexedFile))).scalars()] == ["stay.txt"]
     assert stack.count == 1
     assert len((await db_session.execute(select(Chunk))).scalars().all()) == 1
@@ -104,7 +104,7 @@ async def test_embedding_failure_keeps_keyword_search(db_session, stack, tmp_pat
     row = (await db_session.execute(select(IndexedFile))).scalars().one()
     assert row.status == "partial"
     assert "Semantic search unavailable" in row.error
-    assert (await search_files(db_session, "cedar"))[0]["name"] == "a.txt"
+    assert (await search_memory(db_session, "cedar"))[0]["title"] == "a.txt"
 
 
 @pytest.mark.asyncio
@@ -128,7 +128,7 @@ async def test_forgetting_a_folder_removes_its_index_but_not_its_files(db_sessio
     assert target.exists()
     assert stack.count == 0
     assert (await db_session.execute(select(Chunk))).scalars().all() == []
-    assert await search_files(db_session, "walrus") == []
+    assert await search_memory(db_session, "walrus") == []
 
 
 @pytest.mark.asyncio

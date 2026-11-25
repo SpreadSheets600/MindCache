@@ -452,17 +452,18 @@ These routes are for the desktop app and web app. Browser extensions cannot call
 
 Indexed files with `status` of `pending`, `indexed`, `partial` (keyword search works, embedding missing), `skipped` (unreadable or blank) or `failed`, plus `error` and `chunk_count`.
 
-### `GET /files/search?q=&limit=`
+### `GET /memory/search?q=&limit=`
 
-Hybrid keyword and semantic search over indexed files.
+Hybrid keyword and semantic search over indexed files and saved web pages together. `kind` is `file` or `page`, and `location` is the file path or the page URL.
 
 ```json
 {
     "results": [
         {
-            "file_id": 3,
-            "name": "cells.md",
-            "path": "/home/me/notes/cells.md",
+            "kind": "file",
+            "id": 3,
+            "title": "cells.md",
+            "location": "/home/me/notes/cells.md",
             "score": 0.03279,
             "reasons": ["keyword", "semantic"],
             "passages": [{ "text": "The mitochondria produces energy…", "start": 0 }]

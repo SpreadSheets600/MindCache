@@ -14,12 +14,21 @@ from app.core.logging import get_logger, setup_logging
 from app.db.base import Base
 from app.db.session import engine
 from app.services.document_processor import document_processor
+from app.services.chunk_index import chunk_index
 from app.services.indexer import indexer
+from app.services.page_chunks import backfill_pages
 from app.services.watcher import watcher
 from app.services.vector_service import vector_service
 
 setup_logging()
 logger = get_logger("app.main")
+
+
+async def catch_up():
+    rebuilding = chunk_index.needs_rebuild
+    await backfill_pages(force=rebuilding)
+    await indexer.rebuild_if_needed()
+    await indexer.enqueue_unfinished()
 
 
 @asynccontextmanager
@@ -58,13 +67,13 @@ async def lifespan(app: FastAPI):
 
     reindex = asyncio.create_task(document_processor.reindex_if_needed())
     indexer.start()
-    await indexer.rebuild_if_needed()
-    await indexer.enqueue_unfinished()
+    startup = asyncio.create_task(catch_up())
     await watcher.start()
 
     yield
 
     reindex.cancel()
+    startup.cancel()
     await watcher.stop()
     await indexer.stop()
     logger.info("MindCache Backend Shutting Down ...")
@@ -100,7 +109,7 @@ async def restrict_local_browser_requests(request, call_next):
     if not local_host(host) or not allowed_origin(origin, host):
         return JSONResponse({"detail": "Only local MindCache clients may access this service."}, status_code=403)
     if origin and origin.startswith("chrome-extension://"):
-        if request.url.path.startswith(("/ai", "/privacy", "/imports", "/pairing", "/folders", "/files", "/index")):
+        if request.url.path.startswith(("/ai", "/privacy", "/imports", "/pairing", "/folders", "/files", "/index", "/memory")):
             return JSONResponse({"detail": "Use the local web app to change these settings."}, status_code=403)
         try:
             paired = origin.removeprefix("chrome-extension://") in trusted_ids(pairing.PAIRING_PATH)

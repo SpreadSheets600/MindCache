@@ -10,6 +10,7 @@ from app.services.ai_providers import download_model, generate
 from app.services.document_processor import document_processor
 from app.services.embedder import DIMENSION, MODEL_ID, embedder
 from app.services.indexer import indexer
+from app.services.page_chunks import backfill_pages
 
 router = APIRouter(prefix="/ai", tags=["AI models"])
 CONFIG_PATH = settings.DATA_DIR / "models.json"
@@ -77,6 +78,7 @@ async def run_download(task, model):
         if task == "embedding":
             await asyncio.to_thread(embedder.download)
             await document_processor.reindex_if_needed()
+            await backfill_pages(force=True)
             await indexer.rebuild_if_needed()
             await indexer.enqueue_unfinished(("partial",))
         else:

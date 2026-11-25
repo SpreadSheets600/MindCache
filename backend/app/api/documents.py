@@ -6,6 +6,7 @@ from app.core.logging import get_logger
 from app.core.exceptions import DocumentNotFoundError, MindCacheException
 
 from app.services.bm25_service import bm25_service
+from app.services.page_chunks import forget_page
 from app.services.vector_service import vector_service
 from app.repositories.document_repository import document_repository
 from app.schemas.document import DocumentResponse, EntityResponse, KeywordResponse
@@ -141,6 +142,8 @@ async def delete_document(
 
         await db.commit()
 
+        await forget_page(db, document_id)
+        await db.commit()
         vector_service.delete_document(document_id)
         bm25_service.remove_document(document_id)
 

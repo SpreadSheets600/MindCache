@@ -38,7 +38,7 @@ async def load_sources(db, chunks):
     pages = {}
     items = {}
     if wanted["file"]:
-        files = {item.id: item for item in (await db.execute(select(IndexedFile).where(IndexedFile.id.in_(wanted["file"])))).scalars()}
+        files = {item.id: item for item in (await db.execute(select(IndexedFile).where(IndexedFile.id.in_(wanted["file"]), IndexedFile.status != "missing"))).scalars()}
     if wanted["document"]:
         pages = {item.id: item for item in (await db.execute(select(Document).where(Document.id.in_(wanted["document"])))).scalars()}
     if wanted["item"]:

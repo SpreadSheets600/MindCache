@@ -57,3 +57,14 @@ async def keyword_hits(db, query, limit):
         {"q": expression, "n": limit},
     )
     return [row[0] for row in rows]
+
+
+async def retitle_source(db, kind, source_id, title):
+    rows = (await db.execute(select(Chunk).where(Chunk.source_kind == kind, Chunk.source_id == source_id))).scalars().all()
+    for chunk in rows:
+        chunk.title = title
+        await db.execute(text("DELETE FROM chunks_fts WHERE rowid = :id"), {"id": chunk.id})
+        await db.execute(
+            text("INSERT INTO chunks_fts(rowid, title, text) VALUES (:id, :title, :text)"),
+            {"id": chunk.id, "title": title, "text": chunk.text},
+        )

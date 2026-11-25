@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from app.models.files import IndexedFile, WatchedFolder
-from app.services import file_search
+from app.services import memory_search
 from app.services.chunk_index import ChunkIndex
 from app.services.chunk_store import WORD, keyword_hits, remove_source, replace_source
 from app.services.embedder import DIMENSION
@@ -39,9 +39,9 @@ async def add_file(db, index, name, content):
 def index(tmp_path):
     chunk_index = ChunkIndex(tmp_path / "chunks.faiss")
     with (
-        patch.object(file_search, "chunk_index", chunk_index),
-        patch.object(file_search.embedder, "embed_query", side_effect=fake_vector),
-        patch.object(file_search, "SEMANTIC_FLOOR", 0.2),
+        patch.object(memory_search, "chunk_index", chunk_index),
+        patch.object(memory_search.embedder, "embed_query", side_effect=fake_vector),
+        patch.object(memory_search, "SEMANTIC_FLOOR", 0.2),
     ):
         yield chunk_index
 
@@ -50,8 +50,8 @@ def index(tmp_path):
 async def test_keyword_and_semantic_hits_are_fused_and_grouped(db_session, index):
     biology = await add_file(db_session, index, "biology.md", "The mitochondria produces energy for the cell.")
     await add_file(db_session, index, "shopping.txt", "Buy milk, eggs and bread from the market.")
-    results = await file_search.search_files(db_session, "mitochondria energy")
-    assert results[0]["file_id"] == biology.id
+    results = await memory_search.search_memory(db_session, "mitochondria energy")
+    assert results[0]["id"] == biology.id
     assert set(results[0]["reasons"]) == {"keyword", "semantic"}
     assert "mitochondria" in results[0]["passages"][0]["text"].lower()
     assert len(results) >= 1
@@ -60,9 +60,9 @@ async def test_keyword_and_semantic_hits_are_fused_and_grouped(db_session, index
 @pytest.mark.asyncio
 async def test_search_still_works_when_embedding_is_unavailable(db_session, index):
     note = await add_file(db_session, index, "note.txt", "Quarterly budget review for the cedar project.")
-    with patch.object(file_search.embedder, "embed_query", side_effect=RuntimeError("no model")):
-        results = await file_search.search_files(db_session, "cedar budget")
-    assert [item["file_id"] for item in results] == [note.id]
+    with patch.object(memory_search.embedder, "embed_query", side_effect=RuntimeError("no model")):
+        results = await memory_search.search_memory(db_session, "cedar budget")
+    assert [item["id"] for item in results] == [note.id]
     assert results[0]["reasons"] == ["keyword"]
 
 
@@ -85,16 +85,16 @@ async def test_removed_source_leaves_no_keyword_hits(db_session, index):
 @pytest.mark.asyncio
 async def test_punctuation_and_empty_queries_are_safe(db_session, index):
     await add_file(db_session, index, "a.txt", "Plain text.")
-    assert await file_search.search_files(db_session, '" ( ) "') == []
-    assert await file_search.search_files(db_session, "   ") == []
+    assert await memory_search.search_memory(db_session, '" ( ) "') == []
+    assert await memory_search.search_memory(db_session, "   ") == []
 
 
 @pytest.mark.asyncio
 async def test_weak_semantic_matches_are_dropped(db_session, index):
     await add_file(db_session, index, "biology.md", "The mitochondria produces energy for the cell.")
-    assert await file_search.search_files(db_session, "elephant savannah migration") == []
-    related = await file_search.search_files(db_session, "mitochondria energy cell")
+    assert await memory_search.search_memory(db_session, "elephant savannah migration") == []
+    related = await memory_search.search_memory(db_session, "mitochondria energy cell")
     assert related[0]["reasons"] == ["keyword", "semantic"]
-    with patch.object(file_search, "SEMANTIC_FLOOR", 0.99):
-        strict = await file_search.search_files(db_session, "mitochondria energy cell")
+    with patch.object(memory_search, "SEMANTIC_FLOOR", 0.99):
+        strict = await memory_search.search_memory(db_session, "mitochondria energy cell")
     assert strict[0]["reasons"] == ["keyword"]

@@ -10,7 +10,7 @@ from app.db import session as database
 from app.models.files import IndexedFile, WatchedFolder
 from app.services import indexer as indexer_module
 from app.services import watcher as watcher_module
-from app.services.file_search import search_files
+from app.services.memory_search import search_memory
 from app.services.watcher import Watcher
 
 
@@ -30,7 +30,7 @@ async def rows():
 
 async def found(query, name):
     async with database.AsyncSessionLocal() as db:
-        return any(item["name"] == name and "keyword" in item["reasons"] for item in await search_files(db, query))
+        return any(item["title"] == name and "keyword" in item["reasons"] for item in await search_memory(db, query))
 
 
 @pytest_asyncio.fixture
@@ -121,5 +121,5 @@ async def test_unmounted_folder_keeps_its_index(file_db, stack, tmp_path):
     async with database.AsyncSessionLocal() as db:
         assert (await db.get(WatchedFolder, folder_id)).status == "unavailable"
         assert [row.name for row in (await db.execute(select(IndexedFile))).scalars()] == ["a.txt"]
-        assert (await search_files(db, "heron"))[0]["name"] == "a.txt"
+        assert (await search_memory(db, "heron"))[0]["title"] == "a.txt"
     assert os.path.isdir(moved)

@@ -32,11 +32,20 @@ class FakeApi extends Api {
     calls.add('search:$query');
     return [
       SearchHit(
-        fileId: 1,
-        name: 'cells.md',
-        path: '/home/me/notes/cells.md',
+        kind: 'file',
+        id: 1,
+        title: 'cells.md',
+        location: '/home/me/notes/cells.md',
         reasons: ['keyword', 'semantic'],
         passages: ['The mitochondria produces energy for the cell.'],
+      ),
+      SearchHit(
+        kind: 'page',
+        id: 7,
+        title: 'Cell biology primer',
+        location: 'https://example.com/cells',
+        reasons: ['keyword'],
+        passages: ['Mitochondria in eukaryotic cells.'],
       ),
     ];
   }
@@ -157,15 +166,17 @@ Future<void> openTab(WidgetTester tester, String label) async {
 void main() {
   test('models parse backend json', () {
     final hit = SearchHit.fromJson({
-      'file_id': 4,
-      'name': 'a.txt',
-      'path': '/x/a.txt',
+      'kind': 'page',
+      'id': 4,
+      'title': 'A page',
+      'location': 'https://x.test/a',
       'reasons': ['keyword'],
       'passages': [
         {'text': 'hello', 'start': 0},
       ],
     });
     expect(hit.passages, ['hello']);
+    expect(hit.isPage, isTrue);
     final status = IndexStatus.fromJson({
       'files': {'indexed': 3, 'skipped': 1},
       'queued': 0,
@@ -188,6 +199,9 @@ void main() {
     expect(find.text('cells.md'), findsOneWidget);
     expect(find.textContaining('produces energy'), findsOneWidget);
     expect(find.text('semantic'), findsOneWidget);
+    expect(find.text('Cell biology primer'), findsOneWidget);
+    expect(find.byIcon(Icons.public), findsOneWidget);
+    expect(find.byTooltip('Show in folder'), findsOneWidget);
   });
 
   testWidgets('offers the embedding download when the model is missing', (

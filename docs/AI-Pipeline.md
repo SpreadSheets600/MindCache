@@ -289,3 +289,16 @@ Measured on an i7-13620H (16 threads) and an RTX 2050 4 GB, text-only load.
 | CPU bf16 | about 0.4 chunks/s. Never use bf16 on a CPU without native support |
 
 Consequences: use bf16 on GPU and fp32 on CPU, and treat CPU indexing speed as the main risk (see `PLAN.md`).
+
+### CPU speed options tried (2026-11-25)
+
+| Option | chunks/s (i7-13620H, about 400-token chunks) | Verdict |
+| --- | --- | --- |
+| torch fp32, 16 threads | 1.4 | Baseline |
+| torch fp32, 8 threads (physical cores) | 1.8 | Adopted: thread count follows physical cores |
+| torch int8 dynamic quantization | 2.0 | Rejected: 15% gain, vectors drift to 0.96 to 0.98 cosine of the originals |
+| llama.cpp with the Q8 GGUF | 2.0 | Rejected: no real gain, and it outputs 512 dimensions, which does not match the 768-dimension index |
+| GPU bf16 (RTX 2050) | about 24 | Used automatically when CUDA is present |
+
+CPU throughput is compute-bound. Mitigations are in the product instead: newest files are indexed first, progress and time remaining are shown, indexing can be paused, and keyword search works immediately.
+

@@ -69,9 +69,9 @@ Selective loading per the model card: `config_kwargs={"vision_config": None, "au
 - Speed is the main risk. GPU bf16 reaches about 24 chunks/s, but CPU fp32 only about 1.3 chunks/s (about 2 hours for 10,000 chunks) and CPU bf16 about 0.4. Use bf16 on GPU and fp32 on CPU.
 - Still unverified: the multimodal `encode({...})` form (Phase 8), and the faster CPU options below.
 
-### CPU speed plan
+### CPU speed
 
-CPU users must be able to index. Phase 1 evaluates, in order: smaller chunks and a 512-token `max_seq_length`; the Q8 GGUF build (310 MB, text only) served through llama.cpp or `llama-cpp-python`, which is the one allowed implementation of the same model; ONNX export. The same model and prompts are used throughout, so no embedding choice is exposed to users. Indexing also prioritizes recently modified files and reports an honest time estimate.
+Measured and decided on 2026-11-25 (table in `docs/AI-Pipeline.md`): int8 quantization and the Q8 GGUF through llama.cpp give no meaningful gain on this model, and the GGUF has the wrong output size. The adopted fix is thread count equal to physical cores (about 26 percent faster). Beyond that, CPU indexing is about 2 chunks/s, so the product relies on newest-first ordering, visible time estimates, pause, and instant keyword search.
 
 ### Embedding rules
 

@@ -19,7 +19,7 @@ Install Python, [uv](https://docs.astral.sh/uv/), Node.js and npm, then run:
 
 Open `http://127.0.0.1:8000/app/` and load `extension/dist/` as an unpacked extension in Chrome or Brave. Copy its ID from `chrome://extensions` into **Setup → Pair a browser extension**. Existing installations must pair after upgrading. New installations start with automatic tracking off; existing saved settings are preserved. Run `./setup.sh --help` for build options. Setup installs the locked backend dependencies and extension packages; it requires network access for packages not already cached. It does not download an AI model deliberately.
 
-Embeddings always use EmbeddingGemma 2 on your computer; download it once from the Models page. Text generation is optional: choose a local model, Ollama, or an OpenAI-compatible API with your own key (remote endpoints need explicit consent and HTTPS). Search falls back to lexical results until the embedding model is downloaded. Notes and uploaded files currently use text matching; image OCR can be run explicitly when Tesseract is installed. See [PLAN.md](PLAN.md) for remaining work.
+Embeddings always use EmbeddingGemma 2 on your computer; download it once from the Models page. Text generation is optional: choose a local model, Ollama, or an OpenAI-compatible API with your own key (remote endpoints need explicit consent and HTTPS). Search falls back to lexical results until the embedding model is downloaded. Notes and uploaded files currently use text matching; image OCR can be run explicitly when Tesseract is installed. A Flutter desktop app in `app/` adds folder indexing: pick folders and MindCache keeps their files searchable as they change. See [PLAN.md](PLAN.md) for remaining work.
 
 ---
 

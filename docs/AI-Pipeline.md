@@ -271,3 +271,21 @@ Optional: Ollama Collective Summary
     ▼
 Return Search Results
 ```
+
+## EmbeddingGemma 2 Spike (2026-11-25)
+
+Measured on an i7-13620H (16 threads) and an RTX 2050 4 GB, text-only load.
+
+| Item | Result |
+| --- | --- |
+| Model access | `google/embeddinggemma-2` is not gated, no token needed. Download is 1.4 GB |
+| Required packages | `transformers>=5.24`, `sentence-transformers>=6.3`, `pillow`, `torchvision` (the processors import them even for text-only use). Older transformers does not know `embedding_gemma2` |
+| Load | `SentenceTransformer("google/embeddinggemma-2", config_kwargs={"vision_config": None, "audio_config": None})`: 271M parameters, 768 dimensions, 4 to 5 s |
+| Prompts | `SearchQuery` for queries. Documents formatted as `title: {title} \| text: {content}` |
+| Sequence length | `max_seq_length` is unbounded by default. Set it explicitly |
+| Truncation | 512 and 256 keep the same ranking. 128 compresses the similarity spread, so it is not a default candidate |
+| GPU bf16 | about 24 chunks/s (400-token chunks) |
+| CPU fp32 | about 1.3 chunks/s, peak RSS about 3.3 GB |
+| CPU bf16 | about 0.4 chunks/s. Never use bf16 on a CPU without native support |
+
+Consequences: use bf16 on GPU and fp32 on CPU, and treat CPU indexing speed as the main risk (see `PLAN.md`).

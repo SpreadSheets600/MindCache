@@ -5,7 +5,7 @@ export interface Keyword {
 
 export interface Entity {
   name: string;
-  type: string;  // Person, Company, Technology, Project, etc.
+  type: string;
 }
 
 export interface SearchResultItem {
@@ -20,6 +20,8 @@ export interface SearchResultItem {
   total_dwell_time: number;
   keywords: Keyword[];
   source_type: string;
+  match_reasons?: string[];
+  excerpt?: string | null;
 }
 
 export interface SearchResponse {
@@ -51,7 +53,7 @@ export interface VisitRequest {
 }
 
 export interface VisitResponse {
-  status: string; // 'success', 'duplicate', 'error'
+  status: string;
   message: string;
   document_id: number | null;
   title: string | null;

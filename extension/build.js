@@ -8,7 +8,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 async function runBuild() {
   console.log('--- 1. Building Popup & Settings UI ---');
   await build({
-    configFile: false, // Disable merging from vite.config.ts
+    configFile: false,
     plugins: [react()],
     resolve: {
       alias: {
@@ -17,7 +17,7 @@ async function runBuild() {
     },
     build: {
       outDir: 'dist',
-      emptyOutDir: true, // Clean the output directory first
+      emptyOutDir: true,
       rollupOptions: {
         input: {
           popup: resolve(__dirname, 'index.html'),
@@ -29,7 +29,7 @@ async function runBuild() {
 
   console.log('\n--- 2. Building Content Script (IIFE format) ---');
   await build({
-    configFile: false, // Disable merging from vite.config.ts
+    configFile: false,
     plugins: [react()],
     resolve: {
       alias: {
@@ -41,7 +41,7 @@ async function runBuild() {
     },
     build: {
       outDir: 'dist',
-      emptyOutDir: false, // Maintain popup & settings files
+      emptyOutDir: false,
       lib: {
         entry: resolve(__dirname, 'src/content/index.ts'),
         name: 'content',
@@ -59,7 +59,7 @@ async function runBuild() {
 
   console.log('\n--- 3. Building Background Script (IIFE format) ---');
   await build({
-    configFile: false, // Disable merging from vite.config.ts
+    configFile: false,
     resolve: {
       alias: {
         '@': resolve(__dirname, './src'),
@@ -70,7 +70,7 @@ async function runBuild() {
     },
     build: {
       outDir: 'dist',
-      emptyOutDir: false, // Maintain all previous files
+      emptyOutDir: false,
       lib: {
         entry: resolve(__dirname, 'src/background/index.ts'),
         name: 'background',
@@ -82,6 +82,21 @@ async function runBuild() {
           extend: true,
           entryFileNames: 'background.js',
         },
+      },
+    },
+  });
+
+  console.log('\n--- 4. Building the local web dashboard ---');
+  await build({
+    configFile: false,
+    plugins: [react()],
+    resolve: { alias: { '@': resolve(__dirname, './src') } },
+    build: {
+      outDir: resolve(__dirname, '../frontend/dist'),
+      emptyOutDir: true,
+      rollupOptions: {
+        input: resolve(__dirname, 'src/settings/main.tsx'),
+        output: { entryFileNames: 'dashboard.js', assetFileNames: 'dashboard.[ext]' },
       },
     },
   });

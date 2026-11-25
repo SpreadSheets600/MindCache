@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MindCache</title>
+  <meta name="description" content="Search and manage your MindCache library.">
+  <link rel="stylesheet" href="/app/styles.css">
+  <script type="module" src="/app/app.js"></script>
+</head>
+<body>
+  <header class="bar">
+    <a class="brand" href="/app/landing.html" aria-label="MindCache home"><span class="mark" aria-hidden="true">m</span> MindCache</a>
+    <p class="workspace-label">Your workspace</p>
+    <nav aria-label="Main navigation">
+      <button data-view="library" aria-current="page">Documents</button>
+      <button data-view="privacy">Privacy</button>
+      <button data-view="models">Models</button>
+    </nav>
+    <a class="sidebar-about" href="/app/landing.html">About MindCache</a>
+  </header>
+  <main>
+    <section id="library" class="view">
+      <div class="heading library-heading"><div><h1>Documents</h1><p>Browse and search your saved pages, notes, and files.</p></div><span class="connection" id="connection">Checking connection</span></div>
+      <form id="search-form" class="search-form" role="search">
+        <label for="query">Find an item</label>
+        <div class="search-row"><span class="search-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"></circle><path d="m16 16 4 4"></path></svg></span><input id="query" name="q" type="search" placeholder="Search by topic, title, or a detail you remember" autocomplete="off"><button class="primary" type="submit">Search</button></div>
+        <p class="search-help">Find an item by matching words or meaning.</p>
+      </form>
+      <section class="capture"><div class="capture-heading"><h2>Add to your memory</h2><p>Save a thought, document, or image so you can find it later.</p></div>
+        <div class="capture-grid">
+          <form id="note-form"><h2>Write a note</h2><label for="note-title">Title</label><input id="note-title" required maxlength="512"><label for="note-content">Note</label><textarea id="note-content" required rows="4"></textarea><button class="primary" type="submit">Save note</button></form>
+          <form id="upload-form"><h2>Upload a file</h2><p>PDF, image, text or Markdown, up to 20 MB. Images can be processed with local OCR after upload.</p><label for="upload-file">Choose a file</label><input id="upload-file" type="file" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.txt,.md" required><button class="primary" type="submit">Upload file</button></form>
+        </div><p id="capture-message" role="status"></p>
+      </section>
+      <details class="import-section"><summary>Import from Recall</summary><div><p>For original files, run <code>python3 scripts/pack_recall.py /path/to/Recall/data recall-export.zip</code>. You can also use a Recall JSON export, which does not include original files.</p>
+        <form id="recall-form"><label for="recall-file">Recall ZIP or JSON export</label><input id="recall-file" type="file" accept=".zip,.json" required><button class="primary" type="submit">Preview import</button><button id="recall-import" type="button" hidden>Import memories</button></form>
+        <p id="recall-message" role="status"></p>
+      </div></details>
+      <div class="list-heading"><h2 id="list-title">Recently saved</h2><button id="clear-search" class="text-button" hidden>Clear search</button></div>
+      <div class="filter-bar" role="group" aria-label="Filter saved items"><button type="button" data-kind="all" aria-pressed="true">All items</button><button type="button" data-kind="page" aria-pressed="false">Pages</button><button type="button" data-kind="note" aria-pressed="false">Notes</button><button type="button" data-kind="file" aria-pressed="false">Files</button></div>
+      <div id="status" class="state" role="status">Loading your library…</div>
+      <div id="results" class="results"></div>
+    </section>
+    <section id="privacy" class="view" hidden>
+      <div class="heading"><div><h1>Privacy</h1><p>Choose what MindCache remembers and who can access it.</p></div></div>
+      <div class="privacy-layout">
+        <section class="privacy-controls"><div class="panel-heading"><div><h2>Search history and learning</h2><p>Choose what to keep for future searches.</p></div></div>
+          <p id="privacy-counts" class="muted privacy-counts" role="status">Loading privacy settings…</p>
+          <form id="privacy-form" hidden>
+            <label class="privacy-option"><span><strong>Save search history</strong><small>Keep your previous searches on this device.</small></span><input type="checkbox" role="switch" name="save_search_history"></label>
+            <label class="privacy-option"><span><strong>Learn from result clicks</strong><small>Use the results you open to improve ranking.</small></span><input type="checkbox" role="switch" name="learn_from_clicks"></label>
+            <div class="dialog-actions"><button class="primary" type="submit">Save settings</button><button id="clear-history" type="button" class="danger">Clear history</button></div>
+          </form><p id="privacy-message" role="status"></p>
+        </section>
+        <section class="privacy-storage"><h2>Local storage</h2><p>Saved content on this device.</p><p id="privacy-storage">Loading storage information…</p><a class="backup-link" href="/privacy/backup" download>Download database backup</a><details><summary>What is included?</summary><p>The backup includes saved content and originals, but excludes settings and search indexes. Guided restore is not available yet.</p></details></section>
+        <section class="privacy-network"><h2>Capture &amp; connections</h2><p id="privacy-model-routing" role="status">Checking model routing…</p><button type="button" id="privacy-models">Review model providers</button><p>Browser capture controls are available in the extension.</p><details><summary>Network access</summary><p>Page and metadata fetching and model downloads can use the network. Local programs and paired extensions can access the backend.</p></details></section>
+      </div>
+      <div class="import-section pairing-settings"><h2>Browser extensions</h2><p>Manage which extensions can access your memory.</p>
+        <form id="pairing-form"><label for="extension-id">Extension ID</label><input id="extension-id" required pattern="[a-p]{32}" maxlength="32" autocomplete="off"><button class="primary" type="submit">Pair extension</button></form>
+        <p id="pairing-message" role="status">Loading paired extensions…</p><div id="paired-extensions"></div>
+      </div>
+    </section>
+    <section id="models" class="view" hidden>
+      <div class="heading"><div><h1>Models</h1><p>Choose how each task runs.</p></div></div>
+      <p class="provider-notice">Remote providers receive the content needed for their task.</p>
+      <div class="model-summary" id="model-summary" role="status">Checking your current model choices…</div><form id="models-form" hidden>
+        <div class="model-grid">
+          <fieldset><legend class="visually-hidden">Embeddings</legend><div class="model-card-head"><div><h2>Embeddings</h2><p>Find related saved pages.</p></div><span class="task-chip">Search</span></div>
+            <label for="embedding-provider">Provider</label><select id="embedding-provider"><option value="disabled">Disabled</option><option value="transformers">Local Transformers</option><option value="ollama">Ollama</option><option value="openai">OpenAI compatible</option></select>
+            <label for="embedding-model">Model name</label><input id="embedding-model" list="embedding-suggestions" autocomplete="off" placeholder="e.g. sentence-transformers/all-MiniLM-L6-v2"><p class="model-hint" id="embedding-hint"></p><datalist id="embedding-suggestions"></datalist>
+            <label for="embedding-endpoint">Endpoint for Ollama or OpenAI compatible</label><input id="embedding-endpoint" type="url" placeholder="http://localhost:11434">
+            <label for="embedding-key">API key environment variable</label><input id="embedding-key" autocomplete="off" placeholder="Optional">
+            <label class="privacy-option"><span><strong>Allow remote processing</strong><small>Send saved content and queries to this endpoint.</small></span><input id="embedding-consent" type="checkbox" role="switch"></label><button type="button" id="download-embedding">Download model</button><div id="embedding-download-status" class="download-status" role="status" aria-live="polite" hidden></div>
+          </fieldset>
+          <fieldset><legend class="visually-hidden">Generation</legend><div class="model-card-head"><div><h2>Generation</h2><p>Generate text when you request it.</p></div><span class="task-chip">Optional</span></div>
+            <label for="generation-provider">Provider</label><select id="generation-provider"><option value="disabled">Disabled</option><option value="transformers">Local Transformers</option><option value="ollama">Ollama</option><option value="openai">OpenAI compatible</option></select>
+            <label for="generation-model">Model name</label><input id="generation-model" list="generation-suggestions" autocomplete="off" placeholder="e.g. Qwen/Qwen2.5-0.5B-Instruct"><p class="model-hint" id="generation-hint"></p><datalist id="generation-suggestions"></datalist>
+            <label for="generation-endpoint">Endpoint for Ollama or OpenAI compatible</label><input id="generation-endpoint" type="url" placeholder="http://localhost:11434">
+            <label for="generation-key">API key environment variable</label><input id="generation-key" autocomplete="off" placeholder="Optional">
+            <label class="privacy-option"><span><strong>Allow remote processing</strong><small>Send prompts to this endpoint.</small></span><input id="generation-consent" type="checkbox" role="switch"></label><button type="button" id="download-generation">Download model</button><div id="generation-download-status" class="download-status" role="status" aria-live="polite" hidden></div>
+          </fieldset>
+        </div>
+        <button type="submit" class="primary">Save models</button>
+      </form>
+      <p id="models-message" role="status">Loading model settings…</p>
+      <details class="model-help"><summary>Model and index details</summary><p>Downloads save both model choices and use the network. Changing an embedding model for a populated index requires a safe rebuild, which is not yet available. Earlier pages without vectors are not automatically indexed. API keys are read from named environment variables.</p></details>
+    </section>
+  </main>
+  <dialog id="detail"><div class="dialog-header"><h2 id="detail-title"></h2><button id="close-detail" aria-label="Close details">Close</button></div><p id="detail-origin" class="muted"></p><p id="detail-content" class="detail-content"></p><form id="edit-note-form" hidden><label for="edit-note-title">Title</label><input id="edit-note-title" required maxlength="512"><label for="edit-note-content">Note</label><textarea id="edit-note-content" required rows="6"></textarea><button class="primary" type="submit">Save changes</button></form><div class="dialog-actions"><button id="summarize-item" type="button">Summarize saved text</button><button id="run-ocr" type="button" hidden>Extract image text</button><a id="open-source" target="_blank" rel="noopener noreferrer">Open original</a><a id="download-original" hidden>Download original</a><button id="delete-item" class="danger">Delete from MindCache</button></div><p id="summary-status" role="status"></p><p id="generated-summary" class="detail-content"></p></dialog>
+  <noscript>Enable JavaScript to search and view your saved pages.</noscript>
+</body>
+</html>

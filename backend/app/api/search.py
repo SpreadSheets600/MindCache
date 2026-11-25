@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import MindCacheException
+from app.api.privacy import get_preferences
 from app.core.logging import get_logger
 from app.db.session import get_db
 from app.schemas.document import SearchRequest, SearchResponse, ClickRequest
@@ -20,9 +21,8 @@ logger = get_logger(__name__)
 )
 async def semantic_search(
     request: SearchRequest,
-    db: AsyncSession = Depends(get_db),  # noqa: B008
-) -> SearchResponse:
-    """Performs Semantic Search Using Vector Similarity And Generates An Optional Collective AI Summary."""
+    db: AsyncSession = Depends(get_db),
+):
 
     try:
         response = await search_service.search(
@@ -55,10 +55,11 @@ async def semantic_search(
 )
 async def record_search_click(
     request: ClickRequest,
-    db: AsyncSession = Depends(get_db),  # noqa: B008
-) -> dict:
-    """Logs the click event to enable dynamic rank-boosting for clicked documents on subsequent queries."""
+    db: AsyncSession = Depends(get_db),
+):
     try:
+        if not (await get_preferences(db)).learn_from_clicks:
+            return {"status": "disabled", "message": "Click learning is disabled."}
         await document_repository.record_click(db, request.query, request.document_id)
         await db.commit()
         return {"status": "success", "message": "Search click recorded successfully."}

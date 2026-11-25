@@ -6,10 +6,8 @@ from app.services.extractors.base import ContentExtractor, ExtractionResult
 
 
 class XExtractor(ContentExtractor):
-    """Platform-Specific Extractor For X (Twitter)."""
 
-    async def extract(self, url: str) -> ExtractionResult:
-        # Convert Standard X/Twitter Domain To Fixupx.com
+    async def extract(self, url: str):
         fixupx_url = url.replace("x.com", "fixupx.com").replace("twitter.com", "fixupx.com")
 
         try:

@@ -1,7 +1,6 @@
 import httpx
 import re
 from bs4 import BeautifulSoup
-from typing import Any, Optional
 from urllib.parse import urlparse
 
 from app.core.exceptions import RedditExtractionError
@@ -12,25 +11,20 @@ logger = get_logger(__name__)
 
 
 class RedditExtractor(ContentExtractor):
-    """Platform-Specific Extractor For Reddit (Posts, Subreddits, And Comments) Via old.reddit.com."""
 
-    async def extract(self, url: str) -> ExtractionResult:
+    async def extract(self, url: str):
         logger.info(f"RedditExtractor Selected For URL: '{url}'")
 
-        # Normalize Reddit URL To old.reddit.com To Bypass Cloudflare Captchas And Rate-Limits
         normalized_url = url.strip()
 
-        # Remove Trailing .json If User/Extension Sent It
         if normalized_url.endswith(".json"):
             normalized_url = normalized_url[:-5]
 
-        # Strip Trailing Slash
         if normalized_url.endswith("/"):
             normalized_url = normalized_url[:-1]
 
         parsed_url = urlparse(normalized_url)
 
-        # Handle redd.it Short URL Redirection First
         if "redd.it" in parsed_url.netloc:
             try:
                 async with httpx.AsyncClient(timeout=5.0, follow_redirects=False) as client:
@@ -42,9 +36,7 @@ class RedditExtractor(ContentExtractor):
             except Exception as redirect_err:
                 logger.warning(f"RedditExtractor: Failed To Resolve redd.it Redirect: {redirect_err}")
 
-        # Replace Domain With old.reddit.com
         if any(dom in parsed_url.netloc for dom in ["reddit.com", "redd.it"]):
-            # Replace Netloc To old.reddit.com
             new_netloc = "old.reddit.com"
             normalized_url = parsed_url._replace(netloc=new_netloc).geturl()
 
@@ -68,37 +60,29 @@ class RedditExtractor(ContentExtractor):
 
             soup = BeautifulSoup(html_content, "html.parser")
 
-            # Check If This Is A Post Page (Contains /comments/) Or Listing Feed
             is_post = "/comments/" in normalized_url
 
             if is_post:
-                # 1. Title
                 title_el = soup.find("a", class_="title")
                 title = title_el.get_text().strip() if title_el else "Reddit Post"
                 if not title_el and soup.title:
                     title = soup.title.string.replace(" : HeliumBrowserHQ", "").replace(" : ", " - ").strip()
 
-                # 2. Subreddit
                 subreddit = ""
                 subreddit_el = soup.find("span", class_="redditname")
                 if subreddit_el:
                     subreddit = subreddit_el.get_text().strip().replace("r/", "")
                 if not subreddit:
-                    # Fallback From URL
                     match = re.search(r"/r/([^/]+)", normalized_url)
                     if match:
                         subreddit = match.group(1)
 
-                # 3. Author
                 author = "Unknown"
-                # Locate Author Inside The Post Tag Or Tagline
                 author_el = soup.find("a", class_="author")
                 if author_el:
                     author = author_el.get_text().strip()
 
-                # 4. Score
                 score = 0
-                # Try To Locate Score Within The Post Thing's Midcol
                 midcol = soup.find("div", class_="midcol")
                 if midcol:
                     score_el = midcol.find("div", class_="score unvoted")
@@ -108,7 +92,6 @@ class RedditExtractor(ContentExtractor):
                         except ValueError:
                             pass
 
-                # 5. Post Content (Selftext)
                 content_text = ""
                 site_table = soup.find("div", id="siteTable")
                 if site_table:
@@ -127,7 +110,6 @@ class RedditExtractor(ContentExtractor):
                 if content_text:
                     content_parts.append(f"Post Content:\n{content_text}")
 
-                # 6. Comments (Up To 10 Top Comments)
                 comment_divs = soup.find_all("div", class_="comment")
                 comments_list = []
                 for comment in comment_divs[:10]:
@@ -141,7 +123,6 @@ class RedditExtractor(ContentExtractor):
                     if not c_body:
                         continue
 
-                    # Extract Score
                     c_score = "0 points"
                     c_score_el = (
                         comment.find("span", class_="score unvoted")
@@ -158,7 +139,6 @@ class RedditExtractor(ContentExtractor):
 
                 unified_content = "\n\n".join(content_parts)
 
-                # Get Comments Count
                 num_comments = 0
                 comments_link = soup.find("a", class_="comments")
                 if comments_link:
@@ -182,7 +162,6 @@ class RedditExtractor(ContentExtractor):
                 )
 
             else:
-                # Subreddit Listing Feed
                 things = soup.find_all("div", class_="thing")
                 content_parts = ["Reddit Listing Feed:\n"]
                 for thing in things[:15]:
@@ -212,14 +191,12 @@ class RedditExtractor(ContentExtractor):
                 )
 
         except Exception as e:
-            # Fall Back To GenericExtractor For HTML Page Parsing
             logger.info(f"RedditExtractor: old.reddit Parsing Had Issues, Falling Back To GenericExtractor: {e}")
             from app.services.extractors.generic import GenericExtractor
 
             try:
                 generic = GenericExtractor()
                 result = await generic.extract(normalized_url)
-                # Override source_type To Be "Reddit" For Consistency In Dashboard
                 result.source_type = "Reddit"
                 return result
             except Exception as generic_err:

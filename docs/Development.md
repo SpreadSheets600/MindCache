@@ -97,12 +97,12 @@ Tests use an in-memory SQLite database (`sqlite+aiosqlite:///:memory:`) and mock
 ### Lint
 
 ```bash
-uv run ruff check .              # Lint with auto-fix
-uv run ruff format --check .     # Format check
-uv run mypy .                    # Static type checking
+uv run ruff check .              # Lint
+python ../scripts/check_style.py # Style gate: no comments, docstrings or return annotations
+python ../scripts/check_style.py --fix   # Strip them from Python files (verified against the syntax tree)
 ```
 
-Pre-commit hooks run ruff lint and format automatically on `git commit`.
+Rules for contributors and agents are in `AGENT.md`.
 
 **Code style** (`pyproject.toml`): line-length 120, target Python 3.12, selects E/W/F/I/B/C4/UP rules.
 

@@ -1,1 +1,1 @@
-"""MindCache Core Application Module."""
+pass

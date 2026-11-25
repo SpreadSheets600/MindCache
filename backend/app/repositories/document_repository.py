@@ -13,10 +13,8 @@ logger = get_logger(__name__)
 
 
 class DocumentRepository:
-    """Repository To Manage All Asynchronous CRUD Operations For Documents, Keywords, And VisitHistory."""
 
-    async def get_by_id(self, db: AsyncSession, document_id: int) -> Optional[Document]:  # noqa: UP045
-        """Retrieves A Document By Its Primary Key, Preloading Keywords, Entities, And Visits."""
+    async def get_by_id(self, db: AsyncSession, document_id: int):
 
         result = await db.execute(
             select(Document)
@@ -25,8 +23,7 @@ class DocumentRepository:
         )
         return result.scalars().first()
 
-    async def get_by_url(self, db: AsyncSession, url: str) -> Optional[Document]:  # noqa: UP045
-        """Retrieves A Document By Its Exact URL."""
+    async def get_by_url(self, db: AsyncSession, url: str):
 
         result = await db.execute(
             select(Document)
@@ -35,8 +32,7 @@ class DocumentRepository:
         )
         return result.scalars().first()
 
-    async def get_by_ids(self, db: AsyncSession, document_ids: list[int]) -> list[Document]:
-        """Retrieves Multiple Documents By Their Primary Keys. Preserves Preloading."""  # noqa: UP045
+    async def get_by_ids(self, db: AsyncSession, document_ids: list[int]):
 
         if not document_ids:
             return []
@@ -47,12 +43,10 @@ class DocumentRepository:
             .options(selectinload(Document.keywords), selectinload(Document.visits))
         )
 
-        # Store In Dict To Allow Sorting By The Requested document_ids Order
         doc_map = {doc.id: doc for doc in result.scalars().all()}
         return [doc_map[did] for did in document_ids if did in doc_map]
 
-    async def list_documents(self, db: AsyncSession, skip: int = 0, limit: int = 100) -> list[Document]:
-        """Lists Stored Documents Ordered By Updated Timestamp Descending."""
+    async def list_documents(self, db: AsyncSession, skip: int = 0, limit: int = 100):
 
         result = await db.execute(
             select(Document)
@@ -63,8 +57,7 @@ class DocumentRepository:
         )
         return list(result.scalars().all())
 
-    async def count_documents(self, db: AsyncSession) -> int:
-        """Returns the total number of documents in the database."""
+    async def count_documents(self, db: AsyncSession):
 
         result = await db.execute(select(func.count(Document.id)))
         return result.scalar() or 0
@@ -74,17 +67,16 @@ class DocumentRepository:
         db: AsyncSession,
         url: str,
         domain: str,
-        title: Optional[str],  # noqa: UP045
-        author: Optional[str],  # noqa: UP045
-        published_date: Optional[datetime.datetime],  # noqa: UP045
+        title: Optional[str],
+        author: Optional[str],
+        published_date: Optional[datetime.datetime],
         extracted_content: str,
-        summary: Optional[str] = None,  # noqa: UP045
+        summary: Optional[str] = None,
         source_type: str = "Generic",
-        platform_metadata: Optional[dict] = None,  # noqa: UP045
+        platform_metadata: Optional[dict] = None,
         quality_score: float = 0.0,
         total_dwell_time: float = 0.0,
-    ) -> Document:
-        """Creates And Persists A New Web Document Record In The Database."""
+    ):
 
         document = Document(
             url=sanitize_text(url, 2048) or "",
@@ -100,11 +92,10 @@ class DocumentRepository:
             total_dwell_time=total_dwell_time,
         )
         db.add(document)
-        await db.flush()  # Generates The document.id
+        await db.flush()
         return document
 
-    async def add_keywords(self, db: AsyncSession, document_id: int, keywords_list: list[tuple[str, float]]) -> None:
-        """Associates Multiple Extracted Keywords And Scores With A Document."""
+    async def add_keywords(self, db: AsyncSession, document_id: int, keywords_list: list[tuple[str, float]]):
 
         for kw, score in keywords_list:
             keyword_record = Keyword(
@@ -114,15 +105,13 @@ class DocumentRepository:
             )
             db.add(keyword_record)
 
-    async def add_visit(self, db: AsyncSession, document_id: int, visited_at: datetime.datetime) -> VisitHistory:
-        """Records A New Timestamped Visit For A Document."""
+    async def add_visit(self, db: AsyncSession, document_id: int, visited_at: datetime.datetime):
 
         visit = VisitHistory(document_id=document_id, visited_at=sanitize_datetime(visited_at) or visited_at)
         db.add(visit)
         return visit
 
-    async def update_summary(self, db: AsyncSession, document_id: int, summary: str) -> None:
-        """Updates A Document's Summary Field."""
+    async def update_summary(self, db: AsyncSession, document_id: int, summary: str):
 
         result = await db.execute(select(Document).where(Document.id == document_id))
         document = result.scalars().first()
@@ -131,8 +120,7 @@ class DocumentRepository:
             document.summary = sanitize_text(summary)
             document.updated_at = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
 
-    async def search_by_keywords(self, db: AsyncSession, query_keywords: list[str], limit: int = 25) -> list[Document]:
-        """Searches Documents By Matching Keywords. Returns Documents With The Most Keyword Hits First."""
+    async def search_by_keywords(self, db: AsyncSession, query_keywords: list[str], limit: int = 25):
 
         if not query_keywords:
             return []
@@ -150,8 +138,7 @@ class DocumentRepository:
         )
         return list(result.scalars().all())
 
-    async def get_all_document_ids(self, db: AsyncSession) -> list[int]:
-        """Returns All Document IDs Currently In The Database."""
+    async def get_all_document_ids(self, db: AsyncSession):
 
         result = await db.execute(select(Document.id))
         return list(result.scalars().all())
@@ -161,8 +148,7 @@ class DocumentRepository:
         db: AsyncSession,
         start_time: Optional[datetime.datetime] = None,
         end_time: Optional[datetime.datetime] = None,
-    ) -> set[int]:
-        """Retrieves a set of Document IDs where updated_at is within the specified time window."""
+    ):
 
         query = select(Document.id)
         if start_time:
@@ -173,8 +159,7 @@ class DocumentRepository:
         result = await db.execute(query)
         return set(result.scalars().all())
 
-    async def delete(self, db: AsyncSession, document_id: int) -> bool:
-        """Deletes A Document And Its Related Records By ID (Cascade Handles Keywords And Visits)."""
+    async def delete(self, db: AsyncSession, document_id: int):
 
         result = await db.execute(select(Document).where(Document.id == document_id))
         document = result.scalars().first()
@@ -185,8 +170,7 @@ class DocumentRepository:
         logger.info(f"Deleted Document ID {document_id} From SQLite.")
         return True
 
-    async def add_entities(self, db: AsyncSession, document_id: int, entities_list: list[tuple[str, str]]) -> None:
-        """Associates Multiple Extracted Entities (name, type) With A Document."""
+    async def add_entities(self, db: AsyncSession, document_id: int, entities_list: list[tuple[str, str]]):
 
         for name, etype in entities_list:
             entity_record = Entity(
@@ -196,24 +180,20 @@ class DocumentRepository:
             )
             db.add(entity_record)
 
-    async def record_click(self, db: AsyncSession, query: str, document_id: int) -> None:
-        """Logs a search result click signal to SQLite."""
+    async def record_click(self, db: AsyncSession, query: str, document_id: int):
 
         click_record = SearchClick(query=query.strip().lower(), document_id=document_id)
         db.add(click_record)
 
-    async def get_clicks_for_query(self, db: AsyncSession, query: str) -> list[SearchClick]:
-        """Retrieves all click records for a given search query (case-insensitive)."""
+    async def get_clicks_for_query(self, db: AsyncSession, query: str):
 
         result = await db.execute(select(SearchClick).where(SearchClick.query == query.strip().lower()))
         return list(result.scalars().all())
 
-    async def record_search_query(self, db: AsyncSession, query: str) -> None:
-        """Logs a search query to SQLite."""
+    async def record_search_query(self, db: AsyncSession, query: str):
 
         query_record = SearchQuery(query=query.strip())
         db.add(query_record)
 
 
-# Singleton Instance
 document_repository = DocumentRepository()

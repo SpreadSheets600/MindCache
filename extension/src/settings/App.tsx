@@ -1,9 +1,12 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSettingsStore } from "../store/settingsStore";
 import { useConnectionStore } from "../store/connectionStore";
 import { backendClient } from "../services/BackendClient";
 import { DocumentDetail } from "../components/DocumentDetail";
+import { SidebarLink } from "../components/ui/sidebar";
+import { Input } from "../components/ui/input";
+import { Card } from "../components/ui/card";
 import { InteractiveKnowledgeGraph } from "../components/InteractiveKnowledgeGraph";
 import {
     Brain,
@@ -12,7 +15,6 @@ import {
     Trash2,
     Shield,
     Server,
-    Activity,
     LayoutDashboard,
     Search,
     ExternalLink,
@@ -25,6 +27,7 @@ import {
     Trophy,
     KeyRound,
     Clock,
+    FileText as FileTextIcon,
 } from "lucide-react";
 import { getErrorMessage } from "../utils/error";
 
@@ -50,14 +53,16 @@ function formatDuration(seconds: number): string {
     return `${h}h ${m}m`;
 }
 
-type Page = "dashboard" | "search" | "graph" | "memories" | "settings";
+type Page = "dashboard" | "search" | "graph" | "memories" | "settings" | "library" | "privacy" | "models" | "setup";
+const isWebDashboard = typeof window !== "undefined" && /^https?:$/.test(window.location.protocol);
 
 const App: React.FC = () => {
     const queryClient = useQueryClient();
     const [activePage, setActivePage] = useState<Page>(() => {
         try {
             const params = new URLSearchParams(window.location.search);
-            const page = params.get("page") as Page;
+            const requestedPage = params.get("page") as Page;
+            const page = isWebDashboard && requestedPage === "settings" ? "privacy" : requestedPage;
             if (
                 page &&
                 [
@@ -65,17 +70,34 @@ const App: React.FC = () => {
                     "search",
                     "graph",
                     "memories",
-                    "settings",
+                    "settings", "library", "privacy", "models", "setup",
                 ].includes(page)
             ) {
                 return page;
             }
         } catch {
-            // Ignored
         }
-        return "dashboard";
+        if (isWebDashboard && new URLSearchParams(window.location.search).get("focus") === "search") return "search";
+        return isWebDashboard ? "dashboard" : "settings";
     });
     const [detailDocId, setDetailDocId] = useState<number | null>(null);
+    const embeddedFrame = useRef<HTMLIFrameElement>(null);
+    const [frameHeight, setFrameHeight] = useState(700);
+
+    useEffect(() => {
+        const navigate = (event: MessageEvent) => {
+            if (event.origin !== window.location.origin || event.source !== embeddedFrame.current?.contentWindow) return;
+            if (event.data?.type === "mindcache:resize" && Number.isFinite(event.data.height)) {
+                setFrameHeight(Math.max(240, Math.min(event.data.height, 100000)));
+            }
+            if (event.data?.type === "mindcache:navigate" && event.data.page === "models") {
+                setActivePage("models");
+                setDetailDocId(null);
+            }
+        };
+        window.addEventListener("message", navigate);
+        return () => window.removeEventListener("message", navigate);
+    }, []);
 
     const {
         backendUrl,
@@ -98,7 +120,6 @@ const App: React.FC = () => {
     const [saveSuccess, setSaveSuccess] = useState(false);
     const [searchFilter, setSearchFilter] = useState("");
 
-    // Dashboard Search States
     const [dashSearch, setDashSearch] = useState("");
     const [debouncedDashSearch, setDebouncedDashSearch] = useState("");
     const [dashLimit, setDashLimit] = useState(DEFAULT_RESULT_LIMIT);
@@ -123,7 +144,6 @@ const App: React.FC = () => {
         try {
             await backendClient.checkHealth();
         } catch {
-            // Ignored
         }
     };
 
@@ -139,6 +159,16 @@ const App: React.FC = () => {
         queryKey: ["documents"],
         queryFn: () => backendClient.listDocuments(0, MAX_DOCUMENTS_FETCH),
         enabled: isOnline,
+    });
+
+    const { data: memoryStats } = useQuery({
+        queryKey: ["privacy-overview"],
+        queryFn: async () => {
+            const response = await fetch("/privacy");
+            if (!response.ok) throw new Error("Unable to load memory statistics");
+            return response.json() as Promise<{ documents: number; items: number; search_queries: number; search_clicks: number }>;
+        },
+        enabled: isOnline && isWebDashboard,
     });
 
     const domainTimeData = useMemo(() => {
@@ -186,24 +216,20 @@ const App: React.FC = () => {
         if (!dashSearchResults?.results) return [];
         let items = [...dashSearchResults.results];
 
-        // 1. Filter by Source Type
         if (searchSourceType !== "all") {
             items = items.filter(
                 (item) => item.source_type?.toLowerCase() === searchSourceType.toLowerCase()
             );
         }
 
-        // 2. Filter by Minimum Score (0-100)
         if (searchMinScore > DEFAULT_MIN_SCORE) {
             items = items.filter((item) => Math.round(item.score * SCORE_PERCENTAGE_MULTIPLIER) >= searchMinScore);
         }
 
-        // 2b. Filter by Minimum Dwell Time
         if (searchMinDwell > 0) {
             items = items.filter((item) => (item.total_dwell_time || 0) >= searchMinDwell);
         }
 
-        // 3. Sort Results
         if (searchSortOrder === "date_desc") {
             items.sort((a, b) => new Date(b.last_visited_at).getTime() - new Date(a.last_visited_at).getTime());
         } else if (searchSortOrder === "date_asc") {
@@ -272,24 +298,20 @@ const App: React.FC = () => {
     });
 
     const navItem = (page: Page, label: string, icon: React.ReactNode) => (
-        <button
-            onClick={() => {
-                setActivePage(page);
-                setDetailDocId(null);
-            }}
-            className={`flex items-center space-x-2.5 w-full px-3 py-2 rounded-md text-sm transition-colors text-left ${
-                activePage === page && !detailDocId
-                    ? "bg-secondary text-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
-            }`}
-        >
-            {icon}
-            <span>{label}</span>
-        </button>
+        <SidebarLink icon={icon} active={(activePage === page || (page === "privacy" && (activePage === "models" || activePage === "setup"))) && !detailDocId} onClick={() => {
+            if (!isWebDashboard && (page === "dashboard" || page === "search" || page === "memories" || page === "library" || page === "privacy" || page === "models" || page === "setup")) {
+                const base = useSettingsStore.getState().backendUrl.replace(/\/+$/, "");
+                chrome.tabs.create({ url: `${base}/app/${page === "search" ? "?focus=search" : page === "dashboard" || page === "memories" ? "" : `?page=${page}`}` });
+                return;
+            }
+            setActivePage(page);
+            setDetailDocId(null);
+        }} className="shrink-0 md:w-full">
+            {label}
+        </SidebarLink>
     );
 
     const renderContent = () => {
-        // Inline document detail view
         if (detailDocId !== null) {
             return (
                 <DocumentDetail
@@ -300,222 +322,46 @@ const App: React.FC = () => {
         }
 
         switch (activePage) {
+            case "library":
+                return <iframe key={activePage} ref={embeddedFrame} title="library workspace" src="/app/workspace.html?embedded=1&view=library" scrolling="no" style={{ height: frameHeight }} className="block w-full border-0" />;
+            case "privacy":
+            case "models":
+            case "setup":
+                return <div>
+                    <nav aria-label="Settings sections" className="mb-6 flex gap-1 border-b border-border">
+                        <button type="button" aria-current={activePage !== "models" ? "page" : undefined} onClick={() => setActivePage("privacy")} className={`px-4 py-3 text-sm ${activePage !== "models" ? "border-b-2 border-blue-400 text-foreground" : "text-muted-foreground hover:text-foreground"}`}>Privacy</button>
+                        <button type="button" aria-current={activePage === "models" ? "page" : undefined} onClick={() => setActivePage("models")} className={`px-4 py-3 text-sm ${activePage === "models" ? "border-b-2 border-blue-400 text-foreground" : "text-muted-foreground hover:text-foreground"}`}>Models</button>
+                    </nav>
+                    <iframe key={activePage} ref={embeddedFrame} title={`${activePage} workspace`} src={`/app/workspace.html?embedded=1&view=${activePage === "setup" ? "privacy" : activePage}`} scrolling="no" style={{ height: frameHeight }} className="block w-full border-0" />
+                </div>;
             case "dashboard":
                 return (
-                    <div className="space-y-6">
-                        {/* Stats */}
-                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                            <div className="p-4 rounded-lg border border-border">
-                                <div className="text-[11px] text-muted-foreground">
-                                    Memories
-                                </div>
-                                <div className="text-xl font-semibold mt-1">
-                                    {components?.database?.documents_count ?? documents.length}
-                                </div>
-                            </div>
-                            <div className="p-4 rounded-lg border border-border">
-                                <div className="text-[11px] text-muted-foreground">
-                                    Vectors
-                                </div>
-                                <div className="text-xl font-semibold mt-1">
-                                    {components?.faiss_index.status ===
-                                    "initialized"
-                                        ? components.faiss_index.vectors_count
-                                        : "-"}
-                                </div>
-                            </div>
-                            <div className="p-4 rounded-lg border border-border">
-                                <div className="text-[11px] text-muted-foreground">
-                                    Embedding Model
-                                </div>
-                                <div className="text-sm font-medium mt-1.5 truncate" title={components?.embedding?.model || ""}>
-                                    {components?.embedding?.status === "connected"
-                                        ? components.embedding.model
-                                        : "Offline"}
-                                </div>
-                            </div>
-                            <div className="p-4 rounded-lg border border-border">
-                                <div className="text-[11px] text-muted-foreground">
-                                    Embedding Model
-                                </div>
-                                <div className="text-sm font-medium mt-1.5 truncate" title={components?.embedding?.model || ""}>
-                                    {components?.embedding?.status === "connected"
-                                        ? components.embedding.model
-                                        : "Offline"}
-                                </div>
-                            </div>
-                            <div className="p-4 rounded-lg border border-border">
-                                <div className="text-[11px] text-muted-foreground">
-                                    Status
-                                </div>
-                                <div className="flex items-center space-x-1.5 mt-1.5">
-                                    <span
-                                        className={`w-1.5 h-1.5 rounded-full ${isOnline ? "bg-emerald-500" : "bg-red-400"}`}
-                                    />
-                                    <span className="text-sm font-medium">
-                                        {isOnline ? "Connected" : "Offline"}
-                                    </span>
-                                </div>
-                            </div>
+                    <div className="home-layout">
+                        <section className="home-welcome">
+                            <div className="home-title-row"><div><h2>Your memory at a glance</h2><p>Everything you’ve saved, ready when you need it.</p></div><button className="home-add" onClick={() => setActivePage("library")}><Plus className="h-4 w-4" /> Add to memory</button></div>
+                            <form className="home-search" onSubmit={(event) => { event.preventDefault(); setActivePage("search"); }}>
+                                <Search aria-hidden="true" className="h-5 w-5 shrink-0 text-muted-foreground" />
+                                <label htmlFor="home-query" className="sr-only">Search your memory</label>
+                                <input id="home-query" value={dashSearch} onChange={(event) => setDashSearch(event.target.value)} placeholder="What are you looking for?" />
+                                <button type="submit">Search</button>
+                            </form>
+                        </section>
+                        <div className="home-metrics" aria-label="Memory statistics">
+                            <div><span>Saved pages</span><strong>{isOnline ? (memoryStats?.documents ?? components?.database?.documents_count ?? "—") : "—"}</strong><small>Captured from your browser</small></div>
+                            <div><span>Notes &amp; files</span><strong>{memoryStats?.items ?? "—"}</strong><small>Added to your memory</small></div>
+                            <div><span>Searches saved</span><strong>{memoryStats?.search_queries ?? "—"}</strong><small>According to your privacy settings</small></div>
+                            <div><span>Search index</span><strong>{isOnline && components?.faiss_index.status === "initialized" ? components.faiss_index.vectors_count : "—"}</strong><small>Page vectors indexed</small></div>
                         </div>
-
-                        {/* Split Grid - RecentActivity & Stats */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            {/* Recent Activity */}
-                            <div className="md:col-span-2 p-5 rounded-lg border border-border bg-secondary/15 space-y-4">
-                                <div className="flex items-center space-x-2 text-sm font-semibold border-b border-border/60 pb-3 text-zinc-200">
-                                    <Activity className="w-4 h-4 text-blue-400" />
-                                    <span>Recent Activity</span>
-                                </div>
-
-                                {documents.length === 0 ? (
-                                    <p className="text-xs text-muted-foreground/60 italic py-6 text-center">
-                                        No indexed pages yet. Start browsing to
-                                        populate your database.
-                                    </p>
-                                ) : (
-                                    <div className="space-y-2.5">
-                                        {documents.slice(0, RECENT_ACTIVITY_COUNT).map((doc) => (
-                                            <div
-                                                key={doc.id}
-                                                onClick={() =>
-                                                    setDetailDocId(doc.id)
-                                                }
-                                                className="flex items-center justify-between p-3 rounded-md border border-border bg-secondary/5 hover:bg-secondary/20 hover:border-border/80 cursor-pointer transition-all"
-                                            >
-                                                <div className="space-y-0.5 truncate max-w-[65%]">
-                                                    <h4 className="text-xs font-medium text-zinc-100 truncate leading-snug hover:text-blue-400 transition-colors">
-                                                        {doc.title || doc.url}
-                                                    </h4>
-                                                    <p className="text-[10px] text-muted-foreground truncate font-mono">
-                                                        {doc.domain}
-                                                    </p>
-                                                </div>
-                                                <div className="flex items-center space-x-2 shrink-0">
-                                                    {(doc as any).total_dwell_time > 0 && (
-                                                        <span className="text-[9px] font-mono text-amber-400/60">
-                                                            {formatDuration((doc as any).total_dwell_time)}
-                                                        </span>
-                                                    )}
-                                                    <span className="text-[10px] text-muted-foreground/75 font-mono">
-                                                        {new Date(
-                                                            doc.updated_at,
-                                                        ).toLocaleDateString()}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className="space-y-4">
-                                <div className="p-4 rounded-lg border border-border space-y-3">
-                                    <div className="flex items-center space-x-2 text-sm font-medium">
-                                        <Activity className="w-4 h-4 text-muted-foreground" />
-                                        <span>Diagnostics</span>
-                                    </div>
-
-                                    {isOnline && components ? (
-                                        <div className="space-y-3 text-xs">
-                                            <div className="flex justify-between">
-                                                <span className="text-muted-foreground">
-                                                    Database
-                                                </span>
-                                                <span
-                                                    className={
-                                                        components.database?.status ===
-                                                        "connected"
-                                                            ? "text-emerald-400"
-                                                            : "text-red-400"
-                                                    }
-                                                >
-                                                    {components.database?.status}
-                                                </span>
-                                            </div>
-                                            <div className="flex justify-between">
-                                                <span className="text-muted-foreground">
-                                                    Documents
-                                                </span>
-                                                <span>
-                                                    {components.database?.documents_count ?? 0}
-                                                </span>
-                                            </div>
-                                            <div className="flex justify-between">
-                                                <span className="text-muted-foreground">
-                                                    FAISS
-                                                </span>
-                                                <span>
-                                                    {
-                                                        components.faiss_index
-                                                            .vectors_count
-                                                    }{" "}
-                                                    vectors
-                                                </span>
-                                            </div>
-                                            <div className="flex justify-between">
-                                                <span className="text-muted-foreground">
-                                                    Embedding
-                                                </span>
-                                                <span
-                                                    className={
-                                                        components.embedding?.status ===
-                                                        "connected"
-                                                            ? "text-foreground"
-                                                            : "text-muted-foreground/60"
-                                                    }
-                                                >
-                                                    {components.embedding?.status === "connected"
-                                                        ? components.embedding.model
-                                                        : "offline"}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <p className="text-xs text-muted-foreground/60">
-                                            Backend offline. Start the FastAPI
-                                            server.
-                                        </p>
-                                    )}
-
-                                    <button
-                                        onClick={runDiagnostics}
-                                        disabled={isChecking}
-                                        className="w-full py-1.5 border border-border hover:bg-secondary text-xs rounded-md text-muted-foreground hover:text-foreground transition-colors"
-                                    >
-                                        {isChecking ? "Checking..." : "Refresh"}
-                                    </button>
-                                </div>
-
-                                <div className="p-4 rounded-lg border border-border">
-                                    <div className="text-xs text-muted-foreground">
-                                        Exclusions
-                                    </div>
-                                    <div className="text-lg font-semibold mt-1">
-                                        {excludedDomains.length} domains
-                                    </div>
-                                </div>
-
-                                <div className="p-4 rounded-lg border border-border space-y-2">
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-xs text-muted-foreground">Domains Indexed</span>
-                                        <span className="text-lg font-semibold">{new Set(documents.map(d => d.domain)).size}</span>
-                                    </div>
-                                    {domainTimeData.length > 0 && (
-                                        <>
-                                            <div className="border-t border-border/50 pt-2 space-y-1.5 max-h-[180px] overflow-y-auto">
-                                                <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider font-semibold">Top Sites by Time</div>
-                                                {domainTimeData.map((d) => (
-                                                    <div key={d.domain} className="flex items-center justify-between text-[11px]">
-                                                        <span className="truncate max-w-[60%] text-muted-foreground font-mono">{d.domain}</span>
-                                                        <span className="text-amber-400/80 font-mono text-[10px] shrink-0">{formatDuration(d.total)}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </>
-                                    )}
-                                </div>
-                            </div>
+                        <div className="home-columns">
+                            <section className="home-recent" aria-labelledby="recent-title">
+                                <div className="home-section-header"><div><h3 id="recent-title">Recently saved</h3><p>Pick up where you left off.</p></div><button onClick={() => setActivePage("library")}>All documents</button></div>
+                                {!isOnline ? <div className="home-empty"><p>Your memory is unavailable.</p><span>Start MindCache and try connecting again.</span><button onClick={runDiagnostics} disabled={isChecking}>{isChecking ? "Checking…" : "Retry connection"}</button></div> : isDocsLoading ? <div className="home-empty"><p>Loading your saved pages…</p></div> : documents.length === 0 ? <div className="home-empty"><FolderOpen className="h-6 w-6" aria-hidden="true" /><p>Your saved pages will appear here.</p><span>Capture a page with the browser extension, or add a note or file.</span><button onClick={() => setActivePage("library")}>Open documents</button></div> : <div className="home-rows">{documents.slice(0, RECENT_ACTIVITY_COUNT).map((doc) => <button type="button" key={doc.id} className="home-row" onClick={() => setDetailDocId(doc.id)}><span className="home-document-icon"><FileTextIcon /></span><span className="min-w-0 flex-1"><strong>{doc.title || doc.url}</strong><span>{doc.domain}</span></span><time dateTime={doc.updated_at}>{new Date(doc.updated_at).toLocaleDateString()}</time></button>)}</div>}
+                            </section>
+                            <aside className="home-aside" aria-label="Workspace information">
+                                <section><h3>Your workspace</h3><div className="home-status"><span>Connection</span><strong>{isChecking ? "Checking…" : isOnline ? "Connected" : "Offline"}</strong></div><div className="home-status"><span>Saved pages</span><strong>{isOnline ? (components?.database?.documents_count ?? documents.length) : "—"}</strong></div><div className="home-status"><span>Embedding model</span><strong title={components?.embedding?.model || ""}>{components?.embedding?.status === "connected" ? components.embedding.model : "Unavailable"}</strong></div><button className="home-link" onClick={() => setActivePage("models")}>Manage models</button></section>
+                                <section><h3>Make it yours</h3><p>Choose what MindCache keeps and how it searches.</p><button className="home-link" onClick={() => setActivePage("privacy")}>Privacy controls</button><button className="home-link" onClick={() => setActivePage("library")}>Add notes and files</button></section>
+                                <details><summary>Technical details</summary><div className="home-status"><span>Search vectors</span><strong>{components?.faiss_index.status === "initialized" ? components.faiss_index.vectors_count : "—"}</strong></div><div className="home-status"><span>Domains indexed</span><strong>{isOnline ? new Set(documents.map(d => d.domain)).size : "—"}</strong></div>{domainTimeData.map(d => <div className="home-status" key={d.domain}><span>{d.domain}</span><strong>{formatDuration(d.total)}</strong></div>)}<button className="home-link" onClick={runDiagnostics} disabled={isChecking}>Refresh connection</button></details>
+                            </aside>
                         </div>
                     </div>
                 );
@@ -525,7 +371,7 @@ const App: React.FC = () => {
                     <div className="space-y-4">
                         <div className="flex items-center bg-secondary/50 border border-border px-3 py-2 rounded-md space-x-2">
                             <Search className="w-4 h-4 text-muted-foreground" />
-                            <input
+                            <Input
                                 type="text"
                                 value={searchFilter}
                                 onChange={(e) =>
@@ -563,20 +409,12 @@ const App: React.FC = () => {
                         ) : (
                             <div className="space-y-2">
                                 {filteredDocuments.map((doc) => (
-                                    <div
+                                    <Card
                                         key={doc.id}
-                                        className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3.5 rounded-lg border border-border hover:bg-secondary/30 transition-colors space-y-2 sm:space-y-0"
+                                        className="flex flex-col gap-4 transition-colors hover:bg-secondary/30 sm:flex-row sm:items-center sm:justify-between"
                                     >
                                         <div className="space-y-1 max-w-[80%]">
-                                            <h3
-                                                onClick={() =>
-                                                    setDetailDocId(doc.id)
-                                                }
-                                                className="text-sm font-medium truncate cursor-pointer hover:text-primary transition-colors"
-                                                title={doc.title || doc.url}
-                                            >
-                                                {doc.title || "Untitled Page"}
-                                            </h3>
+                                            <h3><button type="button" onClick={() => setDetailDocId(doc.id)} className="text-left text-sm font-medium hover:text-primary transition-colors" title={doc.title || doc.url}>{doc.title || "Untitled Page"}</button></h3>
                                             <div className="flex items-center space-x-2 text-[11px] text-muted-foreground">
                                                 <span className="truncate max-w-[200px]">
                                                     {doc.domain}
@@ -657,7 +495,7 @@ const App: React.FC = () => {
                                                 <Trash2 className="w-3.5 h-3.5" />
                                             </button>
                                         </div>
-                                    </div>
+                                    </Card>
                                 ))}
                             </div>
                         )}
@@ -673,7 +511,7 @@ const App: React.FC = () => {
             case "settings":
                 return (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="md:col-span-2 space-y-6">
+                        <Card className="md:col-span-2 space-y-6">
                             <div className="space-y-3">
                                 <div className="flex items-center space-x-2 text-sm font-medium">
                                     <Server className="w-4 h-4 text-muted-foreground" />
@@ -684,8 +522,9 @@ const App: React.FC = () => {
                                         Base URL
                                     </label>
                                     <div className="flex space-x-2">
-                                        <input
+                                        <Input
                                             type="text"
+                                            aria-label="Backend URL"
                                             value={urlInput}
                                             onChange={(e) =>
                                                 setUrlInput(e.target.value)
@@ -695,7 +534,7 @@ const App: React.FC = () => {
                                         />
                                         <button
                                             onClick={handleSaveUrl}
-                                            className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 active:scale-95 transition-all"
+                                            className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 active:scale-95 transition-colors"
                                         >
                                             {saveSuccess ? "Saved" : "Save"}
                                         </button>
@@ -723,6 +562,10 @@ const App: React.FC = () => {
                                             </p>
                                         </div>
                                         <button
+                                            type="button"
+                                            role="switch"
+                                            aria-label="Auto tab tracking"
+                                            aria-checked={autoTracking}
                                             onClick={() =>
                                                 setAutoTracking(!autoTracking)
                                             }
@@ -753,6 +596,10 @@ const App: React.FC = () => {
                                             </p>
                                         </div>
                                         <button
+                                            type="button"
+                                            role="switch"
+                                            aria-label="Private search logging"
+                                            aria-checked={privacyMode}
                                             onClick={() =>
                                                 setPrivacyMode(!privacyMode)
                                             }
@@ -782,6 +629,10 @@ const App: React.FC = () => {
                                             </p>
                                         </div>
                                         <button
+                                            type="button"
+                                            role="switch"
+                                            aria-label="Auto extraction"
+                                            aria-checked={autoExtract}
                                             onClick={() =>
                                                 setAutoExtract(!autoExtract)
                                             }
@@ -846,9 +697,9 @@ const App: React.FC = () => {
                                     </button>
                                 </div>
                             </div>
-                        </div>
+                        </Card>
 
-                        <div className="space-y-6">
+                        <Card className="space-y-6 self-start">
                             <div className="space-y-3">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center space-x-2 text-sm font-medium">
@@ -864,8 +715,9 @@ const App: React.FC = () => {
                                     onSubmit={handleAddDomain}
                                     className="flex space-x-2"
                                 >
-                                    <input
+                                    <Input
                                         type="text"
+                                        aria-label="Domain to exclude"
                                         value={newDomain}
                                         onChange={(e) =>
                                             setNewDomain(e.target.value)
@@ -875,7 +727,7 @@ const App: React.FC = () => {
                                     />
                                     <button
                                         type="submit"
-                                        className="flex items-center space-x-1 px-3 py-2 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 active:scale-95 transition-all"
+                                        className="flex items-center space-x-1 px-3 py-2 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 active:scale-95 transition-colors"
                                     >
                                         <Plus className="w-3.5 h-3.5" />
                                         <span>Add</span>
@@ -947,25 +799,26 @@ const App: React.FC = () => {
                             </div>
 
                             <div className="border-t border-border" />
-                        </div>
+                        </Card>
                     </div>
                 );
             case "graph":
                 return (
-                    <InteractiveKnowledgeGraph
-                        documents={documents}
-                        onDocumentClick={(id) => setDetailDocId(id)}
-                        onDeleteDocument={(id) => deleteMutation.mutate(id)}
-                    />
+                    <Card className="min-h-0 flex-1 overflow-hidden p-0">
+                        <InteractiveKnowledgeGraph
+                            documents={documents}
+                            onDocumentClick={(id) => setDetailDocId(id)}
+                            onDeleteDocument={(id) => deleteMutation.mutate(id)}
+                        />
+                    </Card>
                 );
             case "search":
                 return (
                     <div className="space-y-6">
-                        {/* Search Input Box */}
                         <div>
                             <div className="flex items-center bg-secondary/35 border border-border px-4 py-3 rounded-lg space-x-3 focus-within:border-primary/50 transition-colors">
-                                <Search className="w-5 h-5 text-muted-foreground" />
-                                <input
+                                <Search className="w-5 h-5 text-blue-400" />
+                                <Input
                                     type="text"
                                     value={dashSearch}
                                     onChange={(e) => setDashSearch(e.target.value)}
@@ -982,7 +835,7 @@ const App: React.FC = () => {
                                 )}
                                 <button
                                     onClick={() => setDashAI(!dashAI)}
-                                    className={`flex items-center space-x-1.5 px-3 py-1 rounded text-xs font-semibold transition-colors focus:outline-none ${
+                                    className={`flex items-center space-x-1.5 px-3 py-1 rounded text-xs font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400 ${
                                         dashAI
                                             ? "bg-primary/20 text-primary border border-primary/30"
                                             : "text-muted-foreground hover:text-foreground border border-transparent"
@@ -1003,7 +856,7 @@ const App: React.FC = () => {
                                     <button
                                         key={i}
                                         onClick={() => setDashSearch(query)}
-                                        className="px-2.5 py-1 bg-secondary/30 hover:bg-secondary/70 border border-border/50 hover:border-border rounded-full text-[11.5px] cursor-pointer transition-all hover:scale-[1.02] text-muted-foreground hover:text-foreground inline-flex items-center"
+                                        className="px-2.5 py-1 bg-secondary/30 hover:bg-secondary/70 border border-border/50 hover:border-border rounded-full text-[11.5px] cursor-pointer transition-colors hover:scale-[1.02] text-muted-foreground hover:text-foreground inline-flex items-center"
                                     >
                                         "{query}"
                                     </button>
@@ -1011,13 +864,11 @@ const App: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Two-Column Search Grid */}
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                            {/* Left sidebar filters */}
                             <div className="space-y-4">
-                                <div className="p-4 rounded-lg border border-border bg-secondary/15 space-y-3.5">
-                                    <h4 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
-                                        Search Scope
+                                <Card className="space-y-4">
+                                    <h4 className="text-xs font-semibold text-zinc-300">
+                                        Search scope
                                     </h4>
 
                                     <div className="space-y-1.5">
@@ -1041,10 +892,9 @@ const App: React.FC = () => {
                                         </select>
                                     </div>
 
-                                    {/* Date range selection */}
                                     <div className="border-t border-zinc-800/60 pt-3.5 space-y-3">
-                                        <h5 className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
-                                            Time Range
+                                        <h5 className="text-xs font-semibold text-zinc-400">
+                                            Time range
                                         </h5>
 
                                         <div className="space-y-1 bg-zinc-950/20 p-1.5 rounded-md border border-zinc-900/50">
@@ -1102,7 +952,6 @@ const App: React.FC = () => {
                                         </div>
                                     </div>
 
-                                    {/* Source Type Filter */}
                                     <div className="border-t border-zinc-800/60 pt-3.5 space-y-1.5">
                                         <label className="text-[11px] text-muted-foreground">
                                             Source / Platform
@@ -1121,7 +970,6 @@ const App: React.FC = () => {
                                         </select>
                                     </div>
 
-                                    {/* Sort Order Selector */}
                                     <div className="border-t border-zinc-800/60 pt-3.5 space-y-1.5">
                                         <label className="text-[11px] text-muted-foreground">
                                             Sort Results By
@@ -1140,7 +988,6 @@ const App: React.FC = () => {
                                         </select>
                                     </div>
 
-                                    {/* Min Match Score Slider */}
                                     <div className="border-t border-zinc-800/60 pt-3.5 space-y-1.5">
                                         <div className="flex justify-between text-[11px]">
                                             <span className="text-muted-foreground">Min Match Score</span>
@@ -1156,7 +1003,6 @@ const App: React.FC = () => {
                                         />
                                     </div>
 
-                                    {/* Min Time Spent Filter */}
                                     <div className="border-t border-zinc-800/60 pt-3.5 space-y-1.5">
                                         <div className="flex justify-between text-[11px]">
                                             <span className="text-muted-foreground">Min Time Spent</span>
@@ -1176,10 +1022,9 @@ const App: React.FC = () => {
                                             <span>1h</span>
                                         </div>
                                     </div>
-                                </div>
+                                </Card>
                             </div>
 
-                            {/* Right column results */}
                             <div className="md:col-span-3 space-y-4">
                                 {isDashSearchLoading && (
                                     <div className="flex flex-col items-center justify-center py-16 space-y-2">
@@ -1216,7 +1061,6 @@ const App: React.FC = () => {
                                     debouncedDashSearch.trim() &&
                                     dashSearchResults && (
                                         <>
-                                            {/* AI Summary block */}
                                             {dashAI &&
                                                 dashSearchResults.ai_summary && (
                                                     <div className="p-4 rounded-lg bg-primary/5 border border-primary/20 shadow-md space-y-1.5 animate-in fade-in duration-200">
@@ -1235,7 +1079,6 @@ const App: React.FC = () => {
                                                     </div>
                                                 )}
 
-                                            {/* Results list */}
                                             {processedResults.length === 0 ? (
                                                 <div className="p-12 text-center border border-dashed border-border rounded-lg">
                                                     <p className="text-xs text-muted-foreground">
@@ -1258,16 +1101,13 @@ const App: React.FC = () => {
                                                                 ? "border-blue-500/60 bg-blue-500/5 ring-1 ring-blue-500/20"
                                                                 : "border-border bg-secondary/10";
                                                             return (
-                                                                <div
-                                                                    key={
-                                                                        result.id
-                                                                    }
-                                                                    onClick={() =>
-                                                                        setDetailDocId(
-                                                                            result.id,
-                                                                        )
-                                                                    }
-                                                                    className={`p-4 rounded-lg border ${borderClass} hover:bg-secondary/20 hover:border-border/80 hover:scale-[1.005] cursor-pointer transition-all flex flex-col space-y-2.5`}
+                                                                <Card
+                                                                    key={result.id}
+                                                                    role="button"
+                                                                    tabIndex={0}
+                                                                    onClick={() => setDetailDocId(result.id)}
+                                                                    onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setDetailDocId(result.id); } }}
+                                                                    className={`${borderClass} cursor-pointer space-y-2.5 transition-colors hover:bg-secondary/20`}
                                                                 >
                                                                     <div className="flex items-start justify-between space-x-3">
                                                                         <h3 className="font-semibold text-sm text-zinc-100 hover:text-blue-400 transition-colors line-clamp-1">
@@ -1324,6 +1164,10 @@ const App: React.FC = () => {
                                                                         )}
                                                                     </div>
 
+                                                                    {result.match_reasons && result.match_reasons.length > 0 && (
+                                                                        <p className="text-xs text-blue-300">Matched: {result.match_reasons.map(reason => ({ title: "title", keyword: "keyword", metadata: "metadata", lexical: "indexed terms", semantic: "semantic similarity", text: "saved text" }[reason] || reason)).join(", ")}</p>
+                                                                    )}
+                                                                    {result.excerpt && <p className="text-xs leading-relaxed text-muted-foreground">{result.excerpt}</p>}
                                                                     {result.summary && (
                                                                         <p className="text-xs text-muted-foreground/80 leading-relaxed line-clamp-2">
                                                                             {
@@ -1363,7 +1207,7 @@ const App: React.FC = () => {
                                                                                     )}
                                                                             </div>
                                                                         )}
-                                                                </div>
+                                                                </Card>
                                                             );
                                                         },
                                                     )}
@@ -1378,7 +1222,6 @@ const App: React.FC = () => {
         }
     };
 
-    // Page title for main content header
     const pageTitle = detailDocId
         ? "Document"
         : activePage === "dashboard"
@@ -1389,20 +1232,17 @@ const App: React.FC = () => {
               ? "Knowledge Graph"
               : activePage === "memories"
                 ? "Memories"
-                : "Settings";
+                : activePage === "library" ? "Documents" : activePage === "privacy" || activePage === "models" || activePage === "setup" ? "Settings" : "Settings";
 
     return (
-        <div className="flex h-screen bg-background text-foreground">
-            {/* Sidebar */}
-            <aside className="w-56 flex-shrink-0 border-r border-border flex flex-col">
-                {/* Brand */}
+        <div className="flex h-screen min-h-screen flex-col bg-background text-foreground md:flex-row">
+            <aside className="flex flex-shrink-0 flex-col border-b border-border bg-card/40 md:w-56 md:border-b-0 md:border-r">
                 <div className="flex items-center space-x-2.5 px-4 py-5 border-b border-border">
-                    <Brain className="w-5 h-5 text-muted-foreground" />
+                    <Brain className="w-5 h-5 text-blue-400" />
                     <span className="text-sm font-semibold">MindCache</span>
                 </div>
 
-                {/* Nav */}
-                <nav className="flex-1 p-3 space-y-0.5">
+                <nav className="flex gap-1 overflow-x-auto p-2 md:block md:flex-1 md:space-y-0.5 md:p-3">
                     {navItem(
                         "dashboard",
                         "Overview",
@@ -1418,20 +1258,12 @@ const App: React.FC = () => {
                         "Knowledge Graph",
                         <Network className="w-4 h-4" />,
                     )}
-                    {navItem(
-                        "memories",
-                        "Memories",
-                        <FolderOpen className="w-4 h-4" />,
-                    )}
-                    {navItem(
-                        "settings",
-                        "Settings",
-                        <Settings className="w-4 h-4" />,
-                    )}
+                    {navItem("library", "Documents", <FolderOpen className="w-4 h-4" />)}
+                    {navItem("privacy", "Settings", <Settings className="w-4 h-4" />)}
+                    {!isWebDashboard && navItem("settings", "Browser settings", <Settings className="w-4 h-4" />)}
                 </nav>
 
-                {/* Footer status */}
-                <div className="px-4 py-3 border-t border-border text-[11px] text-muted-foreground space-y-1">
+                <div className="hidden px-4 py-3 border-t border-border text-[11px] text-muted-foreground space-y-1 md:block">
                     <div className="flex items-center space-x-1.5">
                         <span
                             className={`w-1.5 h-1.5 rounded-full ${isOnline ? "bg-emerald-500" : "bg-red-400"}`}
@@ -1447,27 +1279,25 @@ const App: React.FC = () => {
                 </div>
             </aside>
 
-            {/* Main content */}
             <main
-                className={`flex-1 ${activePage === "graph" && !detailDocId ? "overflow-hidden flex flex-col" : "overflow-y-auto"}`}
+                className={`min-h-0 flex-1 ${activePage === "graph" && !detailDocId ? "overflow-hidden flex flex-col" : "overflow-y-auto"}`}
             >
                 <div
                     className={
                         activePage === "graph" && !detailDocId
                             ? "w-full h-full px-6 py-5 flex flex-col space-y-4"
-                            : "max-w-4xl mx-auto px-6 py-6 space-y-6"
+                            : "w-full px-6 md:px-10 py-8 space-y-8"
                     }
                 >
-                    {/* Page header */}
                     <div className="flex items-center justify-between flex-shrink-0">
-                        <h1 className="text-lg font-semibold">{pageTitle}</h1>
+                        <h1 className="text-2xl font-semibold tracking-tight">{pageTitle}</h1>
                         {activePage === "memories" && !detailDocId && (
-                            <span className="text-xs text-muted-foreground font-mono">
+                            <span className="text-xs text-muted-foreground">
                                 {documents.length} total
                             </span>
                         )}
                         {activePage === "graph" && !detailDocId && (
-                            <span className="text-xs text-muted-foreground font-mono">
+                            <span className="text-xs text-muted-foreground">
                                 {documents.length > GRAPH_DISPLAY_MAX
                                     ? String(GRAPH_DISPLAY_MAX)
                                     : documents.length}{" "}

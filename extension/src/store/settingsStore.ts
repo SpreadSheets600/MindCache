@@ -16,7 +16,7 @@ interface SettingsState extends ExtensionSettings {
 
 const defaultSettings: ExtensionSettings = {
   backendUrl: "http://localhost:8000",
-  autoTracking: true,
+  autoTracking: false,
   autoExtract: true,
   excludedDomains: [
     "localhost",

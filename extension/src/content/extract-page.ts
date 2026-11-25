@@ -65,7 +65,6 @@ async function flattenShadowDom(doc: Document): Promise<void> {
         el.innerHTML = flat;
       }
     } catch {
-      // Some shadow roots can't be accessed cross-origin
     }
   }));
 }

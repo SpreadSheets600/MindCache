@@ -160,3 +160,39 @@ async def test_extension_origin_cannot_manage_folders(client_override):
     async with httpx.AsyncClient(transport=transport, base_url="http://localhost") as client:
         response = await client.get("/folders", headers={"origin": "chrome-extension://" + "a" * 32})
     assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_partial_files_are_embedded_once_the_model_is_available(db_session, stack, tmp_path):
+    (tmp_path / "a.txt").write_text("Quarterly cedar budget review.")
+    folder_id = await add_folder(db_session, tmp_path)
+    with patch.object(indexer_module.embedder, "embed_documents", side_effect=RuntimeError("no model")):
+        await scan_and_index(db_session, folder_id)
+    assert stack.count == 0
+    row = (await db_session.execute(select(IndexedFile))).scalars().one()
+    assert row.status == "partial"
+    await indexer_module.indexer.index_file(row.id)
+    db_session.expire_all()
+    assert (await db_session.execute(select(IndexedFile))).scalars().one().status == "indexed"
+    assert stack.count == 1
+
+
+@pytest.mark.asyncio
+async def test_other_model_signature_re_embeds_every_file(db_session, stack, tmp_path):
+    (tmp_path / "a.txt").write_text("Alpine meadow wildflowers.")
+    (tmp_path / "b.txt").write_text("Harbour lighthouse keeper.")
+    folder_id = await add_folder(db_session, tmp_path)
+    await scan_and_index(db_session, folder_id)
+    assert stack.count == 2
+    stack.needs_rebuild = True
+    stack._index = stack._empty()
+    await indexer_module.indexer.rebuild_if_needed()
+    indexer_module.indexer.queued.clear()
+    db_session.expire_all()
+    rows = (await db_session.execute(select(IndexedFile))).scalars().all()
+    assert {row.status for row in rows} == {"partial"}
+    for row in rows:
+        await indexer_module.indexer.index_file(row.id)
+    await indexer_module.indexer.finish_rebuild()
+    assert stack.count == 2
+    assert stack.needs_rebuild is False

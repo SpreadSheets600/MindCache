@@ -2,7 +2,7 @@ import asyncio
 import os
 from datetime import UTC, datetime
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 
 from app.core.logging import get_logger
 from app.db import session as database
@@ -48,6 +48,23 @@ class Indexer:
         for file_id in ids:
             self.enqueue(file_id)
 
+    async def rebuild_if_needed(self):
+        if not chunk_index.needs_rebuild:
+            return
+        async with database.AsyncSessionLocal() as db:
+            await db.execute(update(IndexedFile).where(IndexedFile.status == "indexed").values(status="partial"))
+            await db.commit()
+        await self.enqueue_unfinished(("partial",))
+
+    async def finish_rebuild(self):
+        if not chunk_index.needs_rebuild:
+            return
+        async with database.AsyncSessionLocal() as db:
+            waiting = await db.scalar(select(func.count()).where(IndexedFile.status.in_(("pending", "partial"))))
+        if not waiting:
+            chunk_index.save()
+            chunk_index.mark_current()
+
     async def run(self):
         while True:
             file_id = await self.queue.get()
@@ -59,9 +76,11 @@ class Indexer:
             finally:
                 self.queued.discard(file_id)
                 self.current = None
-                if self.queue.empty() and self.unsaved:
-                    chunk_index.save()
-                    self.unsaved = 0
+                if self.queue.empty():
+                    if self.unsaved:
+                        chunk_index.save()
+                        self.unsaved = 0
+                    await self.finish_rebuild()
 
     async def scan_folder(self, folder_id):
         async with self.lock, database.AsyncSessionLocal() as db:

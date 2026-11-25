@@ -1,0 +1,24 @@
+name: mindcache
+description: MindCache desktop memory search
+publish_to: none
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.8.0
+
+dependencies:
+  dio: ^5.11.1
+  file_picker: ^13.4.1
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^3.5.0
+  material_ui: ^1.11.1
+  url_launcher: ^6.3.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

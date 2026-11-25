@@ -346,8 +346,21 @@ Content script defines:
 
 ## Flutter Development
 
-Desktop app lives in `app/` (added in Phase 5 of `PLAN.md`).
+The desktop app lives in `app/` and talks to the local backend over HTTP.
 
 - Flutter 3.50.1 stable, installed at `~/.local/flutter` and added to `PATH` in `~/.zshrc`
-- Linux build needs `clang`, `cmake`, `ninja`, `pkg-config` and `gtk3`
-- Check with `flutter doctor`; only the Linux toolchain is required
+- Linux build needs `clang`, `cmake`, `ninja`, `pkg-config` and `gtk3`; the folder picker needs `kdialog` or `zenity`
+- UI uses `material_ui` (Flutter 3.50 deprecates `package:flutter/material.dart`), Riverpod for state and Dio for HTTP
+
+```bash
+cd app
+flutter pub get
+flutter analyze
+flutter test
+flutter run -d linux
+flutter build linux --release
+```
+
+On launch the app checks `http://127.0.0.1:8000/health`. If nothing answers, it starts `backend/.venv/bin/python -m uvicorn` itself (set `MINDCACHE_ROOT` if the project folder cannot be found) and stops it on exit. Run `./setup.sh` first so the backend environment exists.
+
+Screens: Search, Folders (add, pause, scan now, forget), Index (progress and counts, EmbeddingGemma 2 download) and Settings (optional generation provider with API key).

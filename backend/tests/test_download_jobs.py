@@ -23,6 +23,8 @@ def test_embedding_download_reports_completion_and_prevents_duplicates():
         with (
             patch.object(ai.embedder, "download", blocking_download),
             patch.object(ai.document_processor, "reindex_if_needed", slow_reindex),
+            patch.object(ai.indexer, "rebuild_if_needed", AsyncMock()),
+            patch.object(ai.indexer, "enqueue_unfinished", AsyncMock()),
         ):
             result = await ai.start_download(ai.DownloadRequest(task="embedding"))
             assert result["status"] == "downloading"
@@ -42,9 +44,18 @@ def test_embedding_download_triggers_reindex():
     async def run():
         ai.downloads["embedding"] = {"status": "downloading"}
         reindex = AsyncMock()
-        with patch.object(ai.embedder, "download"), patch.object(ai.document_processor, "reindex_if_needed", reindex):
+        rebuild = AsyncMock()
+        unfinished = AsyncMock()
+        with (
+            patch.object(ai.embedder, "download"),
+            patch.object(ai.document_processor, "reindex_if_needed", reindex),
+            patch.object(ai.indexer, "rebuild_if_needed", rebuild),
+            patch.object(ai.indexer, "enqueue_unfinished", unfinished),
+        ):
             await ai.run_download("embedding", None)
         reindex.assert_awaited_once()
+        rebuild.assert_awaited_once()
+        unfinished.assert_awaited_once_with(("partial",))
         ai.downloads.clear()
 
     asyncio.run(run())

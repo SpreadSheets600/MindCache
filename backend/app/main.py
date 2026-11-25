@@ -58,6 +58,7 @@ async def lifespan(app: FastAPI):
 
     reindex = asyncio.create_task(document_processor.reindex_if_needed())
     indexer.start()
+    await indexer.rebuild_if_needed()
     await indexer.enqueue_unfinished()
     await watcher.start()
 

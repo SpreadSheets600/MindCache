@@ -1,6 +1,8 @@
+import os
 import threading
 
 import numpy as np
+import psutil
 
 from app.core.config import settings
 from app.core.exceptions import EmbeddingGenerationError
@@ -11,6 +13,10 @@ MAX_TOKENS = 1024
 PROMPT_VERSION = 1
 SIGNATURE = f"{MODEL_ID}|{DIMENSION}|{PROMPT_VERSION}"
 QUERY_CACHE_SIZE = 512
+
+
+def cpu_threads():
+    return psutil.cpu_count(logical=False) or max(1, (os.cpu_count() or 2) // 2)
 
 
 class Embedder:
@@ -55,6 +61,8 @@ class Embedder:
                 from sentence_transformers import SentenceTransformer
 
                 device = self.device
+                if device == "cpu":
+                    torch.set_num_threads(cpu_threads())
                 model = SentenceTransformer(
                     MODEL_ID,
                     cache_folder=str(self.models_dir),

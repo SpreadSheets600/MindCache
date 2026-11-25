@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from app.services import embedder as embedder_module
 from app.services.embedder import DIMENSION, MODEL_ID, SIGNATURE, Embedder
 from app.services.vector_service import VectorService
 
@@ -76,3 +77,11 @@ def test_real_model_ranks_relevant_document_first():
     assert float(np.linalg.norm(query)) == pytest.approx(1.0, abs=2e-2)
     assert documents[0] @ query > documents[1] @ query
     assert MODEL_ID == "google/embeddinggemma-2"
+
+
+def test_cpu_threads_follow_physical_cores(monkeypatch):
+    monkeypatch.setattr(embedder_module.psutil, "cpu_count", lambda logical=True: 6 if not logical else 12)
+    assert embedder_module.cpu_threads() == 6
+    monkeypatch.setattr(embedder_module.psutil, "cpu_count", lambda logical=True: None)
+    monkeypatch.setattr(embedder_module.os, "cpu_count", lambda: 8)
+    assert embedder_module.cpu_threads() == 4

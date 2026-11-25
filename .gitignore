@@ -223,3 +223,6 @@ sketch
 
 backend/data/
 backend/ai/
+
+# desloppify local state
+.desloppify/

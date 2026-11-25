@@ -8,28 +8,26 @@ from app.db.base import Base
 
 
 class Document(Base):
-    """Represents A Downloaded And Processed Web Page."""
 
     __tablename__ = "documents"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     url: Mapped[str] = mapped_column(String(2048), unique=True, index=True, nullable=False)
     domain: Mapped[str] = mapped_column(String(253), index=True, nullable=False)
-    title: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)  # noqa: UP045
-    author: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)  # noqa: UP045
-    published_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)  # noqa: UP045
+    title: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    author: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
+    published_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     extracted_content: Mapped[str] = mapped_column(Text, nullable=False)
     source_type: Mapped[str] = mapped_column(
         String(50), default="Generic", server_default="Generic", index=True, nullable=False
     )
-    platform_metadata: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)  # noqa: UP045
-    summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # noqa: UP045
+    platform_metadata: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
     quality_score: Mapped[float] = mapped_column(Float, default=0.0, server_default="0.0", nullable=False)
     total_dwell_time: Mapped[float] = mapped_column(Float, default=0.0, server_default="0.0", nullable=False)
 
-    # Relationships
     keywords: Mapped[list["Keyword"]] = relationship(
         "Keyword", back_populates="document", cascade="all, delete-orphan", lazy="selectin"
     )
@@ -45,7 +43,6 @@ class Document(Base):
 
 
 class Keyword(Base):
-    """Represents A Keyword Extracted From A Document With A Score."""
 
     __tablename__ = "keywords"
 
@@ -56,12 +53,10 @@ class Keyword(Base):
     keyword: Mapped[str] = mapped_column(String(100), index=True, nullable=False)
     score: Mapped[float] = mapped_column(Float, nullable=False)
 
-    # Relationships
     document: Mapped["Document"] = relationship("Document", back_populates="keywords")
 
 
 class Entity(Base):
-    """Represents An Entity Extracted From A Document (Person, Project, Library, Technology, Company)."""
 
     __tablename__ = "entities"
 
@@ -70,14 +65,12 @@ class Entity(Base):
         Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
     )
     name: Mapped[str] = mapped_column(String(100), index=True, nullable=False)
-    type: Mapped[str] = mapped_column(String(50), nullable=False)  # 'Person', 'Company', etc.
+    type: Mapped[str] = mapped_column(String(50), nullable=False)
 
-    # Relationships
     document: Mapped["Document"] = relationship("Document", back_populates="entities")
 
 
 class SearchClick(Base):
-    """Stores click signals from search results to improve ranking dynamically."""
 
     __tablename__ = "search_clicks"
 
@@ -88,12 +81,10 @@ class SearchClick(Base):
     )
     clicked_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), nullable=False)
 
-    # Relationships
     document: Mapped["Document"] = relationship("Document", back_populates="clicks")
 
 
 class SearchQuery(Base):
-    """Stores query history to capture search intent and history."""
 
     __tablename__ = "search_queries"
 
@@ -103,7 +94,6 @@ class SearchQuery(Base):
 
 
 class VisitHistory(Base):
-    """Represents A Record Of When A URL Was Visited And Sent To The System."""
 
     __tablename__ = "visit_history"
 
@@ -113,5 +103,13 @@ class VisitHistory(Base):
     )
     visited_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), nullable=False)
 
-    # Relationships
     document: Mapped["Document"] = relationship("Document", back_populates="visits")
+
+
+class PrivacySettings(Base):
+
+    __tablename__ = "privacy_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    save_search_history: Mapped[bool] = mapped_column(default=True, nullable=False)
+    learn_from_clicks: Mapped[bool] = mapped_column(default=True, nullable=False)

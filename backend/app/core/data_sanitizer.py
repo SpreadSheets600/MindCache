@@ -1,8 +1,8 @@
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 
-def sanitize_text(value: Any, max_length: Optional[int] = None) -> Optional[str]:
+def sanitize_text(value: Any, max_length: int | None = None):
     if value is None:
         return None
     if isinstance(value, bytes):
@@ -10,12 +10,10 @@ def sanitize_text(value: Any, max_length: Optional[int] = None) -> Optional[str]
     if not isinstance(value, str):
         value = str(value)
     cleaned = value.encode("utf-8", errors="replace").decode("utf-8")
-    if max_length is not None:
-        cleaned = cleaned[:max_length]
-    return cleaned
+    return cleaned[:max_length] if max_length is not None else cleaned
 
 
-def sanitize_platform_metadata(value: Any) -> Optional[dict]:
+def sanitize_platform_metadata(value: Any):
     if value is None:
         return None
     if not isinstance(value, dict):
@@ -23,49 +21,34 @@ def sanitize_platform_metadata(value: Any) -> Optional[dict]:
             value = dict(value)
         except (TypeError, ValueError):
             return None
-    cleaned = {}
-    for k, v in value.items():
-        key = sanitize_text(k, 255)
-        if key is None:
+    cleaned: dict[str, Any] = {}
+    for key, item in value.items():
+        clean_key = sanitize_text(key, 255)
+        if clean_key is None:
             continue
-        if isinstance(v, str):
-            cleaned[key] = sanitize_text(v)
-        elif isinstance(v, bytes):
-            cleaned[key] = v.decode("utf-8", errors="replace")
-        elif isinstance(v, dict):
-            cleaned[key] = sanitize_platform_metadata(v)
-        elif isinstance(v, list):
-            cleaned_list = []
-            for item in v:
-                if isinstance(item, str):
-                    cleaned_list.append(sanitize_text(item))
-                elif isinstance(item, bytes):
-                    cleaned_list.append(item.decode("utf-8", errors="replace"))
-                elif isinstance(item, dict):
-                    cleaned_list.append(sanitize_platform_metadata(item))
-                else:
-                    cleaned_list.append(item)
-            cleaned[key] = cleaned_list
-        else:
-            cleaned[key] = v
-    return cleaned if cleaned else None
+        cleaned[clean_key] = _sanitize_metadata_value(item)
+    return cleaned or None
 
 
-def sanitize_datetime(value: Any) -> Optional[datetime]:
+def _sanitize_metadata_value(value: Any):
+    if isinstance(value, str):
+        return sanitize_text(value)
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    if isinstance(value, dict):
+        return sanitize_platform_metadata(value)
+    if isinstance(value, list):
+        return [_sanitize_metadata_value(item) for item in value]
+    return value
+
+
+def sanitize_datetime(value: Any):
     if value is None:
         return None
     if isinstance(value, datetime):
         return value
-    if isinstance(value, str):
-        try:
-            return datetime.fromisoformat(value)
-        except (ValueError, TypeError):
-            return None
     if isinstance(value, bytes):
-        try:
-            return datetime.fromisoformat(value.decode("utf-8", errors="replace"))
-        except (ValueError, TypeError):
-            return None
+        value = value.decode("utf-8", errors="replace")
     try:
         return datetime.fromisoformat(str(value))
     except (ValueError, TypeError):

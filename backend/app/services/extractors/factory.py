@@ -11,11 +11,6 @@ from app.services.extractors.youtube import YouTubeExtractor
 
 
 class ExtractorFactory:
-    """Centralized Factory Pattern To Select The Appropriate Content Extractor Based On URL Domain.
-
-    This avoids having domain checks scattered across the codebase. Adding new platforms is
-    as simple as implementing ContentExtractor and registering the domain here.
-    """
 
     _generic_extractor = GenericExtractor()
     _youtube_extractor = YouTubeExtractor()
@@ -25,7 +20,6 @@ class ExtractorFactory:
     _reddit_extractor = RedditExtractor()
     _pdf_extractor = PDFExtractor()
 
-    # Domain Registry mapping hostnames to their corresponding extractor instance
     _registry: dict[str, ContentExtractor] = {
         "youtube.com": _youtube_extractor,
         "youtu.be": _youtube_extractor,
@@ -38,19 +32,16 @@ class ExtractorFactory:
     }
 
     @classmethod
-    def get_extractor(cls, url: str) -> ContentExtractor:
-        """Resolves and returns the correct ContentExtractor instance for the given URL."""
+    def get_extractor(cls, url: str):
         try:
             parsed = urlparse(url)
             hostname = parsed.hostname or ""
             hostname = hostname.lower()
             path = parsed.path or ""
 
-            # Normalize hostname by stripping 'www.'
             if hostname.startswith("www."):
                 hostname = hostname[4:]
 
-            # Check if the URL path points to a PDF
             path_lower = path.lower()
             if (
                 path_lower.endswith(".pdf")
@@ -59,21 +50,17 @@ class ExtractorFactory:
             ):
                 return cls._pdf_extractor
 
-            # Check for Google Search pages specifically
             if hostname == "google.com" and path.startswith("/search"):
                 return cls._google_search_extractor
 
-            # Direct mapping check
             if hostname in cls._registry:
                 return cls._registry[hostname]
 
-            # Subdomain fallback check (e.g. m.youtube.com, shorts.youtube.com, etc.)
             for domain, extractor in cls._registry.items():
                 if hostname.endswith("." + domain):
                     return extractor
 
         except Exception:
-            # Fall back to generic extractor if parsing fails
             pass
 
         return cls._generic_extractor

@@ -6,9 +6,8 @@ logger = get_logger(__name__)
 
 
 class EntityExtractor:
-    """Extracts key entities (technologies, companies) from text using regex patterns."""
 
-    async def extract_entities(self, text: str) -> list[tuple[str, str]]:
+    async def extract_entities(self, text: str):
         if not text.strip():
             return []
 
@@ -35,5 +34,4 @@ class EntityExtractor:
         return entities[:8]
 
 
-# Singleton Instance
 entity_extractor = EntityExtractor()

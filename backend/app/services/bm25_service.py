@@ -1,7 +1,6 @@
 import os
 import pickle
 import re
-from pathlib import Path
 
 from rank_bm25 import BM25Okapi
 
@@ -14,9 +13,7 @@ BM25_INDEX_PATH = settings.BM25_INDEX_PATH
 
 
 class BM25Service:
-    """Service To Maintain A BM25 Lexical Index For Hybrid Keyword+Semantic Search."""
 
-    # Suffixes ordered longest-first to avoid premature stripping (e.g., 'ization' before 'tion')
     _SUFFIXES = [
         'ization', 'ational', 'fulness', 'ousness', 'iveness',
         'tion', 'ment', 'ness', 'ance', 'ence', 'able', 'ible',
@@ -25,7 +22,7 @@ class BM25Service:
         'ed', 'er', 'al', 'ly', 'es',
     ]
 
-    def __init__(self, index_path: str | None = None) -> None:
+    def __init__(self, index_path: str | None = None):
         self.index_path = index_path or settings.BM25_INDEX_PATH
         self._index: BM25Okapi | None = None
         self._doc_ids: list[int] = []
@@ -33,8 +30,7 @@ class BM25Service:
         self._load_index()
 
     @staticmethod
-    def _stem(token: str) -> str:
-        """Minimal suffix-stripping stemmer. Conservative — only strips if resulting stem >= 3 chars."""
+    def _stem(token: str):
         if len(token) < 4:
             return token
         for suffix in BM25Service._SUFFIXES:
@@ -44,24 +40,20 @@ class BM25Service:
                     return stem
         return token
 
-    def _tokenize(self, text: str) -> list[str]:
-        """Tokenizes Text Into Lowercase Alphanumeric Tokens, splitting hyphenated tokens and applying stemming."""
+    def _tokenize(self, text: str):
         if not text:
             return []
         raw_tokens = re.findall(r"\b[a-zA-Z0-9_-]+\b", text.lower())
         expanded = []
         for token in raw_tokens:
             expanded.append(token)
-            # Split hyphenated tokens into sub-tokens (e.g., 'stop-slop' -> 'stop', 'slop')
             if '-' in token and len(token) > 1:
                 for part in token.split('-'):
                     if part:
                         expanded.append(part)
-        # Apply stemming to all tokens for morphological matching
         return [self._stem(t) for t in expanded]
 
-    def _load_index(self) -> None:
-        """Loads BM25 Index From Disk If It Exists."""
+    def _load_index(self):
 
         if os.path.exists(self.index_path) and os.path.getsize(self.index_path) > 0:
             try:
@@ -82,8 +74,7 @@ class BM25Service:
         else:
             logger.info("No Existing BM25 Index Found. Starting Fresh.")
 
-    def save(self) -> None:
-        """Serializes The BM25 Corpus And Doc IDs To Disk."""
+    def save(self):
 
         try:
             os.makedirs(os.path.dirname(self.index_path), exist_ok=True)
@@ -97,13 +88,10 @@ class BM25Service:
             logger.error(f"Failed To Save BM25 Index: {e}", exc_info=True)
 
     def add_document(self, doc_id: int, title: str, content: str, keywords: list[str],
-                     metadata: dict | None = None) -> None:
-        """Adds Or Updates A Document In The BM25 Index."""
+                     metadata: dict | None = None):
 
-        # Build A Rich Text Representation For Lexical Matching
         parts = []
 
-        # Enrich with platform metadata (repo name, description, topics) for better lexical matching
         if metadata:
             repo_name = metadata.get('repo_name', '')
             if repo_name:
@@ -135,8 +123,7 @@ class BM25Service:
         self._index = BM25Okapi(self._corpus)
         self.save()
 
-    def remove_document(self, doc_id: int) -> None:
-        """Removes A Document From The BM25 Index."""
+    def remove_document(self, doc_id: int):
 
         if doc_id not in self._doc_ids:
             return
@@ -148,8 +135,7 @@ class BM25Service:
         self._index = BM25Okapi(self._corpus) if self._corpus else None
         self.save()
 
-    def search(self, query: str, limit: int = 25) -> list[tuple[int, float]]:
-        """Searches The BM25 Index And Returns Scored Document IDs."""
+    def search(self, query: str, limit: int = 25):
 
         if not self._index or not self._corpus:
             return []
@@ -161,11 +147,12 @@ class BM25Service:
 
         scores = self._index.get_scores(query_tokens)
 
-        # Pair IDs With Scores And Sort Descending
-        scored = sorted(zip(self._doc_ids, scores, strict=True), key=lambda x: x[1], reverse=True)
+        if not any(score > 0 for score in scores):
+            terms = set(query_tokens)
+            scores = [len(terms.intersection(document)) / len(terms) for document in self._corpus]
 
+        scored = sorted(zip(self._doc_ids, scores, strict=True), key=lambda x: x[1], reverse=True)
         return [(doc_id, float(score)) for doc_id, score in scored[:limit] if score > 0]
 
 
-# Singleton Instance
 bm25_service = BM25Service()

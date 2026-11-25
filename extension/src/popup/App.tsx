@@ -112,7 +112,7 @@ export const App: React.FC = () => {
           <h2 id="setup-title" className="mb-3 text-sm font-semibold">Your setup</h2>
           <dl className="space-y-3 text-xs">
             <div className="flex items-center justify-between gap-4"><dt className="flex items-center gap-2 text-muted-foreground"><Database className="h-4 w-4" /> Pages indexed</dt><dd>{isOnline && components ? `${components.database?.documents_count ?? components.faiss_index.vectors_count} pages` : "—"}</dd></div>
-            <div className="flex items-center justify-between gap-4"><dt className="flex items-center gap-2 text-muted-foreground"><Network className="h-4 w-4" /> Embedding</dt><dd className="max-w-[150px] truncate" title={components?.embedding?.model || ""}>{isOnline && components?.embedding?.status === "connected" ? components.embedding.model : "Offline"}</dd></div>
+            <div className="flex items-center justify-between gap-4"><dt className="flex items-center gap-2 text-muted-foreground"><Network className="h-4 w-4" /> Embedding</dt><dd className="max-w-[150px] truncate" title={components?.embedding?.model || ""}>{!isOnline ? "Offline" : components?.embedding?.status === "ready" ? "EmbeddingGemma 2" : "Not downloaded"}</dd></div>
             <div className="flex items-center justify-between gap-4"><dt className="flex items-center gap-2 text-muted-foreground"><Shield className="h-4 w-4" /> Tab tracking</dt><dd>{autoTracking ? "Active" : "Disabled"}</dd></div>
             <div className="flex items-center justify-between gap-4"><dt className="flex items-center gap-2 text-muted-foreground"><Sparkles className="h-4 w-4" /> Page extraction</dt><dd>{autoExtract ? "On" : "Manual"}</dd></div>
           </dl>

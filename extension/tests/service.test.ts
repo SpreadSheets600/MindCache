@@ -14,7 +14,7 @@ describe("BackendClient Service API Tests", () => {
       components: {
         database: { status: "connected", documents_count: 42 },
         faiss_index: { status: "initialized", vectors_count: 12 },
-        embedding: { status: "connected", model: "Qwen/Qwen3-Embedding-0.6B", provider: "local" },
+        embedding: { status: "ready", model: "google/embeddinggemma-2", dimension: 768, reindexing: false },
         generative: undefined,
       },
     };

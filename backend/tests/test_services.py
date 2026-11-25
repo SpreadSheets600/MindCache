@@ -6,7 +6,6 @@ import pytest
 from app.core.exceptions import InvalidURLError
 from app.services.bm25_service import bm25_service
 from app.services.document_processor import document_processor
-from app.services.embedding_service import embedding_service
 from app.services.keyword_extractor import keyword_extractor
 from app.services.vector_service import vector_service
 
@@ -45,12 +44,6 @@ def test_validate_and_parse_url():
         document_processor._validate_and_parse_url("not-a-valid-url")
     with pytest.raises(InvalidURLError):
         document_processor._validate_and_parse_url("ftp://server.com")
-
-
-def test_embedding_service_generation():
-    emb = embedding_service.generate_embedding("Semantic browser memory search")
-    assert len(emb) == 384
-    assert isinstance(emb, np.ndarray)
 
 
 @pytest.mark.asyncio

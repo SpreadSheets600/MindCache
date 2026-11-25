@@ -11,7 +11,7 @@ from app.repositories.document_repository import document_repository
 from app.schemas.document import KeywordResponse, SearchResponse, SearchResultItem
 from app.services.bm25_service import bm25_service
 from app.services.excerpts import matching_excerpt
-from app.services.embedding_service import embedding_service
+from app.services.embedder import embedder
 from app.services.keyword_extractor import keyword_extractor
 from app.services.vector_service import vector_service
 
@@ -20,7 +20,6 @@ logger = get_logger(__name__)
 FAISS_CANDIDATE_POOL = 30
 BM25_CANDIDATE_POOL = 40
 KEYWORD_BOOST = 0.15
-QUERY_PREFIX = ""
 
 
 class SearchService:
@@ -200,7 +199,7 @@ class SearchService:
 
         vector_results = []
         try:
-            query_embedding = embedding_service.generate_embedding(f"{QUERY_PREFIX}{expanded_query}")
+            query_embedding = embedder.embed_query(expanded_query)
             vector_results = vector_service.search_similar(query_embedding, limit=FAISS_CANDIDATE_POOL)
         except Exception as e:
             logger.warning("Semantic search unavailable; continuing with lexical search: %s", e)

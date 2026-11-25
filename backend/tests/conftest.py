@@ -20,7 +20,7 @@ from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
 from app.services.bm25_service import bm25_service
-from app.services.embedding_service import embedding_service
+from app.services.embedder import embedder
 from app.services.keyword_extractor import keyword_extractor
 from app.services.entity_extractor import entity_extractor
 from app.services.vector_service import vector_service
@@ -86,9 +86,9 @@ def mock_ai_services():
     settings.BM25_INDEX_PATH = test_bm25_path
 
     with (
-        patch.object(embedding_service, "get_dimension", return_value=384),
-        patch.object(embedding_service, "generate_embedding", return_value=mock_vector),
-        patch.object(embedding_service, "generate_embeddings", return_value=np.array([mock_vector])),
+        patch.object(embedder, "embed_query", return_value=mock_vector),
+        patch.object(embedder, "embed_documents", return_value=np.array([mock_vector])),
+        patch.object(embedder, "status", return_value="ready"),
         patch.object(keyword_extractor, "extract_keywords", AsyncMock(return_value=mock_keywords)),
         patch.object(entity_extractor, "extract_entities", AsyncMock(return_value=mock_entities)),
     ):

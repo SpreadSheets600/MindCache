@@ -1,45 +1,62 @@
 import asyncio
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import HTTPException
 
 from app.api import ai
 from app.core.ai_config import TaskModel
+from app.services.embedder import MODEL_ID
 
 
-def test_download_job_reports_completion_and_prevents_duplicates():
+def test_embedding_download_reports_completion_and_prevents_duplicates():
     async def run():
-        ai._downloads.clear()
-        model = TaskModel("transformers", "example/model")
+        ai.downloads.clear()
         gate = asyncio.Event()
 
-        async def fake_download(task, selected):
-            await gate.wait()
-            ai._downloads[task].update(status="completed")
+        def blocking_download():
+            return None
 
-        with patch.object(ai, "load_models", return_value={"embedding": model}), patch.object(ai, "_run_download", fake_download):
+        async def slow_reindex():
+            await gate.wait()
+
+        with (
+            patch.object(ai.embedder, "download", blocking_download),
+            patch.object(ai.document_processor, "reindex_if_needed", slow_reindex),
+        ):
             result = await ai.start_download(ai.DownloadRequest(task="embedding"))
             assert result["status"] == "downloading"
-            assert (await ai.download_status())["embedding"]["model"] == "example/model"
+            assert (await ai.download_status())["embedding"]["model"] == MODEL_ID
             with pytest.raises(HTTPException) as error:
                 await ai.start_download(ai.DownloadRequest(task="embedding"))
             assert error.value.status_code == 409
             gate.set()
-            await asyncio.gather(*list(ai._download_tasks))
+            await asyncio.gather(*list(ai.download_tasks))
             assert (await ai.download_status())["embedding"]["status"] == "completed"
-        ai._downloads.clear()
+        ai.downloads.clear()
+
+    asyncio.run(run())
+
+
+def test_embedding_download_triggers_reindex():
+    async def run():
+        ai.downloads["embedding"] = {"status": "downloading"}
+        reindex = AsyncMock()
+        with patch.object(ai.embedder, "download"), patch.object(ai.document_processor, "reindex_if_needed", reindex):
+            await ai.run_download("embedding", None)
+        reindex.assert_awaited_once()
+        ai.downloads.clear()
 
     asyncio.run(run())
 
 
 def test_download_job_reports_provider_error():
     async def run():
-        ai._downloads["generation"] = {"status": "downloading"}
+        ai.downloads["generation"] = {"status": "downloading"}
         with patch.object(ai, "download_model", side_effect=ValueError("model missing")):
-            await ai._run_download("generation", TaskModel("transformers", "missing"))
-        assert ai._downloads["generation"]["status"] == "failed"
-        assert ai._downloads["generation"]["error"] == "model missing"
-        ai._downloads.clear()
+            await ai.run_download("generation", TaskModel("transformers", "missing"))
+        assert ai.downloads["generation"]["status"] == "failed"
+        assert ai.downloads["generation"]["error"] == "model missing"
+        ai.downloads.clear()
 
     asyncio.run(run())

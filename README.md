@@ -4,32 +4,34 @@
 
 # MindCache
 
-> An AI-powered, completely local personal browser memory assistant. MindCache runs entirely on your local machine to scrape, index, summarize, and semantically search web pages you visit, ensuring absolute privacy for your browsing history.
+> A personal browser memory assistant with a local backend and browser extension. MindCache saves and searches pages you choose to capture. Page extraction and model downloads can use the network.
 
 ---
 
 ## Quick Start
 
-```bash
-# 1. Start the backend
-cd backend
-uv sync
-uv run uvicorn app.main:app --reload
+Install Python, [uv](https://docs.astral.sh/uv/), Node.js and npm, then run:
 
-# 2. Build the extension (in another terminal)
-cd extension
-npm install
-npm run build
+```bash
+./setup.sh
+./start.sh
 ```
 
-1. Load `extension/dist/` as an unpacked extension in Chrome/Brave (`chrome://extensions` → Developer mode → Load unpacked).
+Open `http://127.0.0.1:8000/app/` and load `extension/dist/` as an unpacked extension in Chrome or Brave. Copy its ID from `chrome://extensions` into **Setup → Pair a browser extension**. Existing installations must pair after upgrading. New installations start with automatic tracking off; existing saved settings are preserved. Run `./setup.sh --help` for build options. Setup installs the locked backend dependencies and extension packages; it requires network access for packages not already cached. It does not download an AI model deliberately.
 
-> **Ollama required** for AI features:
->
-> ```bash
-> ollama pull qwen3.5:2b
-> ollama pull embeddinggemma:300m
-> ```
+Choose separate embedding and generation providers in the web app: local Transformers, Ollama, or an OpenAI-compatible endpoint. Use the Models page to explicitly download local models; remote endpoints require explicit consent and HTTPS. Search falls back to lexical results when embeddings are unavailable. Notes and uploaded files currently use text matching; image OCR can be run explicitly when Tesseract is installed. Changing an embedding model with an existing vector index is currently blocked until safe rebuilding is available. See [PLAN.md](PLAN.md) for remaining work.
+
+---
+
+## Import from Recall
+
+Create an archive from your Recall data directory, then preview it under **Setup → Bring in Recall**:
+
+```bash
+python3 scripts/pack_recall.py /path/to/Recall/data recall-export.zip
+```
+
+The packer reads Recall's database without changing it and includes files inside its `uploads` directory. Files outside that directory or over 20 MB are reported as missing. Recall's own JSON export can also be imported, but contains no original file data. Preview the missing-file count before importing. Imported records are text searchable; they are not yet included in semantic search.
 
 ---
 
@@ -52,7 +54,7 @@ Everything is in the [`docs/`](docs/README.md) directory:
 
 ## Core Features
 
-- **Absolute Local Privacy** — Zero cloud API calls. All indexing, vector computation, and AI synthesis runs on localhost with no external dependencies.
+- **Local storage** — Captured content and indexes are stored locally. Page fetching and model downloads can make network requests. Search and click logging can be controlled and cleared in the web app. The service restricts browser origins and requires extension pairing, but does not authenticate other local programs.
 - **Background Tab Tracking** — Extension monitors tab activations, navigation, closures, and window focus. Computes exact dwell time per tab. Auto-indexes after a 10-second threshold. Deduplicates rapid revisits.
 - **Path & Extension Blacklists** — Automatically filters out login pages (`/login`, `/signup`, `/admin`), binary files (`.exe`, `.dmg`, `.zip`), images (`.png`, `.jpg`), and documents (`.pdf`, `.docx`) to keep the index clean.
 - **Client-Side Extraction** — Uses the Defuddle library (from Obsidian Web Clipper) to extract page content directly from the DOM. Includes shadow DOM flattening, noise removal (`<nav>`, `<footer>`, `.sidebar`), URL absolutification, and an 8-second Defuddle timeout with sync fallback. Works behind auth/paywalls and on JS-rendered SPAs.
@@ -65,7 +67,7 @@ Everything is in the [`docs/`](docs/README.md) directory:
 - **Flexible Extraction Pipeline** — If client-side extraction is unavailable (chrome:// pages, PDF viewer), the backend falls back to server-side download via Trafilatura/BeautifulSoup. Platform-specific extractors handle YouTube (yt-dlp + transcripts) and X/Twitter (syndication API).
 - **Hybrid Search** — Combines FAISS vector similarity (cosine, 768d), BM25 lexical matching, title/keyword overlap, platform metadata scoring, and recency decay into a weighted fusion formula. Results below a 0.15 score floor are filtered out.
 - **Dynamic Quality Boosts** — Documents are ranked higher based on dwell time (>60s), word count (>500), source type (GitHub/PDF/docs), transcript availability, and revisit count. Click signals add up to +0.30 boost per query.
-- **Local RAG Summarization** — Ollama (`qwen3.5:2b`) generates page summaries on ingestion and collective AI synthesis with inline citations on search.
+- **Summaries** — Request a summary from an item in the web app using your chosen generation provider. Remote processing is opt-in.
 - **Spotlight Search UI** — Keyboard-first popup (`Ctrl+Shift+K`) with debounced query updates, relevance percentage scores, domain badges, keyword tags, and match classification (Best Match ≥65%, Strong Match ≥55%).
 - **Interactive Knowledge Graph** — Visualize documents, entities (Persons, Companies, Technologies, Projects), and keywords with co-occurrence edges. Supports entity color-coding, keyword frequency filtering, and multiple color modes.
 - **Privacy Controls** — Auto-tracking toggle, auto-extraction toggle, private search logging mode, per-domain exclusion list, and path/extension blacklists.

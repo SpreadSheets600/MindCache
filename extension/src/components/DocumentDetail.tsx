@@ -57,7 +57,6 @@ export const DocumentDetail: React.FC<DocumentDetailProps> = ({
 
   return (
     <div className="space-y-5">
-      {/* Back nav */}
       <button
         onClick={onBack}
         className="flex items-center space-x-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"

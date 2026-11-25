@@ -19,7 +19,6 @@ describe("BackendClient Service API Tests", () => {
       },
     };
 
-    // Setup global fetch mock
     (global.fetch as any).mockResolvedValue({
       ok: true,
       json: async () => healthMockResponse,

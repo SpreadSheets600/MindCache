@@ -26,7 +26,6 @@ export const useSearchStore = create<SearchState>()(
         set((state) => {
           const cleaned = query.trim();
           if (!cleaned) return state;
-          // Filter out existing and prepend
           const filtered = state.recentSearches.filter((q) => q !== cleaned);
           const updated = [cleaned, ...filtered].slice(0, 10);
           return { recentSearches: updated };
@@ -42,7 +41,7 @@ export const useSearchStore = create<SearchState>()(
         recentSearches: state.recentSearches,
         limit: state.limit,
         generateSummary: state.generateSummary,
-      }), // only persist these fields, not the active query
+      }),
     }
   )
 );

@@ -86,5 +86,7 @@ class RecallDatabaseTests(unittest.TestCase):
                     self.assertEqual((await import_recall(Upload(raw), db))["skipped"], 1)
                     self.assertEqual(session.query(SavedItem).count(), 1)
                     self.assertEqual(session.query(RecallImport).one().metadata_json["title"], "old")
-                asyncio.run(exercise())
+                with patch("app.api.recall.backfill_in_background") as backfill:
+                    asyncio.run(exercise())
+                self.assertEqual(backfill.call_count, 2)
             engine.dispose()

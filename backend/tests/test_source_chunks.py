@@ -10,7 +10,7 @@ from app.models.files import Chunk
 from app.services import indexer as indexer_module
 from app.services.document_processor import document_processor
 from app.services.memory_search import search_memory
-from app.services.page_chunks import backfill_pages
+from app.services.source_chunks import backfill_pages
 
 
 async def visit(client, url, title, body):
@@ -61,3 +61,43 @@ async def test_backfill_indexes_existing_pages_once(db_session, stack):
     assert indexer_module.embedder.embed_documents.call_count == calls + pages
     chunked = {chunk.source_id for chunk in (await db_session.execute(select(Chunk).where(Chunk.source_kind == "document"))).scalars()}
     assert len(chunked) == pages
+
+
+@pytest.mark.asyncio
+async def test_notes_are_searchable_and_follow_edits_and_deletes(client_override, db_session, stack):
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://localhost") as client:
+        created = await client.post("/items", json={"title": "Garden", "content": "Plant the dahlias after the last frost."})
+        note_id = created.json()["id"]
+        hit = next(item for item in await search_memory(db_session, "dahlias") if item["kind"] == "note")
+        assert hit["id"] == note_id
+        assert hit["location"] == ""
+        edited = await client.put(f"/items/{note_id}", json={"title": "Garden", "content": "Sow the sunflowers in spring."})
+        assert edited.status_code == 200
+        assert not any(item["kind"] == "note" and item["id"] == note_id for item in await search_memory(db_session, "dahlias"))
+        assert any(item["kind"] == "note" and item["id"] == note_id for item in await search_memory(db_session, "sunflowers"))
+        assert (await client.delete(f"/items/{note_id}")).status_code == 200
+        assert not any(item["kind"] == "note" for item in await search_memory(db_session, "sunflowers"))
+
+
+@pytest.mark.asyncio
+async def test_uploaded_text_files_are_searchable_with_a_download_location(client_override, db_session, stack):
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://localhost") as client:
+        response = await client.post("/items/upload", files={"file": ("trip.txt", b"Hostel booking for the Lisbon trip, confirmation 4821.", "text/plain")})
+        assert response.status_code == 201
+        item_id = response.json()["id"]
+    hit = next(item for item in await search_memory(db_session, "lisbon confirmation") if item["kind"] == "upload")
+    assert hit["id"] == item_id
+    assert hit["location"] == f"/items/{item_id}/file"
+
+
+@pytest.mark.asyncio
+async def test_backfill_covers_existing_items(db_session, stack):
+    from app.models.item import SavedItem
+    from app.services.source_chunks import backfill_items
+
+    db_session.add(SavedItem(kind="note", title="Old note", content="Remember the heron sanctuary visit.", status="ready"))
+    await db_session.commit()
+    await backfill_items()
+    assert any(item["kind"] == "note" for item in await search_memory(db_session, "heron sanctuary"))

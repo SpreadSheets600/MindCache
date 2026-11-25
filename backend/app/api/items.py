@@ -13,6 +13,7 @@ from app.models.item import RecallImport, SavedItem
 from app.services.excerpts import matching_excerpt
 from app.services.file_content import MAX_UPLOAD, extract_file
 from app.services.ocr import recognize_image
+from app.services.source_chunks import forget_source, index_source
 
 router = APIRouter(prefix="/items", tags=["Notes and files"])
 
@@ -56,6 +57,8 @@ async def create_note(note: Note, db: AsyncSession = Depends(get_db)):
         raise HTTPException(400, "Title and content cannot be blank")
     item = SavedItem(kind="note", title=note.title.strip(), content=note.content, status="ready")
     db.add(item)
+    await db.flush()
+    await index_source(db, "item", item.id, item.title, item.content)
     await db.commit()
     await db.refresh(item)
     return item_json(item)
@@ -79,6 +82,8 @@ async def upload(file: UploadFile = File(...), db: AsyncSession = Depends(get_db
         raise HTTPException(400, str(exc)) from exc
     item = SavedItem(kind=kind, title=filename, content=text, filename=filename, mime_type=mime, original=data, status=state)
     db.add(item)
+    await db.flush()
+    await index_source(db, "item", item.id, item.title, item.content)
     await db.commit()
     await db.refresh(item)
     return item_json(item)
@@ -109,6 +114,7 @@ async def edit_note(item_id: int, note: Note, db: AsyncSession = Depends(get_db)
     if not note.title.strip() or not note.content.strip():
         raise HTTPException(400, "Title and content cannot be blank")
     item.title, item.content = note.title.strip(), note.content
+    await index_source(db, "item", item.id, item.title, item.content)
     await db.commit()
     await db.refresh(item)
     return item_json(item)
@@ -135,6 +141,7 @@ async def run_ocr(item_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(400, str(exc)) from exc
     item.content = text
     item.status = "ready" if text else "partial"
+    await index_source(db, "item", item.id, item.title, item.content)
     await db.commit()
     await db.refresh(item)
     return item_json(item)
@@ -145,6 +152,7 @@ async def delete_item(item_id: int, db: AsyncSession = Depends(get_db)):
     item = await db.get(SavedItem, item_id)
     if item is None:
         raise HTTPException(404, "Item not found")
+    await forget_source(db, "item", item.id)
     await db.delete(item)
     await db.commit()
     return {"status": "deleted"}

@@ -14,7 +14,7 @@ from app.models.document import Document
 from app.repositories.document_repository import document_repository
 from app.services.bm25_service import bm25_service
 from app.services.embedder import embedder
-from app.services.page_chunks import index_page
+from app.services.source_chunks import index_source
 from app.services.extractors import ExtractorFactory
 from app.services.entity_extractor import entity_extractor
 from app.services.keyword_extractor import keyword_extractor
@@ -175,7 +175,7 @@ class DocumentProcessor:
         except Exception as exc:
             logger.warning("Semantic indexing unavailable for document %s: %s", doc.id, exc)
         try:
-            await index_page(db, doc.id, title or doc.url, extracted_content)
+            await index_source(db, "document", doc.id, title or doc.url, extracted_content)
         except Exception as exc:
             logger.warning("Page search index unavailable for document %s: %s", doc.id, exc)
 

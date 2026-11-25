@@ -47,6 +47,14 @@ class FakeApi extends Api {
         reasons: ['keyword'],
         passages: ['Mitochondria in eukaryotic cells.'],
       ),
+      SearchHit(
+        kind: 'note',
+        id: 9,
+        title: 'Lab note',
+        location: '',
+        reasons: ['semantic'],
+        passages: ['Remember to label the cell cultures.'],
+      ),
     ];
   }
 
@@ -198,10 +206,15 @@ void main() {
     expect(api.calls, contains('search:mitochondria'));
     expect(find.text('cells.md'), findsOneWidget);
     expect(find.textContaining('produces energy'), findsOneWidget);
-    expect(find.text('semantic'), findsOneWidget);
+    expect(find.text('semantic'), findsNWidgets(2));
     expect(find.text('Cell biology primer'), findsOneWidget);
     expect(find.byIcon(Icons.public), findsOneWidget);
     expect(find.byTooltip('Show in folder'), findsOneWidget);
+    expect(find.byIcon(Icons.sticky_note_2_outlined), findsOneWidget);
+    await tester.tap(find.text('Lab note'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('label the cell cultures'), findsWidgets);
+    expect(find.text('Close'), findsOneWidget);
   });
 
   testWidgets('offers the embedding download when the model is missing', (

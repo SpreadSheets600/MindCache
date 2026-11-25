@@ -24,10 +24,7 @@ class Settings(BaseSettings):
 
     FAISS_INDEX_PATH: str = str(BASE_DIR / "data" / "faiss_index.bin")
     BM25_INDEX_PATH: str = str(BASE_DIR / "data" / "bm25_index.pkl")
-    EMBEDDING_DIMENSION: int = 1024
 
-    EMBEDDING_MODEL_PATH: str = "ai"
-    EMBEDDING_MODEL_NAME: str = "Qwen/Qwen3-Embedding-0.6B"
 
     LOG_LEVEL: str = "INFO"
     APP_NAME: str = "MindCache Backend"

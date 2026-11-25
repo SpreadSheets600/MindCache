@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -12,6 +13,7 @@ from app.core.config import settings
 from app.core.logging import get_logger, setup_logging
 from app.db.base import Base
 from app.db.session import engine
+from app.services.document_processor import document_processor
 from app.services.vector_service import vector_service
 
 setup_logging()
@@ -52,8 +54,11 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.critical(f"Critical Error During Database Schema Sync : {e}", exc_info=True)
 
+    reindex = asyncio.create_task(document_processor.reindex_if_needed())
+
     yield
 
+    reindex.cancel()
     logger.info("MindCache Backend Shutting Down ...")
 
     try:

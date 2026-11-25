@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.repositories.document_repository import document_repository
+from app.services.embedder import DIMENSION, MODEL_ID, embedder
 from app.services.vector_service import vector_service
 
 router = APIRouter(tags=["System health"])
@@ -35,10 +36,7 @@ async def health_check(db: AsyncSession = Depends(get_db)):
     except Exception:
         pass
 
-    from app.services.embedding_service import embedding_service
-    embedding_online = await embedding_service.check_health()
-    embedding_model = embedding_service.model_name
-    embedding_provider = embedding_service.provider
+    embedding_status = embedder.status()
 
     is_healthy = db_connected and faiss_status == "initialized"
     status_str = "healthy" if is_healthy else "degraded"
@@ -55,9 +53,10 @@ async def health_check(db: AsyncSession = Depends(get_db)):
                 "vectors_count": vector_count,
             },
             "embedding": {
-                "status": "connected" if embedding_online else "offline",
-                "model": embedding_model,
-                "provider": embedding_provider,
+                "status": embedding_status,
+                "model": MODEL_ID,
+                "dimension": DIMENSION,
+                "reindexing": vector_service.needs_reindexing,
             },
         },
     }

@@ -1,7 +1,9 @@
-from pathlib import Path
+import json
 import tempfile
 import unittest
-from app.core.ai_config import TaskModel, check_index_model, default_models, load_models, save_models
+from pathlib import Path
+
+from app.core.ai_config import TaskModel, load_generation, public_view, save_generation
 
 
 class AIConfigurationTests(unittest.TestCase):
@@ -13,24 +15,21 @@ class AIConfigurationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             TaskModel("openai", "model", "http://example.com/v1", allow_remote=True).validate()
 
-    def test_index_model_can_be_disabled_and_restored_but_not_switched(self):
-        with tempfile.TemporaryDirectory() as directory:
-            identity = Path(directory) / "identity.json"
-            original = TaskModel("transformers", "first")
-            disabled = TaskModel("disabled", "")
-            check_index_model(identity, original, disabled, True)
-            check_index_model(identity, disabled, original, True)
-            with self.assertRaises(ValueError):
-                check_index_model(identity, disabled, TaskModel("transformers", "different"), True)
-            check_index_model(identity, disabled, TaskModel("transformers", "different"), False)
-            self.assertFalse(identity.exists())
-
-    def test_independent_tasks_round_trip_without_secrets(self):
+    def test_generation_round_trip_keeps_key_private(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "models.json"
-            models = default_models("local-embedding")
-            models["generation"] = TaskModel("openai", "remote-model", "https://example.com/v1", "GENERATION_KEY", True)
-            save_models(path, models)
-            self.assertEqual(load_models(path, "unused"), models)
-            self.assertNotIn("secret-value", path.read_text())
+            model = TaskModel("openai", "remote-model", "https://example.com/v1", "sk-secret", True)
+            save_generation(path, model)
+            self.assertEqual(load_generation(path), model)
             self.assertEqual(path.stat().st_mode & 0o077, 0)
+            view = public_view(model)
+            self.assertTrue(view["api_key_set"])
+            self.assertNotIn("api_key", view)
+            self.assertNotIn("sk-secret", json.dumps(view))
+
+    def test_missing_and_old_files_fall_back_to_disabled_generation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "models.json"
+            self.assertEqual(load_generation(path), TaskModel("disabled", ""))
+            path.write_text(json.dumps({"embedding": {"provider": "ollama", "model": "x"}}))
+            self.assertEqual(load_generation(path), TaskModel("disabled", ""))

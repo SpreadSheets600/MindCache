@@ -1,4 +1,6 @@
+import json
 import os
+from pathlib import Path
 
 import faiss
 import numpy as np
@@ -6,6 +8,7 @@ import numpy as np
 from app.core.config import settings
 from app.core.exceptions import VectorStoreError
 from app.core.logging import get_logger
+from app.services.embedder import DIMENSION, SIGNATURE
 
 logger = get_logger(__name__)
 
@@ -14,10 +17,34 @@ class VectorService:
 
     def __init__(self):
         self.index_path: str = settings.FAISS_INDEX_PATH
-        self.dimension: int = settings.EMBEDDING_DIMENSION
+        self.dimension: int = DIMENSION
         self.needs_reindexing: bool = False
         self._index: faiss.Index | None = None
         self._load_index()
+        self.ensure_current()
+
+    @property
+    def signature_path(self):
+        return Path(self.index_path).with_name("index-embedding.json")
+
+    def mark_current(self):
+        self.signature_path.write_text(json.dumps({"signature": SIGNATURE}), encoding="utf-8")
+        self.needs_reindexing = False
+
+    def ensure_current(self):
+        path = self.signature_path
+        current = path.exists() and json.loads(path.read_text(encoding="utf-8")).get("signature") == SIGNATURE
+        if current and self._index.d == DIMENSION:
+            return
+        stale = self._index.ntotal > 0
+        self.dimension = DIMENSION
+        self._index = faiss.IndexIDMap(faiss.IndexFlatIP(DIMENSION))
+        self.save()
+        if stale:
+            self.needs_reindexing = True
+            logger.warning("Embedding model changed; vector index reset and a reindex is required.")
+        else:
+            self.mark_current()
 
     def _load_index(self):
 

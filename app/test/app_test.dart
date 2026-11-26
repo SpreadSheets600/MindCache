@@ -245,6 +245,22 @@ void main() {
     });
     expect(status.total, 4);
     expect(status.indexed, 3);
+    final graph = GraphData.fromJson({
+      'nodes': {
+        'files': [
+          {'id': 'file_1', 'label': 'notes.md', 'path': '/tmp/notes.md'},
+        ],
+        'folders': [
+          {'id': 'folder_1', 'label': '/tmp'},
+        ],
+      },
+      'edges': [
+        {'source': 'file_1', 'target': 'folder_1'},
+      ],
+    });
+    expect(graph.nodes.first.type, 'file');
+    expect(graph.nodes.first.path, '/tmp/notes.md');
+    expect(graph.edges.single.target, 'folder_1');
   });
 
   testWidgets('typing searches and shows passages with reasons', (
@@ -345,6 +361,43 @@ void main() {
     expect(find.text('Cell biology primer'), findsNothing);
     final canvas = find.byType(GraphCanvas);
     expect(canvas, findsOneWidget);
+  });
+
+  testWidgets('graph selects a local file and offers to open it', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final data = GraphData(
+      nodes: [
+        GraphNode(
+          id: 'file_1',
+          label: 'notes.md',
+          type: 'file',
+          path: '/tmp/notes.md',
+        ),
+      ],
+      edges: [],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: GraphCanvas(data: data)),
+      ),
+    );
+    final canvas = find
+        .descendant(
+          of: find.byType(GraphCanvas),
+          matching: find.byType(CustomPaint),
+        )
+        .last;
+    final point = forceLayout(data)['file_1']!;
+    await tester.tapAt(
+      tester.getTopLeft(canvas) + Offset(point.dx * 1000, point.dy * 700),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('notes.md'), findsOneWidget);
+    expect(find.byTooltip('Open file'), findsOneWidget);
   });
 
   testWidgets('ctrl+k jumps back to search and focuses the box', (

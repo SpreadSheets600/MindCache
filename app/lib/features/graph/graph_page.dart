@@ -34,7 +34,7 @@ class GraphPage extends ConsumerWidget {
             ],
           ),
           Text(
-            'Saved pages with the people, projects and topics they share.',
+            'Saved pages and local files, with their topics and folders.',
             style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
           ),
           const SizedBox(height: 16),
@@ -43,9 +43,7 @@ class GraphPage extends ConsumerWidget {
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (error, _) => Text(Api.message(error)),
               data: (data) => data.nodes.isEmpty
-                  ? const Text(
-                      'Save a few pages and their connections appear here.',
-                    )
+                  ? const Text('Save pages or add a folder to see them here.')
                   : GraphCanvas(data: data),
             ),
           ),
@@ -65,8 +63,17 @@ class GraphCanvas extends StatefulWidget {
 }
 
 class _GraphCanvasState extends State<GraphCanvas> {
-  late final Map<String, Offset> _layout = forceLayout(widget.data);
+  late Map<String, Offset> _layout = forceLayout(widget.data);
   GraphNode? _selected;
+
+  @override
+  void didUpdateWidget(GraphCanvas oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.data != widget.data) {
+      _layout = forceLayout(widget.data);
+      _selected = null;
+    }
+  }
 
   Offset _screen(String id) =>
       Offset(_layout[id]!.dx * _canvas.width, _layout[id]!.dy * _canvas.height);
@@ -116,12 +123,18 @@ class _GraphCanvasState extends State<GraphCanvas> {
             leading: Icon(_iconFor(_selected!.type)),
             title: Text(_selected!.label),
             subtitle: Text(_selected!.type),
-            trailing: _selected!.url == null
+            trailing: _selected!.url == null && _selected!.path == null
                 ? null
                 : IconButton(
-                    tooltip: 'Open page',
+                    tooltip: _selected!.path == null
+                        ? 'Open page'
+                        : 'Open file',
                     icon: const Icon(Icons.open_in_new),
-                    onPressed: () => launchUrl(Uri.parse(_selected!.url!)),
+                    onPressed: () => launchUrl(
+                      _selected!.path == null
+                          ? Uri.parse(_selected!.url!)
+                          : Uri.file(_selected!.path!),
+                    ),
                   ),
           ),
       ],
@@ -130,6 +143,8 @@ class _GraphCanvasState extends State<GraphCanvas> {
 
   IconData _iconFor(String type) => switch (type) {
     'document' => Icons.public,
+    'file' => Icons.insert_drive_file_outlined,
+    'folder' => Icons.folder_outlined,
     'entity' => Icons.person_outline,
     _ => Icons.tag,
   };
@@ -155,18 +170,20 @@ class GraphPainter extends CustomPainter {
     }
     for (final node in data.nodes) {
       final selected = node.id == selectedId;
-      final radius = node.type == 'document' ? 7.0 : 5.0;
+      final radius = node.type == 'document' || node.type == 'file' ? 7.0 : 5.0;
       canvas.drawCircle(
         at(node.id),
         selected ? radius + 3 : radius,
         Paint()
           ..color = switch (node.type) {
             'document' => scheme.primary,
+            'file' => scheme.tertiary,
+            'folder' => scheme.tertiary,
             'entity' => scheme.secondary,
             _ => scheme.onSurfaceVariant,
           },
       );
-      if (selected || node.type == 'document') {
+      if (selected || node.type == 'document' || node.type == 'file') {
         final label = TextPainter(
           text: TextSpan(
             text: node.label.length > 28

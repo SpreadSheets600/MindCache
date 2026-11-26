@@ -172,6 +172,7 @@ class GraphNode {
     required this.label,
     required this.type,
     this.url,
+    this.path,
   });
 
   factory GraphNode.fromJson(Map<String, dynamic> json, String type) =>
@@ -181,12 +182,14 @@ class GraphNode {
             .toString(),
         type: type,
         url: json['url'] as String?,
+        path: json['path'] as String?,
       );
 
   final String id;
   final String label;
   final String type;
   final String? url;
+  final String? path;
 }
 
 class GraphEdge {
@@ -204,6 +207,8 @@ class GraphData {
     final nodes = <GraphNode>[
       for (final entry in const {
         'documents': 'document',
+        'files': 'file',
+        'folders': 'folder',
         'entities': 'entity',
         'keywords': 'keyword',
       }.entries)

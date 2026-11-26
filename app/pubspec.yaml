@@ -12,8 +12,11 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_riverpod: ^3.5.0
+  hotkey_manager: ^0.2.3
   material_ui: ^1.11.1
+  tray_manager: ^0.2.4
   url_launcher: ^6.3.3
+  window_manager: ^0.4.3
 
 dev_dependencies:
   flutter_test:
@@ -22,3 +25,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/tray.png

@@ -1,10 +1,13 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:mindcache/core/api.dart';
 import 'package:mindcache/core/models.dart';
 import 'package:mindcache/core/providers.dart';
+import 'package:mindcache/features/graph/force_layout.dart';
+import 'package:mindcache/features/graph/graph_page.dart';
 import 'package:mindcache/home.dart';
 
 class FakeApi extends Api {
@@ -133,6 +136,35 @@ class FakeApi extends Api {
   }
 
   @override
+  Future<GraphData> graph() async => GraphData.fromJson({
+    'nodes': {
+      'documents': [
+        {
+          'id': 'doc_1',
+          'label': 'Cell biology primer',
+          'url': 'https://example.com/cells',
+        },
+        {
+          'id': 'doc_2',
+          'label': 'Lab protocol',
+          'url': 'https://example.com/lab',
+        },
+      ],
+      'entities': [
+        {'id': 'ent_0', 'name': 'ATP', 'type': 'Technology'},
+      ],
+      'keywords': [
+        {'id': 'kw_0', 'keyword': 'mitochondria'},
+      ],
+    },
+    'edges': [
+      {'source': 'doc_1', 'target': 'ent_0'},
+      {'source': 'doc_2', 'target': 'ent_0'},
+      {'source': 'doc_1', 'target': 'missing_node'},
+    ],
+  });
+
+  @override
   Future<void> startDownload(String task) async => calls.add('download:$task');
 
   @override
@@ -165,6 +197,7 @@ Future<void> openTab(WidgetTester tester, String label) async {
   const icons = {
     'Folders': Icons.folder_outlined,
     'Index': Icons.dataset_outlined,
+    'Graph': Icons.hub_outlined,
     'Settings': Icons.tune,
   };
   await tester.tap(find.byIcon(icons[label]!));
@@ -172,6 +205,25 @@ Future<void> openTab(WidgetTester tester, String label) async {
 }
 
 void main() {
+  test('force layout pulls connected nodes closer than unconnected ones', () {
+    final data = GraphData(
+      nodes: [
+        for (final id in ['a', 'b', 'c', 'd', 'e'])
+          GraphNode(id: id, label: id, type: 'document'),
+      ],
+      edges: [
+        GraphEdge(source: 'a', target: 'b'),
+        GraphEdge(source: 'b', target: 'c'),
+      ],
+    );
+    final layout = forceLayout(data);
+    expect(layout.length, 5);
+    final linked = (layout['a']! - layout['b']!).distance;
+    final loose = (layout['a']! - layout['e']!).distance;
+    expect(linked, lessThan(loose));
+    expect(forceLayout(data)['a'], layout['a']);
+  });
+
   test('models parse backend json', () {
     final hit = SearchHit.fromJson({
       'kind': 'page',
@@ -282,5 +334,30 @@ void main() {
     await tester.pumpAndSettle();
     expect(api.savedGeneration!['apiKey'], 'sk-new');
     expect(find.text('Remove saved key'), findsOneWidget);
+  });
+
+  testWidgets('graph shows saved pages and reveals a node when tapped', (
+    tester,
+  ) async {
+    await show(tester, FakeApi());
+    await openTab(tester, 'Graph');
+    expect(find.byType(CustomPaint), findsWidgets);
+    expect(find.text('Cell biology primer'), findsNothing);
+    final canvas = find.byType(GraphCanvas);
+    expect(canvas, findsOneWidget);
+  });
+
+  testWidgets('ctrl+k jumps back to search and focuses the box', (
+    tester,
+  ) async {
+    await show(tester, FakeApi());
+    await openTab(tester, 'Folders');
+    expect(find.text('Add folder'), findsOneWidget);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+    final field = tester.widget<TextField>(find.byType(TextField));
+    expect(field.focusNode!.hasFocus, isTrue);
   });
 }

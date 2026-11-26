@@ -375,4 +375,11 @@ flutter build linux --release
 
 On launch the app checks `http://127.0.0.1:8000/health`. If nothing answers, it starts `backend/.venv/bin/python -m uvicorn` itself (set `MINDCACHE_ROOT` if the project folder cannot be found) and stops it on exit. Run `./setup.sh` first so the backend environment exists.
 
-Screens: Search, Folders (add, pause, scan now, forget), Index (progress and counts, EmbeddingGemma 2 download) and Settings (optional generation provider with API key).
+Screens: Search, Folders (add, pause, scan now, forget), Graph (saved pages with the entities and topics they share, pan and zoom), Index (progress, estimate, pause, EmbeddingGemma 2 download) and Settings (optional generation provider with API key).
+
+Desktop behaviour:
+
+- Ctrl+K anywhere in the window jumps to Search and focuses the box.
+- A tray icon (Open, Search, Quit) keeps MindCache running after the window is closed; without a tray the close button quits.
+- Ctrl+Alt+Space tries to register as a system-wide hotkey. This works on X11 only; on Wayland compositors (for example niri) the binding is refused and ignored. Bind a key in the compositor to launch or focus the app instead.
+- The Linux build needs `libayatana-appindicator` and `libkeybinder3`. The pinned plugin versions trip `-Werror` under clang, so `app/linux/CMakeLists.txt` builds without it.

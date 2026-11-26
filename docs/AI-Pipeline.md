@@ -318,3 +318,5 @@ The earlier latency measurements reused cached query embeddings and do not measu
 
 The expanded fixture was run on 2026-11-26 with the model on CUDA and the 0.70 floor. Source recall@10 was 1.00 for 800, 1,600 and 3,200 characters; passage recall@10 was respectively 0.75, 0.50 and 0.00 on four passage queries. Cold-query p95 was 33.0, 33.6 and 32.7 ms respectively. Two long documents and four passage queries are too few to choose a new default; expand the fixture before drawing that conclusion. The first indexing measurement includes model loading and is not comparable to the later warm measurements.
 
+After selecting excerpts around clusters of query terms and excluding common words in memory search, passage recall@10 on the same four queries was 0.75, 0.75 and 0.50 respectively. Source recall@10 remained 1.00. The sample is still too small to select a chunk size.
+

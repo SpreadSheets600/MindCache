@@ -4,7 +4,7 @@ from app.models.document import Document
 from app.models.files import Chunk, IndexedFile
 from app.models.item import SavedItem
 from app.services.chunk_index import chunk_index
-from app.services.chunk_store import WORD, keyword_hits
+from app.services.chunk_store import STOPWORDS, WORD, keyword_hits
 from app.services.embedder import embedder
 from app.services.excerpts import matching_excerpt
 
@@ -72,7 +72,8 @@ async def search_memory(db, query, limit=20):
         return []
     chunks = {chunk.id: chunk for chunk in (await db.execute(select(Chunk).where(Chunk.id.in_(scores)))).scalars()}
     files, pages, items = await load_sources(db, chunks)
-    terms = WORD.findall(query)
+    words = WORD.findall(query)
+    terms = [word for word in words if word.lower() not in STOPWORDS] or words
     grouped = {}
     for chunk_id in sorted(chunks, key=lambda key: -scores[key]):
         chunk = chunks[chunk_id]

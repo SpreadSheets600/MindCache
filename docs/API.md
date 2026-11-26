@@ -452,18 +452,34 @@ These routes are for the desktop app and web app. Browser extensions cannot call
 
 Indexed files with `status` of `pending`, `indexed`, `partial` (keyword search works, embedding missing), `skipped` (unreadable or blank) or `failed`, plus `error` and `chunk_count`.
 
-### `GET /memory/search?q=&limit=`
+### `GET /memory/search?q=&limit=&mode=&kind=`
 
-Hybrid keyword and semantic search over indexed files, saved web pages, notes and uploads together. `kind` is `file`, `page`, `note` or `upload`. `location` is the file path, the page URL, or for uploads the backend path of the original (`/items/{id}/file`); notes have an empty location.
+The one search used by the extension, the web app and the desktop app. It searches indexed files, saved web pages, notes and uploads together.
+
+| Parameter | Meaning |
+|---|---|
+| `q` | Query text, up to 500 characters |
+| `limit` | 1 to 100 results, default 20 |
+| `mode` | `fast` matches words only and answers in milliseconds. `full` (default) adds matching by meaning. Clients ask for `fast` first and replace it with `full` |
+| `kind` | Comma-separated filter of `page`, `file`, `note`, `upload` |
+
+`location` is the file path, the page URL, or for uploads the backend path of the original; notes have an empty location. `open_url` is what a browser can open: the page URL, `/files/{id}/raw` for files, or the upload download. `terms` lists the words to highlight.
 
 ```json
 {
+    "mode": "full",
+    "terms": ["mitochondria", "energy"],
     "results": [
         {
             "kind": "file",
             "id": 3,
             "title": "cells.md",
             "location": "/home/me/notes/cells.md",
+            "folder": "/home/me/notes",
+            "ext": ".md",
+            "size": 1204,
+            "when": "2026-11-26T07:43:42",
+            "open_url": "/files/3/raw",
             "score": 0.03279,
             "reasons": ["keyword", "semantic"],
             "passages": [{ "text": "The mitochondria produces energy…", "start": 0 }]
@@ -472,7 +488,21 @@ Hybrid keyword and semantic search over indexed files, saved web pages, notes an
 }
 ```
 
-Semantic matches below a cosine similarity of 0.70 are dropped, so a query with no related content returns nothing.
+Pages add `domain` instead of `folder`, `ext` and `size`. Semantic matches below a cosine similarity of 0.70 are dropped, so a query with no related content returns nothing.
+
+### `GET /files/{id}/raw`
+
+Returns an indexed file so a web page can open it, since browsers do not open `file://` links from `http://` pages. Only files inside a watched folder are served. Text and source files are sent as `text/plain`, PDFs inline, and everything else as a download, always with `nosniff` and a sandbox policy.
+
+### `POST /files/{id}/open`
+
+Body `{"reveal": false}`. Opens the file in the computer's default app, or with `"reveal": true` its folder in the file manager.
+
+### `GET /settings/capture`, `PUT /settings/capture`
+
+Browser capture settings shared by every client: `auto_tracking`, `auto_extract`, `delay_seconds` (1 to 3600) and `excluded_domains`. `configured` is false until the first save, which lets an extension with existing local choices upload them instead of adopting the defaults. The extension polls this endpoint, so a change made in the web app or desktop app reaches the browser within a minute.
+
+The paired extension can call every endpoint except `/pairing`.
 
 ### `POST /files/{id}/reindex`
 

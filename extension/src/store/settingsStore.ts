@@ -7,7 +7,7 @@ interface SettingsState extends ExtensionSettings {
   setBackendUrl: (url: string) => void;
   setAutoTracking: (enabled: boolean) => void;
   setAutoExtract: (enabled: boolean) => void;
-  setPrivacyMode: (enabled: boolean) => void;
+  setCaptureDelaySeconds: (seconds: number) => void;
   setExcludedDomains: (domains: string[]) => void;
   addExcludedDomain: (domain: string) => void;
   removeExcludedDomain: (domain: string) => void;
@@ -18,6 +18,7 @@ const defaultSettings: ExtensionSettings = {
   backendUrl: "http://localhost:8000",
   autoTracking: false,
   autoExtract: true,
+  captureDelaySeconds: 10,
   excludedDomains: [
     "localhost",
     "127.0.0.1",
@@ -27,7 +28,6 @@ const defaultSettings: ExtensionSettings = {
     "google.com/search",
     "youtube.com/results",
   ],
-  privacyMode: false,
 };
 
 export const useSettingsStore = create<SettingsState>()(
@@ -37,7 +37,11 @@ export const useSettingsStore = create<SettingsState>()(
       setBackendUrl: (backendUrl) => set({ backendUrl }),
       setAutoTracking: (autoTracking) => set({ autoTracking }),
       setAutoExtract: (autoExtract) => set({ autoExtract }),
-      setPrivacyMode: (privacyMode) => set({ privacyMode }),
+      setCaptureDelaySeconds: (seconds) => {
+        if (Number.isInteger(seconds) && seconds >= 1 && seconds <= 3600) {
+          set({ captureDelaySeconds: seconds });
+        }
+      },
       setExcludedDomains: (excludedDomains) => set({ excludedDomains }),
       addExcludedDomain: (domain) =>
         set((state) => {

@@ -14,4 +14,4 @@ fi
 
 python3 "$ROOT_DIR/setup.py" --build-only "$@"
 printf '\nSetup complete. Run ./start.sh to start MindCache.\n'
-printf 'Load extension/dist as an unpacked extension, then pair it in the web app.\n'
+printf 'Load extension/dist as an unpacked extension; it connects automatically.\nAdd --app to ./setup.sh to build the desktop app too, then run ./start.sh --app.\n'

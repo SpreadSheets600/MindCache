@@ -7,6 +7,11 @@ import {
   HealthCheckResponse,
   DocumentResponse,
   GraphResponse,
+  MemoryKind,
+  MemorySearchResponse,
+  WatchedFolder,
+  IndexStatus,
+  CaptureSettings,
 } from "../types";
 
 export class BackendClientError extends Error {
@@ -153,6 +158,61 @@ class BackendClient {
       console.error("Search API query failure:", err);
       throw err;
     }
+  }
+
+  public async searchMemory(
+    query: string,
+    options: { mode?: "fast" | "full"; kinds?: MemoryKind[]; limit?: number; signal?: AbortSignal } = {}
+  ): Promise<MemorySearchResponse> {
+    const params = new URLSearchParams({ q: query, limit: String(options.limit ?? 20), mode: options.mode ?? "full" });
+    if (options.kinds?.length) params.set("kind", options.kinds.join(","));
+    const data = await this.request<MemorySearchResponse>(`/memory/search?${params}`, { method: "GET", signal: options.signal }, 0);
+    if (!data || !Array.isArray(data.results)) throw new Error("Invalid search response schema");
+    return data;
+  }
+
+  public absoluteUrl(path: string): string {
+    return path.startsWith("http") ? path : `${this.getBaseUrl()}${path}`;
+  }
+
+  public listFolders(): Promise<WatchedFolder[]> {
+    return this.request<WatchedFolder[]>("/folders", { method: "GET" }, 0);
+  }
+
+  public addFolder(path: string): Promise<WatchedFolder> {
+    return this.request<WatchedFolder>("/folders", { method: "POST", body: JSON.stringify({ path }) }, 0);
+  }
+
+  public setFolderEnabled(id: number, enabled: boolean): Promise<WatchedFolder> {
+    return this.request<WatchedFolder>(`/folders/${id}`, { method: "PATCH", body: JSON.stringify({ enabled }) }, 0);
+  }
+
+  public rescanFolder(id: number): Promise<unknown> {
+    return this.request(`/folders/${id}/rescan`, { method: "POST" }, 0);
+  }
+
+  public forgetFolder(id: number): Promise<unknown> {
+    return this.request(`/folders/${id}`, { method: "DELETE" }, 0);
+  }
+
+  public indexStatus(): Promise<IndexStatus> {
+    return this.request<IndexStatus>("/index/status", { method: "GET" }, 0);
+  }
+
+  public setIndexPaused(paused: boolean): Promise<IndexStatus> {
+    return this.request<IndexStatus>(paused ? "/index/pause" : "/index/resume", { method: "POST" }, 0);
+  }
+
+  public openFile(id: number, reveal = false): Promise<unknown> {
+    return this.request(`/files/${id}/open`, { method: "POST", body: JSON.stringify({ reveal }) }, 0);
+  }
+
+  public getCapture(): Promise<CaptureSettings> {
+    return this.request<CaptureSettings>("/settings/capture", { method: "GET" }, 0);
+  }
+
+  public putCapture(settings: CaptureSettings): Promise<CaptureSettings> {
+    return this.request<CaptureSettings>("/settings/capture", { method: "PUT", body: JSON.stringify(settings) }, 0);
   }
 
   public async deleteDocument(documentId: number): Promise<{ message: string }> {

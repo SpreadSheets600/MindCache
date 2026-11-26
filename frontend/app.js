@@ -7,7 +7,6 @@ let selectedId = null;
 let selectedKind = "document";
 let selectedText = "";
 let currentItems = [];
-let currentSearch = false;
 let activeKind = "all";
 
 async function request(path, options) {
@@ -42,7 +41,7 @@ function render(items, searching) {
     title.type = 'button';
     title.addEventListener('click', () => showDetail(item.id, item.itemKind || 'document'));
     body.append(textElement('span', kind, 'result-kind'), title, textElement('p', item.domain || item.kind || item.url));
-    if (item.status === 'partial') body.append(textElement('p', item.kind === 'recall' ? 'Original file unavailable.' : 'Saved; text extraction is incomplete.')); 
+    if (item.status === 'partial') body.append(textElement('p', 'Saved; text extraction is incomplete.')); 
     if (item.excerpt || item.summary) body.append(textElement('p', item.excerpt || item.summary));
     if (item.match_reasons?.length) {
       const labels = {title: 'Title', keyword: 'Keyword', metadata: 'Metadata', lexical: 'Indexed terms', semantic: 'Semantic similarity', text: 'Saved text'};
@@ -54,21 +53,13 @@ function render(items, searching) {
 }
 
 async function load() {
-  const term = query.value.trim();
-  $('#list-title').textContent = term ? `Results for “${term}”` : 'Recently saved';
-  $('#clear-search').hidden = !term;
   status.hidden = false;
   status.textContent = 'Loading your memory…';
   results.replaceChildren();
   try {
-    const [pages, items] = await Promise.all([
-      term ? request('/search', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({query: term, limit: 50})}) : request('/documents?limit=100'),
-      request(`/items?query=${encodeURIComponent(term)}`),
-    ]);
-    const combined = [...(term ? pages.results : pages), ...items.map(item => ({...item, itemKind: 'item'}))];
-    if (!term) combined.sort((a, b) => Date.parse(b.updated_at || 0) - Date.parse(a.updated_at || 0));
-    currentItems = combined; currentSearch = Boolean(term);
-    render(currentItems, currentSearch);
+    const [pages, items] = await Promise.all([request('/documents?limit=100'), request('/items?query=')]);
+    currentItems = [...pages, ...items.map(item => ({...item, itemKind: 'item'}))].sort((a, b) => Date.parse(b.updated_at || 0) - Date.parse(a.updated_at || 0));
+    render(currentItems, false);
     $('#connection').textContent = 'Backend connected';
   } catch (error) {
     status.textContent = `Could not load your memory. ${error.message} Check that the backend is running and try again.`;
@@ -85,7 +76,7 @@ async function showDetail(id, kind = "document") {
     $("#summary-status").textContent = "";
     $("#generated-summary").textContent = "";
     $('#detail-title').textContent = item.title || item.url;
-    const partial = item.status === 'partial' ? (item.kind === 'recall' ? ' — original file unavailable' : ' — text extraction incomplete') : '';
+    const partial = item.status === 'partial' ? (' — text extraction incomplete') : '';
     $('#detail-origin').textContent = item.domain || `${item.kind}${partial}`;
     $('#detail-content').textContent = selectedText || 'No extracted text is available.';
     $('#edit-note-form').hidden = item.kind !== 'note';
@@ -138,11 +129,16 @@ $('#edit-note-form').addEventListener('submit', async event => {
 document.querySelectorAll('[data-kind]').forEach(button => button.addEventListener('click', () => {
   activeKind = button.dataset.kind;
   document.querySelectorAll('[data-kind]').forEach(other => other.setAttribute('aria-pressed', String(other === button)));
-  render(currentItems, currentSearch);
+  render(currentItems, false);
 }));
 if (new URLSearchParams(location.search).get('focus') === 'search') query.focus();
-$('#search-form').addEventListener('submit', event => { event.preventDefault(); load(); });
-$('#clear-search').addEventListener('click', () => { query.value = ''; load(); });
+$('#search-form').addEventListener('submit', event => {
+  event.preventDefault();
+  const term = query.value.trim();
+  if (!term) return;
+  if (new URLSearchParams(location.search).get('embedded') === '1' && window.parent !== window) window.parent.postMessage({type: 'mindcache:search', query: term}, location.origin);
+  else location.href = `/app/?focus=search&q=${encodeURIComponent(term)}`;
+});
 $('#close-detail').addEventListener('click', () => detail.close());
 $('#run-ocr').addEventListener('click', async event => {
   const button = event.currentTarget; button.disabled = true;
@@ -210,59 +206,6 @@ $('#clear-history').addEventListener('click', async () => {
   if (!confirm('Clear all saved search queries and result clicks?')) return;
   try { await request('/privacy/history', {method: 'DELETE'}); await loadPrivacy(); $('#privacy-message').textContent = 'Search and click history cleared.'; }
   catch (error) { $('#privacy-message').textContent = `Could not clear history. ${error.message}`; }
-});
-async function loadPairing() {
-  try {
-    const data = await request('/pairing');
-    const list = $('#paired-extensions'); list.replaceChildren();
-    $('#pairing-message').textContent = data.extension_ids.length ? 'Paired extensions' : 'No extensions paired yet.';
-    for (const id of data.extension_ids) {
-      const row = textElement('div', '', 'pairing-row');
-      row.append(textElement('code', id));
-      const remove = textElement('button', 'Remove'); remove.type = 'button';
-      remove.addEventListener('click', async () => {
-        if (!confirm('Remove this extension’s access?')) return;
-        try { await request(`/pairing/${id}`, {method: 'DELETE'}); await loadPairing(); }
-        catch (error) { $('#pairing-message').textContent = `Could not remove pairing. ${error.message}`; }
-      });
-      row.append(remove); list.append(row);
-    }
-  } catch (error) { $('#pairing-message').textContent = `Could not load pairings. ${error.message}`; }
-}
-$('#pairing-form').addEventListener('submit', async event => {
-  event.preventDefault();
-  try {
-    await request('/pairing', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({extension_id: $('#extension-id').value.trim()})});
-    $('#extension-id').value = ''; await loadPairing();
-  } catch (error) { $('#pairing-message').textContent = `Could not pair extension. ${error.message}`; }
-});
-let recallPreview = null;
-$('#recall-file').addEventListener('change', () => { recallPreview = null; $('#recall-import').hidden = true; $('#recall-message').textContent = ''; });
-$('#recall-form').addEventListener('submit', async event => {
-  event.preventDefault();
-  const file = $('#recall-file').files[0];
-  const body = new FormData(); body.append('file', file);
-  const button = event.currentTarget.querySelector('[type="submit"]'); button.disabled = true;
-  $('#recall-message').textContent = 'Inspecting export…';
-  try {
-    const preview = await request('/imports/recall/preview', {method: 'POST', body});
-    recallPreview = true;
-    $('#recall-message').textContent = `${preview.total} memories: ${preview.new} new, ${preview.duplicates} duplicates, ${preview.originals_included} originals included, ${preview.missing_originals} originals unavailable. Missing files cannot be restored from this export.`;
-    $('#recall-import').hidden = preview.new === 0;
-  } catch (error) { recallPreview = null; $('#recall-import').hidden = true; $('#recall-message').textContent = `Could not inspect export. ${error.message}`; }
-  finally { button.disabled = false; }
-});
-$('#recall-import').addEventListener('click', async event => {
-  const file = $('#recall-file').files[0];
-  if (!file || !recallPreview || !confirm('Import the new memories shown in the preview? The Recall source will not be changed.')) return;
-  const body = new FormData(); body.append('file', file);
-  event.currentTarget.disabled = true;
-  try {
-    const result = await request('/imports/recall', {method: 'POST', body});
-    $('#recall-message').textContent = `Imported ${result.imported}; skipped ${result.skipped}; ${result.missing_originals} imported without their original files.`;
-    $('#recall-import').hidden = true; recallPreview = null;
-  } catch (error) { $('#recall-message').textContent = `Import failed. ${error.message}`; }
-  finally { event.currentTarget.disabled = false; }
 });
 const modelTasks = ['embedding', 'generation'];
 async function loadModels() {
@@ -386,9 +329,8 @@ for (const button of document.querySelectorAll('nav [data-view]')) {
     for (const view of document.querySelectorAll('.view')) view.hidden = view.id !== button.dataset.view;
     for (const other of document.querySelectorAll('nav [data-view]')) other.removeAttribute('aria-current');
     button.setAttribute('aria-current', 'page');
-    if (button.dataset.view === 'privacy') { loadPrivacy(); loadPairing(); }
+    if (button.dataset.view === 'privacy') loadPrivacy();
     if (button.dataset.view === 'models') loadModels();
-    if (button.dataset.view === 'setup') loadPairing();
   });
 }
 $('#privacy-models').addEventListener('click', () => {

@@ -31,8 +31,12 @@ class FakeApi extends Api {
   Future<bool> reachable() async => true;
 
   @override
-  Future<List<SearchHit>> search(String query) async {
-    calls.add('search:$query');
+  Future<List<SearchHit>> search(
+    String query, {
+    bool fast = false,
+    List<String> kinds = const [],
+  }) async {
+    calls.add('search:$query${fast ? ':fast' : ''}');
     return [
       SearchHit(
         kind: 'file',
@@ -85,6 +89,26 @@ class FakeApi extends Api {
   }
 
   var paused = false;
+  var captureSettings = const CaptureSettings(
+    autoTracking: false,
+    autoExtract: true,
+    delaySeconds: 10,
+    excludedDomains: ['localhost'],
+  );
+
+  @override
+  Future<CaptureSettings> capture() async => captureSettings;
+
+  @override
+  Future<void> saveCapture(CaptureSettings settings) async {
+    calls.add('capture:${settings.autoTracking}:${settings.delaySeconds}');
+    captureSettings = settings;
+  }
+
+  @override
+  Future<void> openFile(int id, {bool reveal = false}) async {
+    calls.add('open:$id:$reveal');
+  }
 
   @override
   Future<IndexStatus> indexStatus() async => IndexStatus(
@@ -245,6 +269,22 @@ void main() {
     });
     expect(status.total, 4);
     expect(status.indexed, 3);
+    final graph = GraphData.fromJson({
+      'nodes': {
+        'files': [
+          {'id': 'file_1', 'label': 'notes.md', 'path': '/tmp/notes.md'},
+        ],
+        'folders': [
+          {'id': 'folder_1', 'label': '/tmp'},
+        ],
+      },
+      'edges': [
+        {'source': 'file_1', 'target': 'folder_1'},
+      ],
+    });
+    expect(graph.nodes.first.type, 'file');
+    expect(graph.nodes.first.path, '/tmp/notes.md');
+    expect(graph.edges.single.target, 'folder_1');
   });
 
   testWidgets('typing searches and shows passages with reasons', (
@@ -267,6 +307,64 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('label the cell cultures'), findsWidgets);
     expect(find.text('Close'), findsOneWidget);
+  });
+
+  testWidgets('results show instantly by words, then settle on meaning', (
+    tester,
+  ) async {
+    final api = FakeApi();
+    await show(tester, api);
+    await tester.enterText(find.byType(TextField), 'cells');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    expect(
+      api.calls.indexOf('search:cells:fast'),
+      lessThan(api.calls.indexOf('search:cells')),
+    );
+    expect(find.text('3 results'), findsOneWidget);
+    await tester.tap(find.text('Files'));
+    await tester.pumpAndSettle();
+    expect(
+      api.calls.where((call) => call.startsWith('search:cells')).length,
+      4,
+    );
+  });
+
+  testWidgets('show in folder asks the backend to reveal the file', (
+    tester,
+  ) async {
+    final api = FakeApi();
+    await show(tester, api);
+    await tester.enterText(find.byType(TextField), 'cells');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Show in folder'));
+    await tester.pumpAndSettle();
+    expect(api.calls, contains('open:1:true'));
+  });
+
+  testWidgets('browser capture settings are saved to the shared backend', (
+    tester,
+  ) async {
+    final api = FakeApi();
+    await show(tester, api);
+    await openTab(tester, 'Settings');
+    expect(find.text('Browser capture'), findsOneWidget);
+    await tester.tap(
+      find.widgetWithText(SwitchListTile, 'Save pages automatically'),
+    );
+    await tester.pumpAndSettle();
+    expect(api.calls, contains('capture:true:10'));
+    expect(api.captureSettings.autoTracking, isTrue);
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Wait (seconds)'),
+      '45',
+    );
+    await tester.ensureVisible(find.widgetWithText(OutlinedButton, 'Apply'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Apply'));
+    await tester.pumpAndSettle();
+    expect(api.calls, contains('capture:true:45'));
   });
 
   testWidgets('offers the embedding download when the model is missing', (
@@ -347,6 +445,43 @@ void main() {
     expect(canvas, findsOneWidget);
   });
 
+  testWidgets('graph selects a local file and offers to open it', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final data = GraphData(
+      nodes: [
+        GraphNode(
+          id: 'file_1',
+          label: 'notes.md',
+          type: 'file',
+          path: '/tmp/notes.md',
+        ),
+      ],
+      edges: [],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: GraphCanvas(data: data)),
+      ),
+    );
+    final canvas = find
+        .descendant(
+          of: find.byType(GraphCanvas),
+          matching: find.byType(CustomPaint),
+        )
+        .last;
+    final point = forceLayout(data)['file_1']!;
+    await tester.tapAt(
+      tester.getTopLeft(canvas) + Offset(point.dx * 1000, point.dy * 700),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('notes.md'), findsOneWidget);
+    expect(find.byTooltip('Open file'), findsOneWidget);
+  });
+
   testWidgets('ctrl+k jumps back to search and focuses the box', (
     tester,
   ) async {
@@ -359,5 +494,16 @@ void main() {
     await tester.pumpAndSettle();
     final field = tester.widget<TextField>(find.byType(TextField));
     expect(field.focusNode!.hasFocus, isTrue);
+  });
+
+  testWidgets('appearance control changes the selected theme', (tester) async {
+    await show(tester, FakeApi());
+    await openTab(tester, 'Settings');
+    await tester.tap(find.text('Dark'));
+    await tester.pumpAndSettle();
+    final control = tester.widget<SegmentedButton<ThemeMode>>(
+      find.byType(SegmentedButton<ThemeMode>),
+    );
+    expect(control.selected, {ThemeMode.dark});
   });
 }

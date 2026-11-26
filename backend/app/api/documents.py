@@ -1,3 +1,4 @@
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -10,6 +11,7 @@ from app.services.source_chunks import forget_source
 from app.services.vector_service import vector_service
 from app.repositories.document_repository import document_repository
 from app.schemas.document import DocumentResponse, EntityResponse, KeywordResponse
+from app.models.files import IndexedFile, WatchedFolder
 
 router = APIRouter(tags=["Document Management"])
 logger = get_logger(__name__)
@@ -177,7 +179,23 @@ async def get_graph_data(
         entity_map: dict[str, dict] = {}
         keyword_map: dict[str, dict] = {}
         doc_nodes = []
+        file_nodes = []
+        folder_nodes = {}
         edges = []
+
+        statement = (
+            select(IndexedFile, WatchedFolder)
+            .join(WatchedFolder, IndexedFile.folder_id == WatchedFolder.id)
+            .where(IndexedFile.status.in_(("indexed", "partial")), IndexedFile.chunk_count > 0)
+            .order_by(IndexedFile.id.desc())
+            .limit(limit)
+        )
+        for file, folder in (await db.execute(statement)).all():
+            folder_id = f"folder_{folder.id}"
+            file_id = f"file_{file.id}"
+            folder_nodes[folder_id] = {"id": folder_id, "label": folder.path, "type": "folder"}
+            file_nodes.append({"id": file_id, "label": file.name, "type": "file", "path": file.path})
+            edges.append({"source": file_id, "target": folder_id, "type": "in_folder"})
 
         for doc in documents:
             doc_id = f"doc_{doc.id}"
@@ -291,12 +309,15 @@ async def get_graph_data(
         return {
             "nodes": {
                 "documents": doc_nodes,
+                "files": file_nodes,
+                "folders": list(folder_nodes.values()),
                 "entities": entity_nodes,
                 "keywords": keyword_nodes,
             },
             "edges": edges,
             "stats": {
                 "document_count": len(doc_nodes),
+                "file_count": len(file_nodes),
                 "entity_count": len(entity_nodes),
                 "keyword_count": len(keyword_nodes),
                 "edge_count": len(edges),

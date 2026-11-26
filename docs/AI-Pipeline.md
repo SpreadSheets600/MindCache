@@ -314,5 +314,15 @@ CPU throughput is compute-bound. Mitigations are in the product instead: newest 
 | 0.70 (default) | 0.97 | 1.00 | 0.98 | 0.88 |
 | 0.75 | 0.93 | 1.00 | 0.96 | 0.88 |
 
-Query latency is about 2 ms (p95 under 4 ms). Indexing runs at about 40 chunks/s on the GPU once the model is warm. Every document fits in one chunk, so this corpus cannot compare chunk sizes (800, 1600 and 3200 characters scored the same); the 1,600 character default stays until a corpus of long documents says otherwise.
+The earlier latency measurements reused cached query embeddings and do not measure a new query. Indexing ran at about 40 chunks/s on the GPU once the model was warm. Those measurements used only short documents, so they did not compare chunk sizes. The fixture now includes two long documents and passage targets, and clears the query cache before each timed search. Rerun the benchmark before choosing a different chunk size. The 1,600 character default remains in use.
+
+The expanded fixture was run on 2026-11-26 with the model on CUDA and the 0.70 floor. Source recall@10 was 1.00 for 800, 1,600 and 3,200 characters; passage recall@10 was respectively 0.75, 0.50 and 0.00 on four passage queries. Cold-query p95 was 33.0, 33.6 and 32.7 ms respectively. Two long documents and four passage queries are too few to choose a new default; expand the fixture before drawing that conclusion. The first indexing measurement includes model loading and is not comparable to the later warm measurements.
+
+After selecting excerpts around clusters of query terms and excluding common words in memory search, passage recall@10 on the same four queries was 0.75, 0.75 and 0.50 respectively. Source recall@10 remained 1.00. The sample is still too small to select a chunk size.
+
+### Multimodal spike (2026-11-26)
+
+Using the locally cached EmbeddingGemma 2 model with the vision encoder enabled and the audio encoder disabled, sentence-transformers encoded a PIL image and a three-frame NumPy video directly. Both produced finite 768-dimensional normalized vectors on CUDA. The video input had no timing metadata, so the processor retained all three frames and warned that it could not sample by frame rate. This verifies the local encoding call, not retrieval quality or indexing support. Long videos need bounded sampling and a way to associate matches with timestamps before they can be indexed.
+
+The [model card](https://huggingface.co/google/embeddinggemma-2) specifies that image and video inputs use no text prompt and that a video's frames share the model's context budget. It also specifies that titled documents need the title formatted explicitly; the current document embedding path does not yet do this.
 

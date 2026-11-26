@@ -23,6 +23,7 @@ class Embedder:
     def __init__(self):
         self._model = None
         self._lock = threading.Lock()
+        self._inference_lock = threading.Lock()
         self._queries = {}
 
     @property
@@ -75,13 +76,21 @@ class Embedder:
                 self._model = model
             return self._model
 
+    def warm(self):
+        try:
+            if self.is_downloaded():
+                self.embed_query("warm up")
+        except Exception:
+            pass
+
     def embed_query(self, text):
         if not text.strip():
             raise EmbeddingGenerationError("Cannot generate embedding for empty text.")
         if text in self._queries:
             return self._queries[text]
         try:
-            vector = self._load().encode(text, prompt_name="SearchQuery", normalize_embeddings=True)
+            with self._inference_lock:
+                vector = self._load().encode(text, prompt_name="SearchQuery", normalize_embeddings=True)
         except Exception as exc:
             raise EmbeddingGenerationError(f"Embedding unavailable: {exc}") from exc
         vector = np.asarray(vector, dtype=np.float32)
@@ -94,7 +103,8 @@ class Embedder:
         if not texts:
             return np.empty((0, DIMENSION), dtype=np.float32)
         try:
-            vectors = self._load().encode(texts, prompt_name="Document", normalize_embeddings=True, batch_size=16)
+            with self._inference_lock:
+                vectors = self._load().encode(texts, prompt_name="Document", normalize_embeddings=True, batch_size=16)
         except Exception as exc:
             raise EmbeddingGenerationError(f"Embedding unavailable: {exc}") from exc
         return np.asarray(vectors, dtype=np.float32)

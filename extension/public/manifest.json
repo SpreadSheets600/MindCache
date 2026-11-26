@@ -1,5 +1,6 @@
 {
   "manifest_version": 3,
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAjQLCiMEnmJ+75g/CmdKiEFSzLM8/zWhpO6/xX0KjplQYRKQSeuE0UYzwpL2fOcvHEjG4s0w0iamWLk1whqnpkVLP3+iRMwKFHyBG4xlOQTDe8P3C0A8LlTNGqnYgoBt2i+ZoKKUxDopwu0txSHSr2NJ83v41PCWxifEVlMs0zDisa8bcPaz6/1qp8JzqQvyrFiiw6rkTeNuMuqP7Qs3okUfBLUfrzwhaDsowWyCYb73KHzeLqwPbsWobZwAXnLEnT2oxH7uBgjr5e54+pMzDVz4xfKdRz5sV7OvDrx6LaonHbua1d68yNdvB1ZiSR9lVbm9Wh8so/aq/4ocwoyW8YwIDAQAB",
   "name": "MindCache",
   "version": "1.0.0",
   "description": "Local, AI-powered browser memory and semantic search assistant.",

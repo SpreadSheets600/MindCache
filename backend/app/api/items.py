@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
 from app.db.session import get_db
-from app.models.item import RecallImport, SavedItem
+from app.models.item import SavedItem
 from app.services.excerpts import matching_excerpt
 from app.services.file_content import MAX_UPLOAD, extract_file
 from app.services.ocr import recognize_image
@@ -95,12 +95,6 @@ async def get_item(item_id: int, db: AsyncSession = Depends(get_db)):
     if item is None:
         raise HTTPException(404, "Item not found")
     data = item_json(item)
-    if item.kind == "recall":
-        imported = (await db.execute(select(RecallImport).where(RecallImport.item_id == item.id))).scalar_one_or_none()
-        if imported:
-            source = imported.metadata_json.get("source") or ""
-            data["source_url"] = source if isinstance(source, str) and source.startswith(("http://", "https://")) else None
-            data["recall_metadata"] = imported.metadata_json
     return data
 
 

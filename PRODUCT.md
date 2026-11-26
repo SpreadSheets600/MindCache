@@ -25,7 +25,6 @@ A local web dashboard, a browser extension, and a local backend work together. T
 - Users choose models independently for embedding and generation. The existing application supports local Transformers, Ollama, and explicitly configured OpenAI-compatible providers.
 - The user's desired privacy boundary is that personal memory remains on their computer. The current implementation also permits explicitly configured remote AI, network model downloads, and page fetching. The exact treatment of those network operations is awaiting clarification; do not claim the current application is fully offline.
 - The existing embedding index cannot safely change models without rebuilding; the application currently blocks that change.
-- Recall is a source of import and functionality within MindCache, not a separate required product.
 
 ## Brand Commitments
 

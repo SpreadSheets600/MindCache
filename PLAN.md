@@ -8,14 +8,12 @@ Status: in progress. Date: 2026-11-25. Rules for whoever implements this are in 
 | --- | --- |
 | 0 Housekeeping | Done except Alembic migrations, which were never used (tables are created at startup) |
 | 1 EmbeddingGemma 2 | Done: spike, embedder, signature and re-embedding, relevance floor (0.70, calibrated on the real model). Benchmark harness is in `backend/benchmarks` (recall@1 0.97, recall@3 1.00 at the 0.70 floor). Comparing chunk sizes needs a corpus of long documents |
-| 2 Chunk storage and search | Done, with the indexer running in the API process. Splitting out a separate worker process is deferred until measurements show search latency suffering during indexing. Saved web pages are chunked, embedded and searched together with files through `/memory/search` (existing pages are backfilled at startup). Notes and uploads (including Recall imports) are chunked and searched the same way |
+| 2 Chunk storage and search | Done, with the indexer running in the API process. Splitting out a separate worker process is deferred until measurements show search latency suffering during indexing. Saved web pages are chunked, embedded and searched together with files through `/memory/search` (existing pages are backfilled at startup). Notes and uploads are chunked and searched the same way |
 | 3 Folder indexing | Done for text and PDF files |
 | 4 Live watching | Done. Renames are detected by size, modification time and extension, so a moved file keeps its index without re-embedding |
 | 5 and 6 Flutter app | Done: Search, Folders, Graph, Index and Settings screens, Ctrl+K, tray with close-to-tray. The system-wide hotkey is registered but only works on X11, not Wayland |
 | 7 Resource behavior | Pause and resume, newest-first order, rate and ETA done. Worker niceness, free-memory batch sizing and the CPU speed plan are open |
 | 8 Images, 9 Packaging | Not started |
-
-The previous plan (Recall integration) is kept at `docs/PLAN-recall-integration.md`. Its pairing, local-access, notes/uploads and privacy work is already in the tree and this plan builds on it.
 
 ## 1. Goal
 
@@ -85,7 +83,7 @@ Measured and decided on 2026-11-25 (table in `docs/AI-Pipeline.md`): int8 quanti
 
 Facts from reading the tree on 2026-11-25:
 
-- Backend: FastAPI + async SQLAlchemy + SQLite (`backend/app`). Routers: `visit`, `health`, `search`, `documents`, `privacy`, `ai`, `items`, `recall`, `pairing`.
+- Backend: FastAPI + async SQLAlchemy + SQLite (`backend/app`). Routers: `visit`, `health`, `search`, `documents`, `privacy`, `ai`, `items`, `pairing`.
 - Embedding: `services/embedding_service.py` uses sentence-transformers with a user-selectable model and provider (`core/ai_config.py`, `services/ai_providers.py`, `data/models.json`). Default is `Qwen/Qwen3-Embedding-0.6B`, dimension 1024.
 - Indexes: `vector_service.py` (FAISS, `data/faiss_index.bin`) and `bm25_service.py` (`rank-bm25`, pickled to `data/bm25_index.pkl`). Both are document-level, not chunk-level.
 - Data model: `Document` (web page, unique URL) and `SavedItem` (note or upload, original bytes stored in SQLite as `LargeBinary`).

@@ -26,16 +26,36 @@ class Api {
     }
   }
 
-  Future<List<SearchHit>> search(String query) async {
+  Future<List<SearchHit>> search(
+    String query, {
+    bool fast = false,
+    List<String> kinds = const [],
+  }) async {
     final response = await dio.get(
       '/memory/search',
-      queryParameters: {'q': query, 'limit': 30},
+      queryParameters: {
+        'q': query,
+        'limit': 30,
+        'mode': fast ? 'fast' : 'full',
+        if (kinds.isNotEmpty) 'kind': kinds.join(','),
+      },
     );
     return [
       for (final item in response.data['results'] as List)
         SearchHit.fromJson(item as Map<String, dynamic>),
     ];
   }
+
+  Future<void> openFile(int id, {bool reveal = false}) =>
+      dio.post('/files/$id/open', data: {'reveal': reveal});
+
+  Future<CaptureSettings> capture() async {
+    final response = await dio.get('/settings/capture');
+    return CaptureSettings.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  Future<void> saveCapture(CaptureSettings settings) =>
+      dio.put('/settings/capture', data: settings.toJson());
 
   Future<List<Folder>> folders() async {
     final response = await dio.get('/folders');
@@ -61,10 +81,7 @@ class Api {
   }
 
   Future<GraphData> graph() async {
-    final response = await dio.get(
-      '/documents/graph',
-      queryParameters: {'limit': 120},
-    );
+    final response = await dio.get('/graph', queryParameters: {'limit': 120});
     return GraphData.fromJson(response.data as Map<String, dynamic>);
   }
 

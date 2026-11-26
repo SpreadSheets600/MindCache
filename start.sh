@@ -4,6 +4,16 @@ set -eu
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_PYTHON="$ROOT_DIR/backend/.venv/bin/python"
 
+if [ "${1:-}" = "--app" ]; then
+  APP="$(find "$ROOT_DIR/app/build" -type f -name mindcache -perm -u+x 2>/dev/null | head -n 1)"
+  if [ -z "$APP" ]; then
+    printf 'The desktop app has not been built. Run ./setup.sh --app first.\n' >&2
+    exit 1
+  fi
+  export MINDCACHE_ROOT="$ROOT_DIR"
+  exec "$APP"
+fi
+
 if [ ! -x "$BACKEND_PYTHON" ] || [ ! -x "$ROOT_DIR/backend/.venv/bin/uvicorn" ]; then
   printf 'Backend dependencies are missing. Run ./setup.sh first.\n' >&2
   exit 1
@@ -14,6 +24,6 @@ if [ ! -f "$ROOT_DIR/extension/dist/manifest.json" ] || [ ! -f "$ROOT_DIR/fronte
 fi
 
 printf 'MindCache: http://127.0.0.1:8000/app/\n'
-printf 'Pair your browser extension under Setup in the web app.\n'
+printf 'The MindCache browser extension connects automatically.\n'
 cd "$ROOT_DIR/backend"
 exec "$BACKEND_PYTHON" -m uvicorn app.main:app --host 127.0.0.1 --port 8000

@@ -1,15 +1,19 @@
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.models.files import IndexedFile, WatchedFolder
-from app.services.memory_search import search_memory
+from app.services.memory_search import query_terms, search_memory
 from app.services.indexer import indexer
-from app.services.scanner import inside
+from app.services.scanner import TEXT_EXTENSIONS, inside
 from app.services.watcher import watcher
 
 router = APIRouter(tags=["Folders and files"])
@@ -42,6 +46,7 @@ def file_json(file):
         "folder_id": file.folder_id,
         "path": file.path,
         "name": file.name,
+        "ext": file.ext,
         "size": file.size,
         "status": file.status,
         "error": file.error,
@@ -123,9 +128,68 @@ async def list_files(
     return [file_json(file) for file in (await db.execute(statement)).scalars()]
 
 
+KINDS = {"page", "file", "note", "upload"}
+
+
 @router.get("/memory/search")
-async def search(q: str = Query(min_length=1, max_length=500), limit: int = Query(20, ge=1, le=100), db: AsyncSession = Depends(get_db)):
-    return {"results": await search_memory(db, q, limit)}
+async def search(
+    q: str = Query(min_length=1, max_length=500),
+    limit: int = Query(20, ge=1, le=100),
+    mode: str = Query("full", pattern="^(fast|full)$"),
+    kind: str = Query("", max_length=60),
+    db: AsyncSession = Depends(get_db),
+):
+    kinds = {value for value in kind.split(",") if value in KINDS}
+    results = await search_memory(db, q, limit, mode, kinds)
+    return {"results": results, "terms": query_terms(q), "mode": mode}
+
+
+INLINE_TYPES = {".pdf": "application/pdf"}
+
+
+async def indexed_path(db, file_id):
+    file = await db.get(IndexedFile, file_id)
+    folder = await db.get(WatchedFolder, file.folder_id) if file else None
+    if file is None or folder is None or file.status == "missing":
+        raise HTTPException(404, "File not found.")
+    path = Path(file.path)
+    if not path.is_file() or not inside(path, folder.path):
+        raise HTTPException(404, "File not found.")
+    return file, path
+
+
+@router.get("/files/{file_id}/raw")
+async def file_content(file_id: int, db: AsyncSession = Depends(get_db)):
+    file, path = await indexed_path(db, file_id)
+    suffix = path.suffix.lower()
+    headers = {"X-Content-Type-Options": "nosniff", "Content-Security-Policy": "sandbox"}
+    if suffix in INLINE_TYPES:
+        return FileResponse(path, media_type=INLINE_TYPES[suffix], content_disposition_type="inline", headers=headers)
+    if suffix in TEXT_EXTENSIONS:
+        return FileResponse(path, media_type="text/plain; charset=utf-8", content_disposition_type="inline", headers=headers)
+    return FileResponse(path, media_type="application/octet-stream", filename=file.name, content_disposition_type="attachment", headers=headers)
+
+
+class OpenBody(BaseModel):
+    reveal: bool = False
+
+
+def launch(target):
+    if sys.platform.startswith("win"):
+        os.startfile(target)
+        return
+    command = ["open", target] if sys.platform == "darwin" else ["xdg-open", target]
+    subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+
+
+@router.post("/files/{file_id}/open")
+async def open_file(file_id: int, body: OpenBody | None = None, db: AsyncSession = Depends(get_db)):
+    _, path = await indexed_path(db, file_id)
+    try:
+        launch(str(path.parent if body and body.reveal else path))
+    except OSError as exc:
+        raise HTTPException(500, "This computer could not open the file.") from exc
+    return {"status": "opened"}
 
 
 @router.post("/files/{file_id}/reindex", status_code=202)

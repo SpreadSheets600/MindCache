@@ -75,7 +75,20 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                   : null,
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            children: [
+              for (final kind in SearchKind.values)
+                ChoiceChip(
+                  label: Text(kind.label),
+                  selected: state.kind == kind,
+                  onSelected: (_) =>
+                      ref.read(searchProvider.notifier).setKind(kind),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
           const EmbeddingNotice(),
           const SizedBox(height: 8),
           Expanded(child: _Results(state: state)),
@@ -105,21 +118,38 @@ class _Results extends StatelessWidget {
         style: TextStyle(color: muted),
       );
     }
-    if (state.results.isEmpty && !state.loading) {
+    if (state.results.isEmpty && !state.loading && !state.refining) {
       return Text(
         'No matches for "${state.query}".',
         style: TextStyle(color: muted),
       );
     }
-    return ListView.separated(
-      itemCount: state.results.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
-      itemBuilder: (context, index) => ResultCard(hit: state.results[index]),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text(
+            state.refining
+                ? '${state.results.length} so far · matching by meaning…'
+                : '${state.results.length} result${state.results.length == 1 ? '' : 's'}',
+            style: TextStyle(color: muted, fontSize: 12),
+          ),
+        ),
+        Expanded(
+          child: ListView.separated(
+            itemCount: state.results.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 8),
+            itemBuilder: (context, index) =>
+                ResultCard(hit: state.results[index]),
+          ),
+        ),
+      ],
     );
   }
 }
 
-class ResultCard extends StatelessWidget {
+class ResultCard extends ConsumerWidget {
   const ResultCard({super.key, required this.hit});
 
   final SearchHit hit;
@@ -157,7 +187,7 @@ class ResultCard extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final muted = theme.colorScheme.onSurfaceVariant;
     final target = _target();
@@ -189,14 +219,8 @@ class ResultCard extends StatelessWidget {
                     IconButton(
                       tooltip: 'Show in folder',
                       icon: const Icon(Icons.folder_open_outlined),
-                      onPressed: () => _open(
-                        Uri.file(
-                          hit.location.substring(
-                            0,
-                            hit.location.lastIndexOf('/'),
-                          ),
-                        ),
-                      ),
+                      onPressed: () =>
+                          ref.read(apiProvider).openFile(hit.id, reveal: true),
                     ),
                 ],
               ),

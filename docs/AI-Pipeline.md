@@ -320,3 +320,9 @@ The expanded fixture was run on 2026-11-26 with the model on CUDA and the 0.70 f
 
 After selecting excerpts around clusters of query terms and excluding common words in memory search, passage recall@10 on the same four queries was 0.75, 0.75 and 0.50 respectively. Source recall@10 remained 1.00. The sample is still too small to select a chunk size.
 
+### Multimodal spike (2026-11-26)
+
+Using the locally cached EmbeddingGemma 2 model with the vision encoder enabled and the audio encoder disabled, sentence-transformers encoded a PIL image and a three-frame NumPy video directly. Both produced finite 768-dimensional normalized vectors on CUDA. The video input had no timing metadata, so the processor retained all three frames and warned that it could not sample by frame rate. This verifies the local encoding call, not retrieval quality or indexing support. Long videos need bounded sampling and a way to associate matches with timestamps before they can be indexed.
+
+The [model card](https://huggingface.co/google/embeddinggemma-2) specifies that image and video inputs use no text prompt and that a video's frames share the model's context budget. It also specifies that titled documents need the title formatted explicitly; the current document embedding path does not yet do this.
+

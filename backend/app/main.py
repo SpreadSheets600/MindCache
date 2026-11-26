@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from app.core.local_access import allowed_origin, local_host
-from app.core.pairing import trusted_ids
+from app.core.pairing import MINDCACHE_EXTENSION_ID, trusted_ids
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import ai, documents, files, health, items, pairing, privacy, recall, search, visit
@@ -112,7 +112,8 @@ async def restrict_local_browser_requests(request, call_next):
         if request.url.path.startswith(("/ai", "/privacy", "/imports", "/pairing", "/folders", "/files", "/index", "/memory")):
             return JSONResponse({"detail": "Use the local web app to change these settings."}, status_code=403)
         try:
-            paired = origin.removeprefix("chrome-extension://") in trusted_ids(pairing.PAIRING_PATH)
+            extension_id = origin.removeprefix("chrome-extension://")
+            paired = extension_id == MINDCACHE_EXTENSION_ID or extension_id in trusted_ids(pairing.PAIRING_PATH)
         except (ValueError, OSError):
             paired = False
         if not paired:

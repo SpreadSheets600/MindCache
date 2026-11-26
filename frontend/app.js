@@ -211,31 +211,6 @@ $('#clear-history').addEventListener('click', async () => {
   try { await request('/privacy/history', {method: 'DELETE'}); await loadPrivacy(); $('#privacy-message').textContent = 'Search and click history cleared.'; }
   catch (error) { $('#privacy-message').textContent = `Could not clear history. ${error.message}`; }
 });
-async function loadPairing() {
-  try {
-    const data = await request('/pairing');
-    const list = $('#paired-extensions'); list.replaceChildren();
-    $('#pairing-message').textContent = data.extension_ids.length ? 'Paired extensions' : 'No extensions paired yet.';
-    for (const id of data.extension_ids) {
-      const row = textElement('div', '', 'pairing-row');
-      row.append(textElement('code', id));
-      const remove = textElement('button', 'Remove'); remove.type = 'button';
-      remove.addEventListener('click', async () => {
-        if (!confirm('Remove this extension’s access?')) return;
-        try { await request(`/pairing/${id}`, {method: 'DELETE'}); await loadPairing(); }
-        catch (error) { $('#pairing-message').textContent = `Could not remove pairing. ${error.message}`; }
-      });
-      row.append(remove); list.append(row);
-    }
-  } catch (error) { $('#pairing-message').textContent = `Could not load pairings. ${error.message}`; }
-}
-$('#pairing-form').addEventListener('submit', async event => {
-  event.preventDefault();
-  try {
-    await request('/pairing', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({extension_id: $('#extension-id').value.trim()})});
-    $('#extension-id').value = ''; await loadPairing();
-  } catch (error) { $('#pairing-message').textContent = `Could not pair extension. ${error.message}`; }
-});
 let recallPreview = null;
 $('#recall-file').addEventListener('change', () => { recallPreview = null; $('#recall-import').hidden = true; $('#recall-message').textContent = ''; });
 $('#recall-form').addEventListener('submit', async event => {
@@ -386,9 +361,8 @@ for (const button of document.querySelectorAll('nav [data-view]')) {
     for (const view of document.querySelectorAll('.view')) view.hidden = view.id !== button.dataset.view;
     for (const other of document.querySelectorAll('nav [data-view]')) other.removeAttribute('aria-current');
     button.setAttribute('aria-current', 'page');
-    if (button.dataset.view === 'privacy') { loadPrivacy(); loadPairing(); }
+    if (button.dataset.view === 'privacy') loadPrivacy();
     if (button.dataset.view === 'models') loadModels();
-    if (button.dataset.view === 'setup') loadPairing();
   });
 }
 $('#privacy-models').addEventListener('click', () => {

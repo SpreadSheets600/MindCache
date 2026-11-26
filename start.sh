@@ -14,6 +14,6 @@ if [ ! -f "$ROOT_DIR/extension/dist/manifest.json" ] || [ ! -f "$ROOT_DIR/fronte
 fi
 
 printf 'MindCache: http://127.0.0.1:8000/app/\n'
-printf 'Pair your browser extension under Setup in the web app.\n'
+printf 'The MindCache browser extension connects automatically.\n'
 cd "$ROOT_DIR/backend"
 exec "$BACKEND_PYTHON" -m uvicorn app.main:app --host 127.0.0.1 --port 8000

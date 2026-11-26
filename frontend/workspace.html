@@ -54,11 +54,7 @@
           </form><p id="privacy-message" role="status"></p>
         </section>
         <section class="privacy-storage"><h2>Local storage</h2><p>Saved content on this device.</p><p id="privacy-storage">Loading storage information…</p><a class="backup-link" href="/privacy/backup" download>Download database backup</a><details><summary>What is included?</summary><p>The backup includes saved content and originals, but excludes settings and search indexes. Guided restore is not available yet.</p></details></section>
-        <section class="privacy-network"><h2>Capture &amp; connections</h2><p id="privacy-model-routing" role="status">Checking model routing…</p><button type="button" id="privacy-models">Review model providers</button><p>Browser capture controls are available in the extension.</p><details><summary>Network access</summary><p>Page and metadata fetching and model downloads can use the network. Local programs and paired extensions can access the backend.</p></details></section>
-      </div>
-      <div class="import-section pairing-settings"><h2>Browser extensions</h2><p>Manage which extensions can access your memory.</p>
-        <form id="pairing-form"><label for="extension-id">Extension ID</label><input id="extension-id" required pattern="[a-p]{32}" maxlength="32" autocomplete="off"><button class="primary" type="submit">Pair extension</button></form>
-        <p id="pairing-message" role="status">Loading paired extensions…</p><div id="paired-extensions"></div>
+        <section class="privacy-network"><h2>Capture &amp; connections</h2><p id="privacy-model-routing" role="status">Checking model routing…</p><button type="button" id="privacy-models">Review model providers</button><p>The MindCache extension connects automatically while the desktop app is running.</p><details><summary>Network access</summary><p>Page and metadata fetching and model downloads can use the network. Local programs and the MindCache extension can access the backend.</p></details></section>
       </div>
     </section>
     <section id="models" class="view" hidden>

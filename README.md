@@ -54,7 +54,7 @@ Everything is in the [`docs/`](docs/README.md) directory:
 
 ## Core Features
 
-- **Local storage** — Captured content and indexes are stored locally. Page fetching and model downloads can make network requests. Search and click logging can be controlled and cleared in the web app. The service restricts browser origins and requires extension pairing, but does not authenticate other local programs.
+- **Local storage** — Captured content and indexes are stored locally. Page fetching and model downloads can make network requests. Search and click logging can be controlled and cleared in the web app. The bundled extension connects automatically; the service restricts browser origins but does not authenticate other local programs.
 - **Background Tab Tracking** — Extension monitors tab activations, navigation, closures, and window focus. Computes exact dwell time per tab. Auto-indexes after a 10-second threshold. Deduplicates rapid revisits.
 - **Path & Extension Blacklists** — Automatically filters out login pages (`/login`, `/signup`, `/admin`), binary files (`.exe`, `.dmg`, `.zip`), images (`.png`, `.jpg`), and documents (`.pdf`, `.docx`) to keep the index clean.
 - **Client-Side Extraction** — Uses the Defuddle library (from Obsidian Web Clipper) to extract page content directly from the DOM. Includes shadow DOM flattening, noise removal (`<nav>`, `<footer>`, `.sidebar`), URL absolutification, and an 8-second Defuddle timeout with sync fallback. Works behind auth/paywalls and on JS-rendered SPAs.

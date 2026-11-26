@@ -386,3 +386,25 @@ async def test_extension_must_be_paired(tmp_path):
             assert (await client.get("/pairing", headers=origin)).status_code == 403
             assert (await client.delete(f"/pairing/{identifier}")).status_code == 200
             assert (await client.get("/", headers=origin)).status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_bundled_extension_connects_without_pairing(tmp_path, client_override):
+    import base64
+    import hashlib
+    import json
+    from pathlib import Path
+    from app.api import pairing
+    from app.core.pairing import MINDCACHE_EXTENSION_ID
+
+    manifest = json.loads((Path(__file__).resolve().parents[2] / "extension/public/manifest.json").read_text())
+    digest = hashlib.sha256(base64.b64decode(manifest["key"])).hexdigest()[:32]
+    identifier = "".join(chr(ord("a") + int(character, 16)) for character in digest)
+    assert identifier == MINDCACHE_EXTENSION_ID
+    transport = httpx.ASGITransport(app=app)
+    with patch.object(pairing, "PAIRING_PATH", tmp_path / "extensions.json"):
+        async with httpx.AsyncClient(transport=transport, base_url="http://localhost") as client:
+            origin = {"Origin": f"chrome-extension://{identifier}"}
+            assert (await client.get("/", headers=origin)).status_code == 200
+            assert (await client.get("/documents", headers=origin)).status_code == 200
+            assert (await client.get("/folders", headers=origin)).status_code == 403

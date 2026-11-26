@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Search, Globe, Brain, CornerDownLeft, X } from "lucide-react";
+import { Search, Globe, Brain, CornerDownLeft, X, FileText, StickyNote } from "lucide-react";
 
 interface TabItem {
   id: number;
@@ -11,14 +11,13 @@ interface TabItem {
 }
 
 interface MemoryItem {
+  kind: "page" | "file" | "note" | "upload";
   id: number;
+  title: string;
   url: string;
-  domain: string;
-  title: string | null;
-  summary: string | null;
-  score: number;
-  last_visited_at: string;
-  source_type: string;
+  domain?: string;
+  folder?: string;
+  passages: { text: string }[];
 }
 
 export const SearchOverlay: React.FC = () => {
@@ -98,27 +97,30 @@ export const SearchOverlay: React.FC = () => {
     }
   };
 
+  const searchSequence = useRef(0);
+
   const searchMemory = (query: string) => {
-    if (!query.trim()) {
+    const text = query.trim();
+    const sequence = ++searchSequence.current;
+    if (!text) {
       setMemoryResults([]);
       setIsLoading(false);
       return;
     }
+    if (typeof chrome === "undefined" || !chrome.runtime) return;
 
     setIsLoading(true);
-    if (typeof chrome !== "undefined" && chrome.runtime) {
-      chrome.runtime.sendMessage(
-        { action: "search-memory", query: query.trim(), limit: 8 },
-        (response) => {
-          setIsLoading(false);
-          if (response && response.status === "ok") {
-            setMemoryResults(response.results || []);
-          } else {
-            setMemoryResults([]);
-          }
-        }
-      );
-    }
+    const toItem = (hit: any): MemoryItem => ({ ...hit, url: hit.open_url || "" });
+    const ask = (mode: "fast" | "full") =>
+      chrome.runtime.sendMessage({ action: "search-memory", query: text, limit: 8, mode }, (response) => {
+        if (sequence !== searchSequence.current) return;
+        const ok = response && response.status === "ok";
+        if (ok) setMemoryResults((response.results || []).map(toItem));
+        else if (mode === "full") setMemoryResults([]);
+        setIsLoading(false);
+      });
+    ask("fast");
+    ask("full");
   };
 
   const checkBackendHealth = () => {
@@ -142,7 +144,7 @@ export const SearchOverlay: React.FC = () => {
       setIsLoading(true);
       debounceTimer.current = setTimeout(() => {
         searchMemory(val);
-      }, 250);
+      }, 120);
     }
   };
 
@@ -154,6 +156,7 @@ export const SearchOverlay: React.FC = () => {
   };
 
   const handleSelectItem = (item: any) => {
+    if (!item) return;
     if (mode === "tabs") {
       const tab = item as TabItem;
       if (typeof chrome !== "undefined" && chrome.runtime) {
@@ -349,17 +352,17 @@ export const SearchOverlay: React.FC = () => {
                     </div>
                     <div>
                       {searchQuery.trim() 
-                        ? "The semantic search found zero matching documents." 
-                        : "Type something above to search your indexed web pages."}
+                        ? "Nothing in your pages, files or notes matches." 
+                        : "Type something above to search everything you have saved."}
                     </div>
                     {!searchQuery.trim() && (
                       <div className="overlay-suggestions" style={{ marginTop: "16px", display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
                         <span style={{ fontSize: "11px", color: "#71717a", fontWeight: 500 }}>Try:</span>
                         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "center" }}>
                           {[
-                            "that rust pdf parser",
-                            "the paper about transformers",
-                            "youtube video about rag pipelines"
+                            "invoice from march",
+                            "notes about the project",
+                            "that article on sleep"
                           ].map((query, i) => (
                             <button
                               key={i}
@@ -404,10 +407,11 @@ export const SearchOverlay: React.FC = () => {
               const isSelected = idx === selectedIndex;
               const key = mode === "tabs" ? `tab-${(item as TabItem).id}` : `mem-${(item as MemoryItem).id}`;
               const title = mode === "tabs" ? (item as TabItem).title : ((item as MemoryItem).title || "Untitled Document");
-              const url = item.url;
-              const domain = mode === "tabs" 
-                ? new URL(url || "http://tab").hostname.replace("www.", "") 
-                : (item as MemoryItem).domain;
+              const memory = item as MemoryItem;
+              const url = mode === "tabs" ? item.url : memory.passages?.[0]?.text || memory.url;
+              const domain = mode === "tabs"
+                ? new URL(item.url || "http://tab").hostname.replace("www.", "")
+                : memory.kind === "page" ? memory.domain : memory.kind === "file" ? (memory.folder || "").split(/[\\/]/).filter(Boolean).pop() || "File" : memory.kind === "note" ? "Note" : "Upload";
               const favIconUrl = mode === "tabs" ? (item as TabItem).favIconUrl : null;
 
               return (
@@ -431,8 +435,12 @@ export const SearchOverlay: React.FC = () => {
                       ) : (
                         <Globe size={16} />
                       )
-                    ) : (
+                    ) : (item as MemoryItem).kind === "file" ? (
+                      <FileText size={16} />
+                    ) : (item as MemoryItem).kind === "page" ? (
                       <Brain size={16} />
+                    ) : (
+                      <StickyNote size={16} />
                     )}
                   </div>
 

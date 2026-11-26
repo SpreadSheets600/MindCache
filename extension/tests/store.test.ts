@@ -30,12 +30,10 @@ describe("MindCache Settings Store Tests", () => {
     const store = useSettingsStore.getState();
     store.setBackendUrl("http://custom-url:9000");
     store.setAutoTracking(true);
-    store.setPrivacyMode(true);
 
     const updated = useSettingsStore.getState();
     expect(updated.backendUrl).toBe("http://custom-url:9000");
     expect(updated.autoTracking).toBe(true);
-    expect(updated.privacyMode).toBe(true);
   });
 
   it("should add and remove excluded domains safely", () => {

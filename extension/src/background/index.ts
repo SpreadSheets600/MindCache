@@ -1,13 +1,16 @@
 import { backendClient } from "../services/BackendClient";
 import { useSettingsStore } from "../store/settingsStore";
+import { pullCaptureSettings, startCaptureSync } from "../services/captureSync";
 import type { PageExtraction } from "../content/extract-page";
 import type { VisitRequest } from "../types";
 
 const recentVisits = new Map<string, number>();
 
 Promise.resolve(useSettingsStore.persist.rehydrate()).then(() => {
+  startCaptureSync();
   if (activeTab && !activeTab.indexed) scheduleCapture(activeTab);
 });
+setInterval(() => void pullCaptureSettings(true), 60_000);
 
 function createContextMenus() {
   chrome.contextMenus.create({
@@ -143,6 +146,7 @@ interface ActiveTabState {
 let activeTab: ActiveTabState | null = null;
 
 function scheduleCapture(state: ActiveTabState) {
+  void pullCaptureSettings();
   if (state.timerId) clearTimeout(state.timerId);
   const seconds = useSettingsStore.getState().captureDelaySeconds;
   const delay = Math.max(0, seconds * 1000 - (Date.now() - state.activatedAt));
@@ -433,10 +437,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.action === "search-memory") {
     const query = message.query || "";
     const limit = message.limit || 8;
+    const mode = message.mode === "fast" ? "fast" : "full";
     backendClient
-      .search(query, limit, false)
+      .searchMemory(query, { limit, mode })
       .then((res) => {
-        sendResponse({ status: "ok", results: res.results || [] });
+        const results = (res.results || []).map((hit) => ({
+          ...hit,
+          open_url: hit.open_url
+            ? backendClient.absoluteUrl(hit.open_url)
+            : backendClient.absoluteUrl(`/app/?focus=search&q=${encodeURIComponent(hit.title)}`),
+        }));
+        sendResponse({ status: "ok", results, terms: res.terms || [] });
       })
       .catch((err) => {
         console.error("[MindCache Background] Search memory failed:", err);

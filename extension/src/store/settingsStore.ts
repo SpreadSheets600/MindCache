@@ -8,7 +8,6 @@ interface SettingsState extends ExtensionSettings {
   setAutoTracking: (enabled: boolean) => void;
   setAutoExtract: (enabled: boolean) => void;
   setCaptureDelaySeconds: (seconds: number) => void;
-  setPrivacyMode: (enabled: boolean) => void;
   setExcludedDomains: (domains: string[]) => void;
   addExcludedDomain: (domain: string) => void;
   removeExcludedDomain: (domain: string) => void;
@@ -29,7 +28,6 @@ const defaultSettings: ExtensionSettings = {
     "google.com/search",
     "youtube.com/results",
   ],
-  privacyMode: false,
 };
 
 export const useSettingsStore = create<SettingsState>()(
@@ -44,7 +42,6 @@ export const useSettingsStore = create<SettingsState>()(
           set({ captureDelaySeconds: seconds });
         }
       },
-      setPrivacyMode: (privacyMode) => set({ privacyMode }),
       setExcludedDomains: (excludedDomains) => set({ excludedDomains }),
       addExcludedDomain: (domain) =>
         set((state) => {

@@ -114,13 +114,62 @@ export interface GraphResponse {
   };
 }
 
+export type MemoryKind = "page" | "file" | "note" | "upload";
+
+export interface MemoryHit {
+  kind: MemoryKind;
+  id: number;
+  title: string;
+  location: string;
+  score: number;
+  reasons: ("keyword" | "semantic")[];
+  passages: { text: string; start: number }[];
+  open_url: string;
+  when: string | null;
+  domain?: string;
+  folder?: string;
+  ext?: string;
+  size?: number;
+}
+
+export interface MemorySearchResponse {
+  results: MemoryHit[];
+  terms: string[];
+  mode: "fast" | "full";
+}
+
+export interface WatchedFolder {
+  id: number;
+  path: string;
+  enabled: boolean;
+  status: string;
+  last_scan_at: string | null;
+}
+
+export interface IndexStatus {
+  files: Record<string, number>;
+  queued: number;
+  vectors: number;
+  embedding: string;
+  paused?: boolean;
+  files_per_minute?: number | null;
+  eta_seconds?: number | null;
+}
+
+export interface CaptureSettings {
+  auto_tracking: boolean;
+  auto_extract: boolean;
+  delay_seconds: number;
+  excluded_domains: string[];
+  configured?: boolean;
+}
+
 export interface ExtensionSettings {
   backendUrl: string;
   autoTracking: boolean;
   autoExtract: boolean;
   captureDelaySeconds: number;
   excludedDomains: string[];
-  privacyMode: boolean;
 }
 
 export interface BackendComponentStatus {

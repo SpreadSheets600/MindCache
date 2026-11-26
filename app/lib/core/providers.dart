@@ -1,12 +1,34 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api.dart';
 import 'backend.dart';
 import 'models.dart';
 
 final apiProvider = Provider<Api>((ref) => Api.local());
+
+final preferencesProvider = Provider<SharedPreferences?>((ref) => null);
+
+class ThemePreference extends Notifier<ThemeMode> {
+  @override
+  ThemeMode build() {
+    final value = ref.watch(preferencesProvider)?.getString('theme');
+    return ThemeMode.values.where((mode) => mode.name == value).firstOrNull ??
+        ThemeMode.system;
+  }
+
+  Future<void> select(ThemeMode mode) async {
+    state = mode;
+    await ref.read(preferencesProvider)?.setString('theme', mode.name);
+  }
+}
+
+final themeProvider = NotifierProvider<ThemePreference, ThemeMode>(
+  ThemePreference.new,
+);
 
 final backendProvider = FutureProvider<void>((ref) async {
   final supervisor = BackendSupervisor();

@@ -360,4 +360,15 @@ void main() {
     final field = tester.widget<TextField>(find.byType(TextField));
     expect(field.focusNode!.hasFocus, isTrue);
   });
+
+  testWidgets('appearance control changes the selected theme', (tester) async {
+    await show(tester, FakeApi());
+    await openTab(tester, 'Settings');
+    await tester.tap(find.text('Dark'));
+    await tester.pumpAndSettle();
+    final control = tester.widget<SegmentedButton<ThemeMode>>(
+      find.byType(SegmentedButton<ThemeMode>),
+    );
+    expect(control.selected, {ThemeMode.dark});
+  });
 }

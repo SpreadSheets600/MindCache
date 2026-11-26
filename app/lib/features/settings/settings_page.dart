@@ -21,6 +21,19 @@ class SettingsPage extends ConsumerWidget {
           children: [
             Text('Settings', style: theme.textTheme.headlineMedium),
             const SizedBox(height: 24),
+            Text('Appearance', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 12),
+            SegmentedButton<ThemeMode>(
+              segments: const [
+                ButtonSegment(value: ThemeMode.system, label: Text('System')),
+                ButtonSegment(value: ThemeMode.light, label: Text('Light')),
+                ButtonSegment(value: ThemeMode.dark, label: Text('Dark')),
+              ],
+              selected: {ref.watch(themeProvider)},
+              onSelectionChanged: (selection) =>
+                  ref.read(themeProvider.notifier).select(selection.first),
+            ),
+            const SizedBox(height: 32),
             Text('Embeddings', style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),
             Text(

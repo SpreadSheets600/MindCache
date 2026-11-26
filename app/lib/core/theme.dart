@@ -15,8 +15,8 @@ class Palette {
   static const cotton = Color(0xFFFDFBF8);
 }
 
-ThemeData buildTheme() {
-  const scheme = ColorScheme.light(
+ThemeData buildTheme({bool dark = false}) {
+  const lightScheme = ColorScheme.light(
     primary: Palette.accentDeep,
     onPrimary: Palette.cotton,
     secondary: Palette.accent,
@@ -30,11 +30,27 @@ ThemeData buildTheme() {
     outlineVariant: Palette.rule,
     error: Palette.error,
   );
+  const darkScheme = ColorScheme.dark(
+    primary: Color(0xFFFFB4A7),
+    onPrimary: Color(0xFF571D17),
+    secondary: Color(0xFFEF8B7B),
+    onSecondary: Color(0xFF38110D),
+    surface: Color(0xFF1D1918),
+    onSurface: Color(0xFFF0DED9),
+    onSurfaceVariant: Color(0xFFCDBDB8),
+    surfaceContainerHighest: Color(0xFF49403D),
+    surfaceContainerHigh: Color(0xFF302A28),
+    outline: Color(0xFF766762),
+    outlineVariant: Color(0xFF514642),
+    error: Color(0xFFFFB4AB),
+  );
+  final scheme = dark ? darkScheme : lightScheme;
+  final card = dark ? const Color(0xFF292321) : Palette.cotton;
   final base = ThemeData(useMaterial3: true, colorScheme: scheme);
   return base.copyWith(
-    scaffoldBackgroundColor: Palette.paper,
+    scaffoldBackgroundColor: scheme.surface,
     textTheme: base.textTheme
-        .apply(bodyColor: Palette.ink, displayColor: Palette.ink)
+        .apply(bodyColor: scheme.onSurface, displayColor: scheme.onSurface)
         .copyWith(
           headlineMedium: const TextStyle(
             fontSize: 28,
@@ -49,39 +65,39 @@ ThemeData buildTheme() {
           ),
         ),
     cardTheme: CardThemeData(
-      color: Palette.cotton,
+      color: card,
       elevation: 0,
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
-        side: const BorderSide(color: Palette.rule),
+        side: BorderSide(color: scheme.outlineVariant),
       ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: Palette.cotton,
+      fillColor: card,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(6),
-        borderSide: const BorderSide(color: Palette.rule),
+        borderSide: BorderSide(color: scheme.outlineVariant),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(6),
-        borderSide: const BorderSide(color: Palette.rule),
+        borderSide: BorderSide(color: scheme.outlineVariant),
       ),
     ),
-    navigationRailTheme: const NavigationRailThemeData(
-      backgroundColor: Palette.paper2,
-      indicatorColor: Palette.accent,
-      selectedIconTheme: IconThemeData(color: Palette.ink),
-      unselectedIconTheme: IconThemeData(color: Palette.muted),
+    navigationRailTheme: NavigationRailThemeData(
+      backgroundColor: scheme.surfaceContainerHigh,
+      indicatorColor: scheme.secondary,
+      selectedIconTheme: IconThemeData(color: scheme.onSecondary),
+      unselectedIconTheme: IconThemeData(color: scheme.onSurfaceVariant),
       labelType: NavigationRailLabelType.all,
     ),
     chipTheme: ChipThemeData(
-      backgroundColor: Palette.paper2,
-      side: const BorderSide(color: Palette.rule),
-      labelStyle: const TextStyle(fontSize: 12, color: Palette.ink2),
+      backgroundColor: scheme.surfaceContainerHigh,
+      side: BorderSide(color: scheme.outlineVariant),
+      labelStyle: TextStyle(fontSize: 12, color: scheme.onSurface),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
     ),
-    dividerColor: Palette.rule,
+    dividerColor: scheme.outlineVariant,
   );
 }

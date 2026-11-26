@@ -196,3 +196,19 @@ async def test_other_model_signature_re_embeds_every_file(db_session, stack, tmp
     await indexer_module.indexer.finish_rebuild()
     assert stack.count == 2
     assert stack.needs_rebuild is False
+
+
+@pytest.mark.asyncio
+async def test_overlapping_folders_do_not_crash_the_scan(db_session, stack, tmp_path):
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "sub" / "a.md").write_text("Nested heron notes.")
+    (tmp_path / "b.md").write_text("Outer walrus notes.")
+    inner = await add_folder(db_session, tmp_path / "sub")
+    await indexer_module.indexer.scan_folder(inner)
+    outer = await add_folder(db_session, tmp_path)
+    await indexer_module.indexer.scan_folder(outer)
+    db_session.expire_all()
+    owners = {file.name: file.folder_id for file in (await db_session.execute(select(IndexedFile))).scalars()}
+    assert owners == {"a.md": inner, "b.md": outer}
+    folder = await db_session.get(WatchedFolder, outer)
+    assert folder.status == "ready"

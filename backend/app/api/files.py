@@ -1,3 +1,4 @@
+import asyncio
 import os
 import subprocess
 import sys
@@ -17,6 +18,7 @@ from app.services.scanner import TEXT_EXTENSIONS, inside
 from app.services.watcher import watcher
 
 router = APIRouter(tags=["Folders and files"])
+add_lock = asyncio.Lock()
 
 
 class FolderBody(BaseModel):
@@ -64,16 +66,21 @@ async def list_folders(db: AsyncSession = Depends(get_db)):
 async def add_folder(body: FolderBody, db: AsyncSession = Depends(get_db)):
     path = Path(body.path).expanduser()
     if not path.is_absolute() or not path.is_dir():
-        raise HTTPException(400, "Choose an existing folder with an absolute path.")
+        raise HTTPException(400, f"{body.path} is not an existing folder. Use an absolute path.")
     resolved = path.resolve()
     if resolved == Path(resolved.anchor):
         raise HTTPException(400, "Choose a folder, not the whole filesystem.")
-    for existing in (await db.execute(select(WatchedFolder))).scalars():
-        if inside(resolved, existing.path) or inside(existing.path, resolved):
-            raise HTTPException(409, "This folder overlaps one that is already watched.")
-    folder = WatchedFolder(path=str(resolved), exclude_globs=[glob.strip() for glob in body.exclude_globs if glob.strip()])
-    db.add(folder)
-    await db.commit()
+    async with add_lock:
+        for existing in (await db.execute(select(WatchedFolder))).scalars():
+            if Path(existing.path) == resolved:
+                raise HTTPException(409, f"{resolved} is already watched.")
+            if inside(resolved, existing.path):
+                raise HTTPException(409, f"{resolved} is already covered by {existing.path}.")
+            if inside(existing.path, resolved):
+                raise HTTPException(409, f"{resolved} contains {existing.path}, which is already watched. Remove that folder first.")
+        folder = WatchedFolder(path=str(resolved), exclude_globs=[glob.strip() for glob in body.exclude_globs if glob.strip()])
+        db.add(folder)
+        await db.commit()
     await db.refresh(folder)
     await watcher.refresh()
     await indexer.scan_folder_later(folder.id)

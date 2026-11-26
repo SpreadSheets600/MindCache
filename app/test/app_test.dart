@@ -89,6 +89,22 @@ class FakeApi extends Api {
   }
 
   var paused = false;
+
+  @override
+  Future<void> addFolder(String path) async {
+    calls.add('add:$path');
+    folderList = [
+      ...folderList,
+      Folder(
+        id: folderList.length + 10,
+        path: path,
+        enabled: true,
+        status: 'pending',
+        lastScanAt: null,
+      ),
+    ];
+  }
+
   var captureSettings = const CaptureSettings(
     autoTracking: false,
     autoExtract: true,
@@ -378,6 +394,25 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Download').last);
     await tester.pumpAndSettle();
     expect(api.calls, contains('download:embedding'));
+  });
+
+  testWidgets('several folders can be added at once', (tester) async {
+    final api = FakeApi();
+    await show(tester, api);
+    await openTab(tester, 'Folders');
+    await tester.tap(find.text('Add several'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byType(TextField),
+      '/home/me/a\n\n/home/me/b\n/home/me/a',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Add'));
+    await tester.pumpAndSettle();
+    expect(api.calls.where((call) => call.startsWith('add:')), [
+      'add:/home/me/a',
+      'add:/home/me/b',
+    ]);
+    expect(find.text('/home/me/b'), findsOneWidget);
   });
 
   testWidgets('folders can be paused and forgotten after confirming', (

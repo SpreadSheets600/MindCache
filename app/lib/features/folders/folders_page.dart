@@ -32,6 +32,56 @@ class FoldersPage extends ConsumerWidget {
     );
   }
 
+  Future<void> _addSeveral(BuildContext context, WidgetRef ref) async {
+    final controller = TextEditingController();
+    final text = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add several folders'),
+        content: SizedBox(
+          width: 480,
+          child: TextField(
+            controller: controller,
+            autofocus: true,
+            minLines: 4,
+            maxLines: 8,
+            decoration: const InputDecoration(
+              labelText: 'One absolute path per line',
+              hintText: '/home/you/Documents\n/home/you/Projects',
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text),
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+    if (text == null || !context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final notifier = ref.read(foldersProvider.notifier);
+    final failures = <String>[];
+    for (final path in {
+      for (final line in text.split('\n'))
+        if (line.trim().isNotEmpty) line.trim(),
+    }) {
+      try {
+        await notifier.add(path);
+      } catch (error) {
+        failures.add(Api.message(error));
+      }
+    }
+    if (failures.isNotEmpty) {
+      messenger.showSnackBar(SnackBar(content: Text(failures.join(' '))));
+    }
+  }
+
   Future<void> _forget(
     BuildContext context,
     WidgetRef ref,
@@ -77,6 +127,11 @@ class FoldersPage extends ConsumerWidget {
               Expanded(
                 child: Text('Folders', style: theme.textTheme.headlineMedium),
               ),
+              TextButton(
+                onPressed: () => _addSeveral(context, ref),
+                child: const Text('Add several'),
+              ),
+              const SizedBox(width: 8),
               FilledButton.icon(
                 onPressed: () => _add(context, ref),
                 icon: const Icon(Icons.add),

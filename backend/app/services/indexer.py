@@ -112,6 +112,8 @@ class Indexer:
                 return
             found = {item["path"]: item for item in await asyncio.to_thread(scan, folder.path, folder.exclude_globs)}
             rows = {row.path: row for row in (await db.execute(select(IndexedFile).where(IndexedFile.folder_id == folder_id))).scalars()}
+            owned = set((await db.execute(select(IndexedFile.path).where(IndexedFile.folder_id != folder_id, IndexedFile.path.startswith(folder.path)))).scalars())
+            found = {path: item for path, item in found.items() if path not in owned}
             gone = [row for path, row in rows.items() if path not in found]
             for path, item in found.items():
                 row = rows.get(path)

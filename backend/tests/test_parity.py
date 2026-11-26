@@ -1,4 +1,4 @@
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
@@ -104,3 +104,21 @@ async def test_unsafe_file_types_download_instead_of_rendering(client_override, 
         response = await http.get(f"/files/{file.id}/raw")
     assert response.headers["content-type"].startswith("text/plain")
     assert response.headers["x-content-type-options"] == "nosniff"
+
+
+@pytest.mark.asyncio
+async def test_adding_folders_explains_conflicts(client_override, tmp_path):
+    for name in ("a", "b", "a/inner"):
+        (tmp_path / name).mkdir()
+    with patch.object(files.watcher, "refresh", AsyncMock()), patch.object(files.indexer, "scan_folder_later", AsyncMock()):
+        async with client() as http:
+            for name in ("a", "b"):
+                assert (await http.post("/folders", json={"path": str(tmp_path / name)})).status_code == 201
+            again = await http.post("/folders", json={"path": str(tmp_path / "a")})
+            assert again.status_code == 409 and "already watched" in again.json()["detail"]
+            nested = await http.post("/folders", json={"path": str(tmp_path / "a/inner")})
+            assert nested.status_code == 409 and f"covered by {tmp_path / 'a'}" in nested.json()["detail"]
+            parent = await http.post("/folders", json={"path": str(tmp_path)})
+            assert parent.status_code == 409 and "contains" in parent.json()["detail"]
+            missing = await http.post("/folders", json={"path": str(tmp_path / "nope")})
+            assert missing.status_code == 400 and "nope" in missing.json()["detail"]

@@ -45,9 +45,22 @@ export function FoldersPage() {
 
   const add = (event: React.FormEvent) => {
     event.preventDefault();
-    const value = path.trim();
-    if (!value) return;
-    run.mutate(async () => { await backendClient.addFolder(value); setPath(""); });
+    const paths = [...new Set(path.split(/[\n;]+/).map((value) => value.trim()).filter(Boolean))];
+    if (!paths.length) return;
+    run.mutate(async () => {
+      const failures: string[] = [];
+      const remaining: string[] = [];
+      for (const value of paths) {
+        try {
+          await backendClient.addFolder(value);
+        } catch (error) {
+          failures.push(getErrorMessage(error));
+          remaining.push(value);
+        }
+      }
+      setPath(remaining.join("\n"));
+      if (failures.length) throw new Error(failures.join(" "));
+    });
   };
 
   const counts = status.data?.files ?? {};
@@ -61,22 +74,24 @@ export function FoldersPage() {
       <section className="rounded-xl border border-border bg-card/30 p-6">
         <h2 className="text-lg font-semibold">Search your files</h2>
         <p className="mt-1 text-sm text-muted-foreground">Choose folders and MindCache keeps their text, Markdown, code and PDF files searchable as they change. Files stay where they are.</p>
-        <form onSubmit={add} className="mt-5 flex flex-col gap-2 sm:flex-row">
-          <label htmlFor="folder-path" className="sr-only">Absolute folder path</label>
-          <input
+        <form onSubmit={add} className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-start">
+          <label htmlFor="folder-path" className="sr-only">Absolute folder paths, one per line</label>
+          <textarea
             id="folder-path"
             value={path}
             onChange={(event) => setPath(event.target.value)}
-            placeholder="/home/you/Documents"
+            onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }}
+            placeholder={"/home/you/Documents\n/home/you/Projects  (Shift+Enter for another line)"}
+            rows={Math.min(6, Math.max(2, path.split("\n").length))}
             autoComplete="off"
             spellCheck={false}
-            className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2.5 font-mono text-sm outline-none focus:border-primary"
+            className="min-w-0 flex-1 resize-none rounded-lg border border-border bg-background px-3 py-2.5 font-mono text-sm outline-none focus:border-primary"
           />
           <button type="submit" disabled={!isOnline || run.isPending} className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50">
-            <FolderPlus className="h-4 w-4" /> Add folder
+            <FolderPlus className="h-4 w-4" /> Add folders
           </button>
         </form>
-        {message && <p role="alert" className="mt-3 text-xs text-red-300">{message}</p>}
+        {message && <p role="alert" className="mt-3 whitespace-pre-line text-xs text-red-300">{message}</p>}
       </section>
 
       <section className="rounded-xl border border-border bg-card/20 p-6" aria-label="Indexing progress">

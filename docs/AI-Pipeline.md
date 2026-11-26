@@ -314,5 +314,7 @@ CPU throughput is compute-bound. Mitigations are in the product instead: newest 
 | 0.70 (default) | 0.97 | 1.00 | 0.98 | 0.88 |
 | 0.75 | 0.93 | 1.00 | 0.96 | 0.88 |
 
-Query latency was about 2 ms (p95 under 4 ms). Indexing ran at about 40 chunks/s on the GPU once the model was warm. Those measurements used only short documents, so they did not compare chunk sizes. The fixture now includes two long documents and passage targets; rerun the benchmark before choosing a different chunk size. The 1,600 character default remains in use.
+The earlier latency measurements reused cached query embeddings and do not measure a new query. Indexing ran at about 40 chunks/s on the GPU once the model was warm. Those measurements used only short documents, so they did not compare chunk sizes. The fixture now includes two long documents and passage targets, and clears the query cache before each timed search. Rerun the benchmark before choosing a different chunk size. The 1,600 character default remains in use.
+
+The expanded fixture was run on 2026-11-26 with the model on CUDA and the 0.70 floor. Source recall@10 was 1.00 for 800, 1,600 and 3,200 characters; passage recall@10 was respectively 0.75, 0.50 and 0.00 on four passage queries. Cold-query p95 was 33.0, 33.6 and 32.7 ms respectively. Two long documents and four passage queries are too few to choose a new default; expand the fixture before drawing that conclusion. The first indexing measurement includes model loading and is not comparable to the later warm measurements.
 

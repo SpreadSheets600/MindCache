@@ -62,6 +62,7 @@ async def evaluate(search, memory_search, index, queries, floor):
     passage_matches = []
     async with search.AsyncSessionLocal() as db:
         for item in queries["positive"]:
+            memory_search.embedder._queries.clear()
             started = time.perf_counter()
             results = await memory_search.search_memory(db, item["query"], 10)
             latencies.append(time.perf_counter() - started)

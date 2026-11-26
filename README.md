@@ -19,19 +19,7 @@ Install Python, [uv](https://docs.astral.sh/uv/), Node.js and npm, then run:
 
 Open `http://127.0.0.1:8000/app/` and load `extension/dist/` as an unpacked extension in Chrome or Brave. The bundled extension connects automatically. New installations start with automatic tracking off; existing saved settings are preserved. Run `./setup.sh --help` for build options. Setup installs the locked backend dependencies and extension packages; it requires network access for packages not already cached. It does not download an AI model deliberately.
 
-Embeddings always use EmbeddingGemma 2 on your computer; download it once from the Models page. Text generation is optional: choose a local model, Ollama, or an OpenAI-compatible API with your own key (remote endpoints need explicit consent and HTTPS). Search falls back to lexical results until the embedding model is downloaded. Notes and uploaded files currently use text matching; image OCR can be run explicitly when Tesseract is installed. A Flutter desktop app in `app/` adds folder indexing: pick folders and MindCache keeps their files searchable as they change. See [PLAN.md](PLAN.md) for remaining work.
-
----
-
-## Import from Recall
-
-Create an archive from your Recall data directory, then preview it under **Setup → Bring in Recall**:
-
-```bash
-python3 scripts/pack_recall.py /path/to/Recall/data recall-export.zip
-```
-
-The packer reads Recall's database without changing it and includes files inside its `uploads` directory. Files outside that directory or over 20 MB are reported as missing. Recall's own JSON export can also be imported, but contains no original file data. Preview the missing-file count before importing. Imported records are text searchable; they are not yet included in semantic search.
+Embeddings always use EmbeddingGemma 2 on your computer; download it once from the Models page. Text generation is optional: choose a local model, Ollama, or an OpenAI-compatible API with your own key (remote endpoints need explicit consent and HTTPS). Search falls back to lexical results until the embedding model is downloaded. Pages, files, notes and uploads are searched together from the extension overlay, the web app and the desktop app. Words match instantly and meaning follows a moment later. Add folders in the web app at `http://127.0.0.1:8000/app/` or the Flutter desktop app in `app/` and MindCache keeps their files searchable as they change; results open in the browser or in your default app. Browser capture settings are shared, so changing them in any of the three changes them everywhere. Image OCR can be run explicitly when Tesseract is installed. See [PLAN.md](PLAN.md) for remaining work.
 
 ---
 

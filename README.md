@@ -17,7 +17,7 @@ Install Python, [uv](https://docs.astral.sh/uv/), Node.js and npm, then run:
 ./start.sh
 ```
 
-Open `http://127.0.0.1:8000/app/` and load `extension/dist/` as an unpacked extension in Chrome or Brave. Copy its ID from `chrome://extensions` into **Setup → Pair a browser extension**. Existing installations must pair after upgrading. New installations start with automatic tracking off; existing saved settings are preserved. Run `./setup.sh --help` for build options. Setup installs the locked backend dependencies and extension packages; it requires network access for packages not already cached. It does not download an AI model deliberately.
+Open `http://127.0.0.1:8000/app/` and load `extension/dist/` as an unpacked extension in Chrome or Brave. The bundled extension connects automatically. New installations start with automatic tracking off; existing saved settings are preserved. Run `./setup.sh --help` for build options. Setup installs the locked backend dependencies and extension packages; it requires network access for packages not already cached. It does not download an AI model deliberately.
 
 Embeddings always use EmbeddingGemma 2 on your computer; download it once from the Models page. Text generation is optional: choose a local model, Ollama, or an OpenAI-compatible API with your own key (remote endpoints need explicit consent and HTTPS). Search falls back to lexical results until the embedding model is downloaded. Notes and uploaded files currently use text matching; image OCR can be run explicitly when Tesseract is installed. A Flutter desktop app in `app/` adds folder indexing: pick folders and MindCache keeps their files searchable as they change. See [PLAN.md](PLAN.md) for remaining work.
 
@@ -55,7 +55,7 @@ Everything is in the [`docs/`](docs/README.md) directory:
 ## Core Features
 
 - **Local storage** — Captured content and indexes are stored locally. Page fetching and model downloads can make network requests. Search and click logging can be controlled and cleared in the web app. The bundled extension connects automatically; the service restricts browser origins but does not authenticate other local programs.
-- **Background Tab Tracking** — Extension monitors tab activations, navigation, closures, and window focus. Computes exact dwell time per tab. Auto-indexes after a 10-second threshold. Deduplicates rapid revisits.
+- **Background Tab Tracking** — Extension monitors tab activations, navigation, closures, and window focus. Computes dwell time per tab. Automatic capture waits for the delay in Browser settings, 10 seconds by default. Deduplicates rapid revisits.
 - **Path & Extension Blacklists** — Automatically filters out login pages (`/login`, `/signup`, `/admin`), binary files (`.exe`, `.dmg`, `.zip`), images (`.png`, `.jpg`), and documents (`.pdf`, `.docx`) to keep the index clean.
 - **Client-Side Extraction** — Uses the Defuddle library (from Obsidian Web Clipper) to extract page content directly from the DOM. Includes shadow DOM flattening, noise removal (`<nav>`, `<footer>`, `.sidebar`), URL absolutification, and an 8-second Defuddle timeout with sync fallback. Works behind auth/paywalls and on JS-rendered SPAs.
 - **Four Capture Methods**:

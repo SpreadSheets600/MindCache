@@ -43,7 +43,7 @@ export interface VisitRequest {
   published_date?: string;
   language?: string;
 
-  schema_org?: Record<string, any>;
+  schema_org?: Record<string, unknown>;
   meta_tags?: { name?: string; property?: string; content: string }[];
   keywords?: string[];
 
@@ -69,7 +69,7 @@ export interface DocumentResponse {
   published_date: string | null;
   extracted_content: string;
   source_type: string;
-  platform_metadata: Record<string, any> | null;
+  platform_metadata: Record<string, unknown> | null;
   summary: string | null;
   total_dwell_time: number;
   created_at: string;
@@ -118,6 +118,7 @@ export interface ExtensionSettings {
   backendUrl: string;
   autoTracking: boolean;
   autoExtract: boolean;
+  captureDelaySeconds: number;
   excludedDomains: string[];
   privacyMode: boolean;
 }

@@ -103,11 +103,13 @@ const App: React.FC = () => {
         backendUrl,
         autoTracking,
         autoExtract,
+        captureDelaySeconds,
         privacyMode,
         excludedDomains,
         setBackendUrl,
         setAutoTracking,
         setAutoExtract,
+        setCaptureDelaySeconds,
         setPrivacyMode,
         addExcludedDomain,
         removeExcludedDomain,
@@ -116,9 +118,12 @@ const App: React.FC = () => {
     const { isOnline, isChecking, components } = useConnectionStore();
 
     const [urlInput, setUrlInput] = useState(backendUrl);
+    const [captureDelayInput, setCaptureDelayInput] = useState(String(captureDelaySeconds));
     const [newDomain, setNewDomain] = useState("");
     const [saveSuccess, setSaveSuccess] = useState(false);
     const [searchFilter, setSearchFilter] = useState("");
+
+    useEffect(() => setCaptureDelayInput(String(captureDelaySeconds)), [captureDelaySeconds]);
 
     const [dashSearch, setDashSearch] = useState("");
     const [debouncedDashSearch, setDebouncedDashSearch] = useState("");
@@ -174,7 +179,7 @@ const App: React.FC = () => {
     const domainTimeData = useMemo(() => {
         const map = new Map<string, { total: number; count: number }>();
         for (const doc of documents) {
-            const dt = (doc as any).total_dwell_time || 0;
+            const dt = doc.total_dwell_time || 0;
             const cur = map.get(doc.domain) || { total: 0, count: 0 };
             cur.total += dt;
             cur.count += 1;
@@ -260,8 +265,8 @@ const App: React.FC = () => {
             queryClient.invalidateQueries({ queryKey: ["documents"] });
             refetchDocs();
         },
-        onError: (err: any) => {
-            setDeleteError(err?.message || "Failed to delete document. Check backend logs.");
+        onError: (err: Error) => {
+            setDeleteError(err.message || "Failed to delete document. Check backend logs.");
         },
     });
 
@@ -427,11 +432,11 @@ const App: React.FC = () => {
                                                         doc.updated_at,
                                                     ).toLocaleDateString()}
                                                 </span>
-                                                {(doc as any).total_dwell_time > 0 && (
+                                                {doc.total_dwell_time > 0 && (
                                                     <>
                                                         <span className="text-muted-foreground/30">-</span>
                                                         <span className="font-mono text-[10px] text-amber-400/70">
-                                                            {formatDuration((doc as any).total_dwell_time)}
+                                                            {formatDuration(doc.total_dwell_time)}
                                                         </span>
                                                     </>
                                                 )}
@@ -650,6 +655,12 @@ const App: React.FC = () => {
                                                 }`}
                                             />
                                         </button>
+                                    </div>
+                                    <div>
+                                        <label htmlFor="capture-delay" className="text-sm">Wait before saving</label>
+                                        <p className="text-xs text-muted-foreground mt-0.5">Seconds to spend on a page before it is saved automatically.</p>
+                                        <Input id="capture-delay" type="number" min="1" max="3600" step="1" value={captureDelayInput} onChange={(event) => setCaptureDelayInput(event.target.value)} onBlur={() => { const seconds = Number(captureDelayInput); if (Number.isInteger(seconds) && seconds >= 1 && seconds <= 3600) setCaptureDelaySeconds(seconds); else setCaptureDelayInput(String(captureDelaySeconds)); }} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} className="mt-2 w-28" />
+                                        <p className="text-xs text-muted-foreground mt-1">1–3,600 seconds. Applied when you leave the field.</p>
                                     </div>
                                 </div>
                             </div>

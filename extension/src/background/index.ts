@@ -1,9 +1,13 @@
 import { backendClient } from "../services/BackendClient";
 import { useSettingsStore } from "../store/settingsStore";
+import type { PageExtraction } from "../content/extract-page";
+import type { VisitRequest } from "../types";
 
 const recentVisits = new Map<string, number>();
 
-useSettingsStore.persist.rehydrate();
+Promise.resolve(useSettingsStore.persist.rehydrate()).then(() => {
+  if (activeTab && !activeTab.indexed) scheduleCapture(activeTab);
+});
 
 function createContextMenus() {
   chrome.contextMenus.create({
@@ -44,7 +48,9 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.onChanged) {
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName === "local" && changes["mindcache-settings-store"]) {
-      useSettingsStore.persist.rehydrate();
+      Promise.resolve(useSettingsStore.persist.rehydrate()).then(() => {
+        if (activeTab && !activeTab.indexed) scheduleCapture(activeTab);
+      });
       console.log("[MindCache Background] Settings store rehydrated from storage changes.");
     }
   });
@@ -124,18 +130,29 @@ function shouldTrack(urlStr: string): boolean {
 }
 
 const DWELL_TIME_THRESHOLD_SEC = 10;
-const MIN_DWELL_TIME_SEC = 5;
 
 interface ActiveTabState {
   tabId: number;
   url: string;
   title: string;
   activatedAt: number;
-  timerId?: any;
+  timerId?: ReturnType<typeof setTimeout>;
   indexed: boolean;
 }
 
 let activeTab: ActiveTabState | null = null;
+
+function scheduleCapture(state: ActiveTabState) {
+  if (state.timerId) clearTimeout(state.timerId);
+  const seconds = useSettingsStore.getState().captureDelaySeconds;
+  const delay = Math.max(0, seconds * 1000 - (Date.now() - state.activatedAt));
+  state.timerId = setTimeout(async () => {
+    if (activeTab === state && !state.indexed) {
+      state.indexed = true;
+      await processVisit(state.url, state.title, (Date.now() - state.activatedAt) / 1000, state.tabId);
+    }
+  }, delay);
+}
 
 async function handleTabActivated(tabId: number, url: string, title: string) {
   if (!shouldTrack(url)) {
@@ -159,15 +176,8 @@ async function handleTabActivated(tabId: number, url: string, title: string) {
     indexed: false,
   };
 
-  state.timerId = setTimeout(async () => {
-    if (activeTab && activeTab.tabId === tabId && activeTab.url === url && !activeTab.indexed) {
-      activeTab.indexed = true;
-      console.log(`[MindCache Background] Dwell threshold crossed for ${url}. Ingesting now.`);
-      await processVisit(url, title, DWELL_TIME_THRESHOLD_SEC, tabId);
-    }
-  }, DWELL_TIME_THRESHOLD_SEC * 1000);
-
   activeTab = state;
+  scheduleCapture(state);
 }
 
 async function handleTabDeactivated(tabId: number | null) {
@@ -184,16 +194,16 @@ async function handleTabDeactivated(tabId: number | null) {
   const durationSeconds = (Date.now() - state.activatedAt) / 1000;
   console.log(`[MindCache Background] Active session ended for ${state.url} after ${durationSeconds.toFixed(1)}s`);
 
-  if (!state.indexed && durationSeconds >= MIN_DWELL_TIME_SEC) {
+  if (!state.indexed && durationSeconds >= useSettingsStore.getState().captureDelaySeconds) {
     await processVisit(state.url, state.title, durationSeconds, state.tabId);
   } else if (!state.indexed) {
-    console.log(`[MindCache Background] Skipping ${state.url} — dwell time ${durationSeconds.toFixed(1)}s below minimum ${MIN_DWELL_TIME_SEC}s`);
+    console.log(`[MindCache Background] Skipping ${state.url} — dwell time below capture delay`);
   }
 }
 
 const EXTRACTION_TIMEOUT_MS = 2000;
 
-async function getPageExtraction(tabId: number): Promise<any | null> {
+async function getPageExtraction(tabId: number): Promise<PageExtraction | null> {
   try {
     const result = await Promise.race([
       chrome.tabs.sendMessage(tabId, { action: "extract-page" }),
@@ -207,12 +217,12 @@ async function getPageExtraction(tabId: number): Promise<any | null> {
   return null;
 }
 
-function sanitizeExtraction(payload: any): any {
+function sanitizeExtraction(payload: VisitRequest): VisitRequest {
   if (payload.meta_tags && Array.isArray(payload.meta_tags)) {
     payload.meta_tags = payload.meta_tags
-      .filter((t: any) => t && t.content != null)
-      .map((t: any) => {
-        const cleaned: Record<string, string> = { content: String(t.content) };
+      .filter((t) => t && t.content != null)
+      .map((t) => {
+        const cleaned: { content: string; name?: string; property?: string } = { content: String(t.content) };
         if (t.name) cleaned.name = String(t.name);
         if (t.property) cleaned.property = String(t.property);
         return cleaned;
@@ -223,7 +233,7 @@ function sanitizeExtraction(payload: any): any {
   }
   if (payload.highlights && Array.isArray(payload.highlights)) {
     payload.highlights = payload.highlights.filter(
-      (h: any) => h && h.text != null && h.content != null && h.xpath != null
+      (h) => h && h.text != null && h.content != null && h.xpath != null
     );
   }
   return payload;
@@ -499,8 +509,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         } else {
           sendResponse({ status: "error", error: "Could not extract page content. The content script may not be available on this page." });
         }
-      } catch (err: any) {
-        sendResponse({ status: "error", error: err.message || "Failed to capture page" });
+      } catch (err: unknown) {
+        sendResponse({ status: "error", error: err instanceof Error ? err.message : "Failed to capture page" });
       }
     });
     return true;

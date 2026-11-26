@@ -7,6 +7,7 @@ interface SettingsState extends ExtensionSettings {
   setBackendUrl: (url: string) => void;
   setAutoTracking: (enabled: boolean) => void;
   setAutoExtract: (enabled: boolean) => void;
+  setCaptureDelaySeconds: (seconds: number) => void;
   setPrivacyMode: (enabled: boolean) => void;
   setExcludedDomains: (domains: string[]) => void;
   addExcludedDomain: (domain: string) => void;
@@ -18,6 +19,7 @@ const defaultSettings: ExtensionSettings = {
   backendUrl: "http://localhost:8000",
   autoTracking: false,
   autoExtract: true,
+  captureDelaySeconds: 10,
   excludedDomains: [
     "localhost",
     "127.0.0.1",
@@ -37,6 +39,11 @@ export const useSettingsStore = create<SettingsState>()(
       setBackendUrl: (backendUrl) => set({ backendUrl }),
       setAutoTracking: (autoTracking) => set({ autoTracking }),
       setAutoExtract: (autoExtract) => set({ autoExtract }),
+      setCaptureDelaySeconds: (seconds) => {
+        if (Number.isInteger(seconds) && seconds >= 1 && seconds <= 3600) {
+          set({ captureDelaySeconds: seconds });
+        }
+      },
       setPrivacyMode: (privacyMode) => set({ privacyMode }),
       setExcludedDomains: (excludedDomains) => set({ excludedDomains }),
       addExcludedDomain: (domain) =>

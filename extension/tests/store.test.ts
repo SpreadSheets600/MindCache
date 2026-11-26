@@ -12,7 +12,18 @@ describe("MindCache Settings Store Tests", () => {
     const state = useSettingsStore.getState();
     expect(state.backendUrl).toBe("http://localhost:8000");
     expect(state.autoTracking).toBe(false);
+    expect(state.captureDelaySeconds).toBe(10);
     expect(state.excludedDomains).toContain("localhost");
+  });
+
+  it("validates the automatic capture delay", () => {
+    const store = useSettingsStore.getState();
+    store.setCaptureDelaySeconds(30);
+    expect(useSettingsStore.getState().captureDelaySeconds).toBe(30);
+    store.setCaptureDelaySeconds(0);
+    store.setCaptureDelaySeconds(1.5);
+    store.setCaptureDelaySeconds(3601);
+    expect(useSettingsStore.getState().captureDelaySeconds).toBe(30);
   });
 
   it("should modify settings variables successfully", () => {

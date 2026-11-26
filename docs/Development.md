@@ -286,8 +286,7 @@ All hardcoded numeric values in the settings dashboard are extracted to named co
 Background worker inlines:
 - `BLACKLISTED_EXTENSIONS` — file extensions to skip (images, media, archives, binaries, docs)
 - `BLACKLISTED_PATHS` — URL path patterns to skip (login, signup, admin, auth, etc.)
-- `DWELL_TIME_THRESHOLD_SEC` — 10s before auto-indexing
-- `MIN_DWELL_TIME_SEC` — 5s minimum dwell to index on deactivation
+- Automatic capture delay is configurable in Browser settings and defaults to 10 seconds.
 - `EXTRACTION_TIMEOUT_MS` — 2s content script timeout
 
 Content script defines:
@@ -311,7 +310,7 @@ Content script defines:
 
 1. Start the backend.
 2. Load the extension in the browser.
-3. Visit any webpage, wait 10 seconds.
+3. Enable automatic tracking, visit a webpage, and wait for the configured capture delay.
 4. Check backend logs for `POST /visit` transaction.
 5. Or check `GET http://127.0.0.1:8000/documents`.
 

@@ -61,10 +61,7 @@ class Api {
   }
 
   Future<GraphData> graph() async {
-    final response = await dio.get(
-      '/documents/graph',
-      queryParameters: {'limit': 120},
-    );
+    final response = await dio.get('/graph', queryParameters: {'limit': 120});
     return GraphData.fromJson(response.data as Map<String, dynamic>);
   }
 

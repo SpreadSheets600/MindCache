@@ -8,13 +8,14 @@ from app.core.local_access import allowed_origin, local_host
 from app.core.pairing import MINDCACHE_EXTENSION_ID, trusted_ids
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import ai, documents, files, health, items, pairing, privacy, recall, search, visit
+from app.api import ai, capture, documents, files, health, items, pairing, privacy, search, visit
 from app.core.config import settings
 from app.core.logging import get_logger, setup_logging
 from app.db.base import Base
 from app.db.session import engine
 from app.services.document_processor import document_processor
 from app.services.chunk_index import chunk_index
+from app.services.embedder import embedder
 from app.services.indexer import indexer
 from app.services.source_chunks import backfill_all
 from app.services.watcher import watcher
@@ -66,6 +67,7 @@ async def lifespan(app: FastAPI):
         logger.critical(f"Critical Error During Database Schema Sync : {e}", exc_info=True)
 
     reindex = asyncio.create_task(document_processor.reindex_if_needed())
+    warm = asyncio.create_task(asyncio.to_thread(embedder.warm))
     indexer.start()
     startup = asyncio.create_task(catch_up())
     await watcher.start()
@@ -73,6 +75,7 @@ async def lifespan(app: FastAPI):
     yield
 
     reindex.cancel()
+    warm.cancel()
     startup.cancel()
     await watcher.stop()
     await indexer.stop()
@@ -109,8 +112,8 @@ async def restrict_local_browser_requests(request, call_next):
     if not local_host(host) or not allowed_origin(origin, host):
         return JSONResponse({"detail": "Only local MindCache clients may access this service."}, status_code=403)
     if origin and origin.startswith("chrome-extension://"):
-        if request.url.path.startswith(("/ai", "/privacy", "/imports", "/pairing", "/folders", "/files", "/index", "/memory")):
-            return JSONResponse({"detail": "Use the local web app to change these settings."}, status_code=403)
+        if request.url.path.startswith("/pairing"):
+            return JSONResponse({"detail": "Use the local web app to pair extensions."}, status_code=403)
         try:
             extension_id = origin.removeprefix("chrome-extension://")
             paired = extension_id == MINDCACHE_EXTENSION_ID or extension_id in trusted_ids(pairing.PAIRING_PATH)
@@ -129,8 +132,8 @@ app.include_router(privacy.router)
 app.include_router(ai.router)
 app.include_router(items.router)
 app.include_router(files.router)
-app.include_router(recall.router)
 app.include_router(pairing.router)
+app.include_router(capture.router)
 
 
 @app.get("/")

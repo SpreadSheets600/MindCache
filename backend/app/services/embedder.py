@@ -76,6 +76,13 @@ class Embedder:
                 self._model = model
             return self._model
 
+    def warm(self):
+        try:
+            if self.is_downloaded():
+                self.embed_query("warm up")
+        except Exception:
+            pass
+
     def embed_query(self, text):
         if not text.strip():
             raise EmbeddingGenerationError("Cannot generate embedding for empty text.")

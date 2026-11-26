@@ -7,7 +7,7 @@ from app.models.files import IndexedFile, WatchedFolder
 
 
 @pytest.mark.asyncio
-async def test_graph_includes_indexed_files_and_their_folders(client_override, tmp_path):
+async def test_graph_includes_indexed_files_and_their_folders_for_every_client(client_override, tmp_path):
     folder = WatchedFolder(path=str(tmp_path))
     client_override.add(folder)
     await client_override.flush()
@@ -25,5 +25,4 @@ async def test_graph_includes_indexed_files_and_their_folders(client_override, t
         assert {"source": f"file_{indexed.id}", "target": f"folder_{folder.id}", "type": "in_folder"} in graph["edges"]
         origin = {"origin": f"chrome-extension://{MINDCACHE_EXTENSION_ID}"}
         extension_graph = (await client.get("/graph", headers=origin)).json()
-        assert extension_graph["nodes"]["files"] == []
-        assert extension_graph["nodes"]["folders"] == []
+        assert extension_graph == graph

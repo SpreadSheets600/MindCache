@@ -407,4 +407,6 @@ async def test_bundled_extension_connects_without_pairing(tmp_path, client_overr
             origin = {"Origin": f"chrome-extension://{identifier}"}
             assert (await client.get("/", headers=origin)).status_code == 200
             assert (await client.get("/documents", headers=origin)).status_code == 200
-            assert (await client.get("/folders", headers=origin)).status_code == 403
+            assert (await client.get("/folders", headers=origin)).status_code == 200
+            assert (await client.get("/settings/capture", headers=origin)).status_code == 200
+            assert (await client.get("/pairing", headers=origin)).status_code == 403

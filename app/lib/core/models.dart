@@ -6,6 +6,9 @@ class SearchHit {
     required this.location,
     required this.reasons,
     required this.passages,
+    this.folder,
+    this.size,
+    this.when,
   });
 
   factory SearchHit.fromJson(Map<String, dynamic> json) => SearchHit(
@@ -18,6 +21,9 @@ class SearchHit {
       for (final passage in json['passages'] as List)
         (passage as Map<String, dynamic>)['text'] as String,
     ],
+    folder: json['folder'] as String?,
+    size: json['size'] as int?,
+    when: DateTime.tryParse(json['when'] as String? ?? ''),
   );
 
   final String kind;
@@ -26,6 +32,9 @@ class SearchHit {
   final String location;
   final List<String> reasons;
   final List<String> passages;
+  final String? folder;
+  final int? size;
+  final DateTime? when;
 
   bool get isPage => kind == 'page';
   bool get isFile => kind == 'file';
@@ -230,4 +239,45 @@ class GraphData {
 
   final List<GraphNode> nodes;
   final List<GraphEdge> edges;
+}
+
+class CaptureSettings {
+  const CaptureSettings({
+    required this.autoTracking,
+    required this.autoExtract,
+    required this.delaySeconds,
+    required this.excludedDomains,
+  });
+
+  factory CaptureSettings.fromJson(Map<String, dynamic> json) =>
+      CaptureSettings(
+        autoTracking: json['auto_tracking'] as bool,
+        autoExtract: json['auto_extract'] as bool,
+        delaySeconds: json['delay_seconds'] as int,
+        excludedDomains: List<String>.from(json['excluded_domains'] as List),
+      );
+
+  final bool autoTracking;
+  final bool autoExtract;
+  final int delaySeconds;
+  final List<String> excludedDomains;
+
+  Map<String, Object> toJson() => {
+    'auto_tracking': autoTracking,
+    'auto_extract': autoExtract,
+    'delay_seconds': delaySeconds,
+    'excluded_domains': excludedDomains,
+  };
+
+  CaptureSettings copyWith({
+    bool? autoTracking,
+    bool? autoExtract,
+    int? delaySeconds,
+    List<String>? excludedDomains,
+  }) => CaptureSettings(
+    autoTracking: autoTracking ?? this.autoTracking,
+    autoExtract: autoExtract ?? this.autoExtract,
+    delaySeconds: delaySeconds ?? this.delaySeconds,
+    excludedDomains: excludedDomains ?? this.excludedDomains,
+  );
 }

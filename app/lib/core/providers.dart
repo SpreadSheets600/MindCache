@@ -89,13 +89,43 @@ class SearchState {
     this.query = '',
     this.results = const [],
     this.loading = false,
+    this.refining = false,
+    this.kind = SearchKind.all,
     this.error,
   });
 
   final String query;
   final List<SearchHit> results;
   final bool loading;
+  final bool refining;
+  final SearchKind kind;
   final String? error;
+
+  SearchState copyWith({
+    String? query,
+    List<SearchHit>? results,
+    bool? loading,
+    bool? refining,
+    SearchKind? kind,
+  }) => SearchState(
+    query: query ?? this.query,
+    results: results ?? this.results,
+    loading: loading ?? this.loading,
+    refining: refining ?? this.refining,
+    kind: kind ?? this.kind,
+  );
+}
+
+enum SearchKind {
+  all('Everything', []),
+  pages('Pages', ['page']),
+  files('Files', ['file']),
+  notes('Notes & uploads', ['note', 'upload']);
+
+  const SearchKind(this.label, this.kinds);
+
+  final String label;
+  final List<String> kinds;
 }
 
 class SearchController extends Notifier<SearchState> {
@@ -104,22 +134,47 @@ class SearchController extends Notifier<SearchState> {
   @override
   SearchState build() => const SearchState();
 
+  Future<void> setKind(SearchKind kind) {
+    state = state.copyWith(kind: kind);
+    return run(state.query);
+  }
+
   Future<void> run(String query) async {
     final trimmed = query.trim();
     final ticket = ++_latest;
+    final kind = state.kind;
     if (trimmed.isEmpty) {
-      state = const SearchState();
+      state = SearchState(kind: kind);
       return;
     }
-    state = SearchState(query: trimmed, results: state.results, loading: true);
+    state = SearchState(
+      query: trimmed,
+      results: state.results,
+      loading: true,
+      refining: true,
+      kind: kind,
+    );
+    final api = ref.read(apiProvider);
     try {
-      final results = await ref.read(apiProvider).search(trimmed);
+      final quick = await api.search(trimmed, fast: true, kinds: kind.kinds);
+      if (ticket != _latest) return;
+      state = SearchState(
+        query: trimmed,
+        results: quick,
+        refining: true,
+        kind: kind,
+      );
+      final full = await api.search(trimmed, kinds: kind.kinds);
       if (ticket == _latest) {
-        state = SearchState(query: trimmed, results: results);
+        state = SearchState(query: trimmed, results: full, kind: kind);
       }
     } catch (error) {
       if (ticket == _latest) {
-        state = SearchState(query: trimmed, error: Api.message(error));
+        state = SearchState(
+          query: trimmed,
+          kind: kind,
+          error: Api.message(error),
+        );
       }
     }
   }
@@ -146,3 +201,7 @@ class SearchFocus extends Notifier<int> {
 }
 
 final searchFocusProvider = NotifierProvider<SearchFocus, int>(SearchFocus.new);
+
+final captureProvider = FutureProvider.autoDispose<CaptureSettings>(
+  (ref) => ref.read(apiProvider).capture(),
+);

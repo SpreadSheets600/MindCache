@@ -97,3 +97,15 @@ rm backend/data/mindcache.db
 ```
 
 The database will be recreated with empty tables on next startup.
+
+
+## Desktop app and releases
+
+`./setup.sh --app` also builds the Flutter desktop app for Linux (Flutter must be installed). Run it with `./start.sh --app`; it starts the backend itself. `./start.sh` alone runs only the backend and web app.
+
+Pushing a tag such as `v0.2.0` runs `.github/workflows/release.yml`, which tests and builds the extension and the Linux app and attaches two files to a GitHub release:
+
+- `mindcache-extension-<tag>.zip`: unzip it and load the folder as an unpacked extension.
+- `mindcache-linux-x64-<tag>.tar.gz`: the desktop app with the backend and dashboard. Extract it, run `scripts/install-release.sh` once (needs `uv`), then start `./mindcache`.
+
+`.github/workflows/ci.yml` runs the backend, extension and app tests on every pull request.

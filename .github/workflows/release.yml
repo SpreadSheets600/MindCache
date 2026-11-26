@@ -1,0 +1,97 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to release, for example v0.2.0
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  TAG: ${{ github.event.inputs.tag || github.ref_name }}
+
+jobs:
+  extension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: extension/package-lock.json
+      - run: npm ci
+        working-directory: extension
+      - run: npm test
+        working-directory: extension
+      - run: npm run build
+        working-directory: extension
+      - name: Package the extension
+        run: |
+          cd extension/dist
+          zip -r "$GITHUB_WORKSPACE/mindcache-extension-$TAG.zip" .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: extension
+          path: mindcache-extension-*.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dashboard
+          path: frontend/dist
+
+  desktop-linux:
+    needs: extension
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dashboard
+          path: frontend/dist
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libayatana-appindicator3-dev libkeybinder-3.0-dev liblzma-dev
+      - name: Build the desktop app
+        working-directory: app
+        run: |
+          flutter pub get
+          flutter test
+          flutter build linux --release
+      - name: Bundle app, backend and dashboard
+        run: |
+          bundle="mindcache-linux-x64"
+          mkdir -p "$bundle/backend"
+          cp -r app/build/linux/x64/release/bundle/. "$bundle/"
+          rsync -a --exclude '.venv' --exclude 'data' --exclude '__pycache__' --exclude 'tests' --exclude 'benchmarks' backend/app backend/pyproject.toml backend/uv.lock "$bundle/backend/"
+          mkdir -p "$bundle/backend/data"
+          cp -r frontend "$bundle/frontend"
+          mkdir -p "$bundle/scripts"
+          cp scripts/install-release.sh "$bundle/scripts/"
+          cp README.md "$bundle/"
+          tar -czf "mindcache-linux-x64-$TAG.tar.gz" "$bundle"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-linux
+          path: mindcache-linux-x64-*.tar.gz
+
+  publish:
+    needs: [extension, desktop-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: "{extension,desktop-linux}"
+          path: release
+          merge-multiple: true
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$TAG" release/* --repo "$GITHUB_REPOSITORY" --title "MindCache $TAG" --generate-notes

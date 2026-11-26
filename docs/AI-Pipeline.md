@@ -314,5 +314,5 @@ CPU throughput is compute-bound. Mitigations are in the product instead: newest 
 | 0.70 (default) | 0.97 | 1.00 | 0.98 | 0.88 |
 | 0.75 | 0.93 | 1.00 | 0.96 | 0.88 |
 
-Query latency is about 2 ms (p95 under 4 ms). Indexing runs at about 40 chunks/s on the GPU once the model is warm. Every document fits in one chunk, so this corpus cannot compare chunk sizes (800, 1600 and 3200 characters scored the same); the 1,600 character default stays until a corpus of long documents says otherwise.
+Query latency was about 2 ms (p95 under 4 ms). Indexing ran at about 40 chunks/s on the GPU once the model was warm. Those measurements used only short documents, so they did not compare chunk sizes. The fixture now includes two long documents and passage targets; rerun the benchmark before choosing a different chunk size. The 1,600 character default remains in use.
 

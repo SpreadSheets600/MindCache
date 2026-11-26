@@ -119,6 +119,26 @@
     {
       "query": "marathon taper",
       "expected": "marathon-plan.md"
+    },
+    {
+      "query": "what should I do if compost smells sour",
+      "expected": "community-garden.md",
+      "passage": "dry leaves"
+    },
+    {
+      "query": "how should the river sample be collected",
+      "expected": "field-notes.md",
+      "passage": "upstream"
+    },
+    {
+      "query": "which measurements are recorded with the river probe",
+      "expected": "field-notes.md",
+      "passage": "conductivity"
+    },
+    {
+      "query": "how to protect vegetable beds during a dry spell",
+      "expected": "community-garden.md",
+      "passage": "watering"
     }
   ],
   "negative": [

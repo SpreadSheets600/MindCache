@@ -9,6 +9,8 @@ from app.services import memory_search
 from app.services.chunk_index import ChunkIndex
 from app.services.chunk_store import WORD, keyword_hits, remove_source, replace_source
 from app.services.embedder import DIMENSION
+from benchmarks.search_bench import evaluate
+from app.db import session as database
 
 
 def fake_vector(text):
@@ -106,3 +108,19 @@ async def test_common_words_do_not_create_keyword_matches(db_session, index):
     assert await keyword_hits(db_session, "how do cells produce power", 5) == []
     assert await keyword_hits(db_session, "tomatoes", 5)
     assert await keyword_hits(db_session, "do the", 5)
+
+
+@pytest.mark.asyncio
+async def test_benchmark_reports_source_and_passage_recall(db_session, index):
+    await add_file(db_session, index, "biology.md", "Mitochondria produce energy in the cell.")
+    await db_session.commit()
+    queries = {
+        "positive": [
+            {"query": "mitochondria energy", "expected": "biology.md", "passage": "energy"},
+            {"query": "mitochondria", "expected": "biology.md", "passage": "absent"},
+        ],
+        "negative": ["elephant savannah migration"],
+    }
+    result = await evaluate(database, memory_search, index, queries, 0.2)
+    assert result["recall@10"] == 1.0
+    assert result["passage_recall@10"] == 0.5

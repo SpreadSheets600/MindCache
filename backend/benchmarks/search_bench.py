@@ -59,6 +59,7 @@ async def evaluate(search, memory_search, index, queries, floor):
     memory_search.SEMANTIC_FLOOR = floor
     ranks = []
     latencies = []
+    passage_matches = []
     async with search.AsyncSessionLocal() as db:
         for item in queries["positive"]:
             started = time.perf_counter()
@@ -66,6 +67,12 @@ async def evaluate(search, memory_search, index, queries, floor):
             latencies.append(time.perf_counter() - started)
             titles = [result["title"] for result in results]
             ranks.append(titles.index(item["expected"]) + 1 if item["expected"] in titles else None)
+            if "passage" in item:
+                passage_matches.append(any(
+                    item["passage"].casefold() in passage["text"].casefold()
+                    for result in results if result["title"] == item["expected"]
+                    for passage in result["passages"]
+                ))
         empty = 0
         for query in queries["negative"]:
             empty += not await memory_search.search_memory(db, query, 10)
@@ -73,6 +80,8 @@ async def evaluate(search, memory_search, index, queries, floor):
     return {
         "recall@1": sum(rank == 1 for rank in ranks) / len(ranks),
         "recall@3": sum(bool(rank) and rank <= 3 for rank in ranks) / len(ranks),
+        "recall@10": len(found) / len(ranks),
+        "passage_recall@10": sum(passage_matches) / len(passage_matches) if passage_matches else None,
         "mrr": sum(1 / rank for rank in found) / len(ranks),
         "empty_on_unanswerable": empty / len(queries["negative"]),
         "p50_ms": statistics.median(latencies) * 1000,
@@ -95,14 +104,16 @@ async def main(arguments):
     memory_search.embedder = embedder
     queries = json.loads(Path(arguments.queries).read_text())
     modules = (chunker, chunk_store, chunk_index_module, embedder, database, Base, models)
-    print(f"{'chars':>6} {'floor':>5} {'chunks':>6} {'chunks/s':>8} {'r@1':>5} {'r@3':>5} {'mrr':>5} {'empty':>6} {'p50ms':>6} {'p95ms':>6}")
+    print(f"{'chars':>6} {'floor':>5} {'chunks':>6} {'chunks/s':>8} {'r@1':>5} {'r@3':>5} {'r@10':>5} {'passage':>7} {'mrr':>5} {'empty':>6} {'p50ms':>6} {'p95ms':>6}")
     for chunk_chars in arguments.chunk_chars:
         index, count, seconds = await build(modules, Path(arguments.corpus), chunk_chars)
         for floor in arguments.floors:
             result = await evaluate(database, memory_search, index, queries, floor)
+            passage = result["passage_recall@10"]
+            passage_text = f"{passage:.2f}" if passage is not None else "n/a"
             print(
                 f"{chunk_chars:>6} {floor:>5.2f} {count:>6} {count / seconds:>8.1f} {result['recall@1']:>5.2f} "
-                f"{result['recall@3']:>5.2f} {result['mrr']:>5.2f} {result['empty_on_unanswerable']:>6.2f} "
+                f"{result['recall@3']:>5.2f} {result['recall@10']:>5.2f} {passage_text:>7} {result['mrr']:>5.2f} {result['empty_on_unanswerable']:>6.2f} "
                 f"{result['p50_ms']:>6.1f} {result['p95_ms']:>6.1f}"
             )
 

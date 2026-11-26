@@ -1,3 +1,5 @@
+import asyncio
+
 from sqlalchemy import select
 
 from app.models.document import Document
@@ -22,9 +24,9 @@ def fuse(*rankings):
     return scores
 
 
-def semantic_hits(query, limit):
+async def semantic_hits(query, limit):
     try:
-        vector = embedder.embed_query(query)
+        vector = await asyncio.to_thread(embedder.embed_query, query)
     except Exception:
         return []
     return [chunk_id for chunk_id, score in chunk_index.search(vector, limit) if score >= SEMANTIC_FLOOR]
@@ -66,7 +68,7 @@ async def search_memory(db, query, limit=20):
     if not WORD.search(query):
         return []
     keyword = await keyword_hits(db, query, CANDIDATES)
-    semantic = semantic_hits(query, CANDIDATES)
+    semantic = await semantic_hits(query, CANDIDATES)
     scores = fuse(keyword, semantic)
     if not scores:
         return []

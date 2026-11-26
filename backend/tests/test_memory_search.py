@@ -1,3 +1,6 @@
+import asyncio
+import threading
+import time
 import zlib
 from unittest.mock import patch
 
@@ -124,3 +127,26 @@ async def test_benchmark_reports_source_and_passage_recall(db_session, index):
     result = await evaluate(database, memory_search, index, queries, 0.2)
     assert result["recall@10"] == 1.0
     assert result["passage_recall@10"] == 0.5
+
+
+@pytest.mark.asyncio
+async def test_query_embedding_does_not_block_the_event_loop(db_session, index):
+    await add_file(db_session, index, "async-biology.md", "Mitochondria produce energy in the cell.")
+    started = threading.Event()
+    release = threading.Event()
+
+    def blocking_embedding(query):
+        started.set()
+        release.wait(timeout=2)
+        return fake_vector(query)
+
+    with patch.object(memory_search.embedder, "embed_query", side_effect=blocking_embedding):
+        start = time.monotonic()
+        task = asyncio.create_task(memory_search.search_memory(db_session, "mitochondria"))
+        try:
+            assert await asyncio.to_thread(started.wait, 1)
+            await asyncio.wait_for(asyncio.sleep(0), timeout=0.5)
+            assert time.monotonic() - start < 1.5
+        finally:
+            release.set()
+        assert (await task)[0]["title"] == "async-biology.md"
